@@ -184,6 +184,37 @@ class SAPCouplerOptions(BaseCouplerOptions):
     rigid_rigid_contact_type: Literal["tet", "vert", "none"] = "tet"
 
 
+class QIPCCouplerOptions(BaseCouplerOptions):
+    """
+    Options configuring the QIPC (cuda-graph-qipc) coupler.
+
+    QIPC replaces Genesis's rigid/FEM solvers entirely — it is a full physics engine
+    using Affine Body Dynamics with IPC contact, CUDA Graph accelerated.
+
+    Parameters
+    ----------
+    contact_enable : bool, optional
+        Whether to enable IPC contact detection. Enabling contact allows penetration-free
+        interaction between bodies and against ground half-planes, at cost of a heavier
+        Newton solve per step. Defaults to True.
+    contact_d_hat : float, optional
+        Barrier activation distance for IPC contact. Pairs closer than d_hat activate
+        the repulsive barrier; larger values give a softer onset but waste Newton budget
+        on distant pairs. Defaults to 0.01.
+    init_collision_pair_capacity : int, optional
+        Initial broadphase pair buffer size. The solver reallocates automatically on
+        overflow, but starting too low causes repeated graph rebuilds in contact-heavy
+        scenes. Defaults to 1000.
+    debug_viewer : bool, optional
+        Whether to show the QIPC debug viewer. Defaults to False.
+    """
+
+    contact_enable: StrictBool = True
+    contact_d_hat: PositiveFloat = 0.01
+    init_collision_pair_capacity: PositiveInt = 1000
+    debug_viewer: StrictBool = False
+
+
 class IPCCouplerOptions(BaseCouplerOptions):
     """
     Options configuring the Incremental Potential Contact (IPC) coupler.
