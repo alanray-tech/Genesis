@@ -648,7 +648,7 @@ def func_contact_order_key(pos: qd.types.vector(3)):
     return pos[0] + 1.618033988749895 * pos[1] + 2.618033988749895 * pos[2]
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_clamp_prune_contacts(
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
@@ -1077,7 +1077,7 @@ def func_clamp_prune_contacts(
             errno[i_b] = errno[i_b] | array_class.ErrorCode.OVERFLOW_CONTACTS
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_clamp_prune_contacts_coop(
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
@@ -1506,6 +1506,38 @@ def func_clamp_prune_contacts_coop(
             if collider_state.n_contacts[i_b] > max_contacts:
                 collider_state.n_contacts[i_b] = max_contacts
                 errno[i_b] = errno[i_b] | array_class.ErrorCode.OVERFLOW_CONTACTS
+
+
+@qd.kernel(fastcache=True)
+def kernel_clamp_prune_contacts(
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    collider_static_config: qd.template(),
+    errno: qd.Tensor,
+):
+    func_clamp_prune_contacts(
+        dyn_state,
+        collider_state,
+        rigid_info,
+        collider_info,
+        rigid_config,
+        collider_static_config,
+        errno,
+    )
+
+
+@qd.kernel(fastcache=True)
+def kernel_clamp_prune_contacts_coop(
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    errno: qd.Tensor,
+):
+    func_clamp_prune_contacts_coop(dyn_state, collider_state, rigid_info, collider_info, errno)
 
 
 @qd.kernel

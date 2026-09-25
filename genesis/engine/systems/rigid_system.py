@@ -1,0 +1,493 @@
+from __future__ import annotations
+
+import quadrants as qd
+
+import genesis as gs
+from genesis.engine.solvers.rigid.abd.forward_kinematics import func_update_geom_aabbs
+from genesis.engine.solvers.rigid.collider import broadphase, contact, narrowphase
+from genesis.engine.solvers.rigid.constraint import linesearch, solver
+from genesis.engine.solvers.rigid.rigid_solver import RigidSolver, func_step_1, func_step_2
+
+from .global_layout import DofRange
+from .physics_system import PhysicsSystem
+
+
+@qd.data_oriented
+class RigidSystem(PhysicsSystem):
+    """Expose the Genesis minimal-coordinate Rigid numerical core to the global Newton runtime."""
+
+    def __init__(self, rigid_solver: RigidSolver, dof_range: DofRange) -> None:
+        super().__init__()
+        if gs.qd_float != qd.f64:
+            raise RuntimeError("The Rigid Newton framework requires double precision")
+        if rigid_solver._requires_grad:
+            raise RuntimeError("The Rigid Newton framework does not support differentiable simulation")
+        if rigid_solver.rigid_config.solver_type != gs.constraint_solver.Newton:
+            raise RuntimeError("The Rigid Newton framework requires the native Newton constraint formulation")
+        if rigid_solver._options.noslip_iterations > 0:
+            raise RuntimeError("The Rigid Newton framework does not support the noslip post-processing solve")
+        if rigid_solver.rigid_config.use_hibernation:
+            raise RuntimeError("The Rigid Newton framework does not support hibernation")
+
+        self.dyn_state = rigid_solver.dyn_state
+        self.constraint_state = rigid_solver.constraint_solver.constraint_state
+        self.dyn_info = rigid_solver.dyn_info
+        self.rigid_info = rigid_solver.rigid_info
+        self.rigid_config = rigid_solver.rigid_config
+        self.collider_state = rigid_solver.collider.collider_state
+        self.collider_info = rigid_solver.collider.collider_info
+        self.collider_config = rigid_solver.collider.collider_config
+        self.geoms_init_AABB = rigid_solver.geoms_init_AABB
+        self.errno = rigid_solver._errno
+
+        self.mpr_state = rigid_solver.collider._mpr.mpr_state
+        self.gjk_state = rigid_solver.collider._gjk.gjk_state
+        self.gjk_config = rigid_solver.collider._gjk.gjk_config
+
+        self.has_constraints = not rigid_solver._disable_constraint
+        self.has_collision = rigid_solver._enable_collision
+        self.has_split_narrowphase = rigid_solver.collider._use_split_narrowphase
+        self.has_cooperative_contact_pruning = (
+            gs.backend != gs.cpu
+            and rigid_solver.collider.collider_config.has_prunable_contacts
+            and (rigid_solver._options.contact_pruning_tolerance or 0.0) > 0.0
+            and rigid_solver._B * 2 <= rigid_solver.collider._gpu_cores
+        )
+        if self.has_split_narrowphase:
+            self.contact0_mpr_state = rigid_solver.collider.contact0_mpr_state
+            self.contact0_gjk_state = rigid_solver.collider.contact0_gjk_state
+            self.multicontact_mpr_state = rigid_solver.collider.multicontact_mpr_state
+            self.multicontact_gjk_state = rigid_solver.collider.multicontact_gjk_state
+            self.contact0_n_chunks = rigid_solver.collider._contact0_n_chunks
+            self.multicontact_n_total_threads = rigid_solver.collider._multicontact_n_total_threads
+            self.multicontact_max_items_per_thread = rigid_solver.collider._multicontact_max_items_per_thread
+
+        self.n_dofs_per_instance = rigid_solver.n_dofs
+        self.n_instances = rigid_solver._B
+        self.n_dofs = self.n_dofs_per_instance * self.n_instances
+        if dof_range.n_dofs != self.n_dofs:
+            raise ValueError("The Rigid global range does not match the built RigidSolver state")
+        self.scalar_offset = dof_range.scalar_offset
+        self.n_storage_dofs = dof_range.n_storage_dofs
+        self.h = rigid_solver._substep_dt
+        self.h4 = self.h**4
+        self.is_forward_pos_updated = rigid_solver._is_forward_pos_updated
+        self.is_forward_vel_updated = rigid_solver._is_forward_vel_updated
+
+    def build(self) -> None:
+        pass
+
+    @qd.func(requires_top_level=True)
+    def predict(self):
+        func_step_1(
+            self.dyn_state,
+            self.constraint_state,
+            self.dyn_info,
+            self.rigid_info,
+            self.rigid_config,
+            self.is_forward_pos_updated,
+            self.is_forward_vel_updated,
+            False,
+        )
+
+    @qd.func(requires_top_level=True)
+    def assemble_candidate_rows(self):
+        if qd.static(self.has_constraints):
+            solver.func_add_equality_constraints(
+                self.dyn_state,
+                self.collider_state,
+                self.constraint_state,
+                self.dyn_info,
+                self.rigid_info,
+                self.rigid_config,
+            )
+
+        if qd.static(self.has_collision):
+            func_update_geom_aabbs(self.geoms_init_AABB, self.dyn_state, self.rigid_config)
+            broadphase.func_broad_phase_device(
+                self.dyn_state,
+                self.collider_state,
+                self.constraint_state,
+                self.dyn_info,
+                self.rigid_info,
+                self.collider_info,
+                self.rigid_config,
+                self.errno,
+            )
+
+            if qd.static(self.has_split_narrowphase):
+                narrowphase.func_reset_narrowphase_work_queues(self.collider_state)
+                narrowphase.func_narrowphase_contact0(
+                    self.geoms_init_AABB,
+                    self.dyn_state,
+                    self.collider_state,
+                    self.contact0_mpr_state,
+                    self.contact0_gjk_state,
+                    self.dyn_info,
+                    self.rigid_info,
+                    self.collider_info,
+                    self.rigid_config,
+                    self.collider_config,
+                    self.n_instances,
+                    self.contact0_n_chunks,
+                    self.errno,
+                )
+                narrowphase.func_narrowphase_multicontact(
+                    self.geoms_init_AABB,
+                    self.dyn_state,
+                    self.collider_state,
+                    self.multicontact_mpr_state,
+                    self.multicontact_gjk_state,
+                    self.dyn_info,
+                    self.rigid_info,
+                    self.collider_info,
+                    self.rigid_config,
+                    self.collider_config,
+                    self.gjk_config,
+                    self.multicontact_n_total_threads,
+                    self.multicontact_max_items_per_thread,
+                    self.errno,
+                )
+            elif qd.static(self.collider_config.has_non_box_plane_convex_convex):
+                narrowphase.func_narrow_phase_convex_vs_convex(
+                    self.geoms_init_AABB,
+                    self.dyn_state,
+                    self.collider_state,
+                    self.mpr_state,
+                    self.gjk_state,
+                    self.gjk_state.diff_contact_input,
+                    self.dyn_info,
+                    self.rigid_info,
+                    self.collider_info,
+                    self.rigid_config,
+                    self.collider_config,
+                    self.gjk_config,
+                    self.errno,
+                )
+
+            if qd.static(self.collider_config.has_convex_specialization):
+                narrowphase.func_narrow_phase_convex_specializations(
+                    self.geoms_init_AABB,
+                    self.dyn_state,
+                    self.collider_state,
+                    self.dyn_info,
+                    self.rigid_info,
+                    self.collider_info,
+                    self.rigid_config,
+                    self.collider_config,
+                    self.errno,
+                )
+            if qd.static(self.collider_config.has_terrain):
+                narrowphase.func_narrow_phase_any_vs_terrain(
+                    self.geoms_init_AABB,
+                    self.dyn_state,
+                    self.collider_state,
+                    self.mpr_state,
+                    self.dyn_info,
+                    self.rigid_info,
+                    self.collider_info,
+                    self.rigid_config,
+                    self.collider_config,
+                    self.errno,
+                )
+            if qd.static(self.collider_config.has_nonconvex_nonterrain):
+                narrowphase.func_narrow_phase_nonconvex_vs_nonterrain(
+                    self.geoms_init_AABB,
+                    self.dyn_state,
+                    self.collider_state,
+                    self.dyn_info,
+                    self.rigid_info,
+                    self.collider_info,
+                    self.rigid_config,
+                    self.collider_config,
+                    self.errno,
+                )
+
+            if qd.static(self.has_cooperative_contact_pruning):
+                contact.func_clamp_prune_contacts_coop(
+                    self.dyn_state,
+                    self.collider_state,
+                    self.rigid_info,
+                    self.collider_info,
+                    self.errno,
+                )
+            else:
+                contact.func_clamp_prune_contacts(
+                    self.dyn_state,
+                    self.collider_state,
+                    self.rigid_info,
+                    self.collider_info,
+                    self.rigid_config,
+                    self.collider_config,
+                    self.errno,
+                )
+
+        if qd.static(self.has_constraints):
+            solver.func_add_inequality_constraints(
+                self.dyn_state,
+                self.collider_state,
+                self.constraint_state,
+                self.dyn_info,
+                self.rigid_info,
+                self.rigid_config,
+                self.collider_config,
+            )
+
+    @qd.func(requires_top_level=True)
+    def initialize_newton(self):
+        if qd.static(self.has_constraints):
+            solver.func_solve_init(
+                self.dyn_state,
+                self.constraint_state,
+                self.dyn_info,
+                self.rigid_info,
+                self.rigid_config,
+                True,
+            )
+            self.set_newton_active(1)
+            self.build_preconditioner(compute_envelope=True)
+            solver.func_update_gradient_no_solve(
+                self.dyn_state,
+                self.constraint_state,
+                self.dyn_info,
+                self.rigid_info,
+                self.rigid_config,
+            )
+
+    @qd.func(requires_top_level=True)
+    def set_newton_active(self, is_active):
+        for i_b in range(self.n_instances):
+            has_constraints = self.constraint_state.n_constraints[i_b] > 0 and is_active != 0
+            self.constraint_state.improved[i_b] = has_constraints
+            for i_island in range(self.constraint_state.island.n_islands[i_b]):
+                self.constraint_state.island.improved[i_island, i_b] = has_constraints
+
+    @qd.func(requires_top_level=True)
+    def build_preconditioner(self, compute_envelope: qd.template()):
+        solver.func_hessian_and_cholesky_factor_direct(
+            self.constraint_state,
+            self.dyn_info,
+            self.rigid_info,
+            self.rigid_config,
+            compute_envelope=compute_envelope,
+        )
+
+    @qd.func(requires_top_level=True)
+    def assemble_gradient(self, linear_system: qd.template(), gradient_squared: qd.template()):
+        for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
+            i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+            gradient = qd.f64(0.0)
+            gradient_unscaled = qd.f64(0.0)
+            has_live_constraints = False
+            if qd.static(self.has_constraints):
+                has_live_constraints = self.constraint_state.n_constraints[i_b] > 0
+            if has_live_constraints:
+                gradient_unscaled = self.constraint_state.grad[i_d, i_b]
+                gradient = self.h4 * gradient_unscaled
+            linear_system.rhs[i_global] = gradient
+            qd.atomic_add(gradient_squared[()], gradient_unscaled * gradient_unscaled)
+
+        for i_padding in range(self.n_dofs, self.n_storage_dofs):
+            linear_system.rhs[self.scalar_offset + i_padding] = qd.f64(0.0)
+
+    @qd.func(requires_top_level=True)
+    def add_current_energy(self, energy: qd.template()):
+        if qd.static(self.has_constraints):
+            for i_b in range(self.n_instances):
+                qd.atomic_add(energy[()], self.h4 * self.constraint_state.cost[i_b])
+
+    @qd.func(requires_top_level=True)
+    def apply_hessian(self, x: qd.template(), y: qd.template()):
+        if qd.static(self.has_constraints):
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
+                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+                self.constraint_state.search[i_d, i_b] = x[i_global]
+
+            for i_b in range(self.n_instances):
+                if self.constraint_state.n_constraints[i_b] > 0:
+                    for i_island in range(self.constraint_state.island.n_islands[i_b]):
+                        n_dofs = self.constraint_state.island.dof_slices.n[i_island, i_b]
+                        if qd.static(self.rigid_config.is_single_island):
+                            n_dofs = self.n_dofs_per_instance
+                        i_dof_start = self.constraint_state.island.dof_slices.start[i_island, i_b]
+
+                        for j_d_local in range(n_dofs):
+                            j_d = j_d_local
+                            if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
+                                j_d = self.constraint_state.island.dof_id[i_dof_start + j_d_local, i_b]
+                            value = gs.qd_float(0.0)
+                            for i_d_local in range(j_d_local, n_dofs):
+                                i_d = i_d_local
+                                if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
+                                    i_d = self.constraint_state.island.dof_id[i_dof_start + i_d_local, i_b]
+                                scale = gs.qd_float(1.0)
+                                if qd.static(self.rigid_config.enable_jacobi_equilibration):
+                                    scale = self.constraint_state.nt_jacobi[i_d, i_b]
+                                value = value + (
+                                    self.constraint_state.nt_H[i_b, i_d, j_d]
+                                    * self.constraint_state.search[i_d, i_b]
+                                    / scale
+                                )
+                            self.constraint_state.Mgrad[j_d, i_b] = value
+
+                        for i_d_local in range(n_dofs):
+                            i_d = i_d_local
+                            if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
+                                i_d = self.constraint_state.island.dof_id[i_dof_start + i_d_local, i_b]
+                            value = gs.qd_float(0.0)
+                            for j_d_local in range(i_d_local + 1):
+                                j_d = j_d_local
+                                if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
+                                    j_d = self.constraint_state.island.dof_id[i_dof_start + j_d_local, i_b]
+                                value = value + (
+                                    self.constraint_state.nt_H[i_b, i_d, j_d] * self.constraint_state.Mgrad[j_d, i_b]
+                                )
+                            scale = gs.qd_float(1.0)
+                            if qd.static(self.rigid_config.enable_jacobi_equilibration):
+                                scale = self.constraint_state.nt_jacobi[i_d, i_b]
+                            self.constraint_state.grad[i_d, i_b] = value / scale
+
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
+                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+                if self.constraint_state.n_constraints[i_b] > 0:
+                    y[i_global] = y[i_global] + self.h4 * self.constraint_state.grad[i_d, i_b]
+
+        for i_padding in range(self.n_dofs, self.n_storage_dofs):
+            i_global = self.scalar_offset + i_padding
+            y[i_global] = y[i_global] + x[i_global]
+
+    @qd.func(requires_top_level=True)
+    def apply_preconditioner(self, residual: qd.template(), result: qd.template()):
+        if qd.static(self.has_constraints):
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
+                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+                self.constraint_state.grad[i_d, i_b] = residual[i_global]
+
+            for i_b in range(self.n_instances):
+                if self.constraint_state.n_constraints[i_b] > 0:
+                    for i_island in range(self.constraint_state.island.n_islands[i_b]):
+                        solver.func_cholesky_solve_batch(
+                            i_b,
+                            i_island,
+                            rhs=self.constraint_state.grad,
+                            out=self.constraint_state.Mgrad,
+                            constraint_state=self.constraint_state,
+                            rigid_config=self.rigid_config,
+                        )
+
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
+                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+                if self.constraint_state.n_constraints[i_b] > 0:
+                    result[i_global] = self.constraint_state.Mgrad[i_d, i_b] / self.h4
+
+        for i_padding in range(self.n_dofs, self.n_storage_dofs):
+            i_global = self.scalar_offset + i_padding
+            result[i_global] = residual[i_global]
+
+    @qd.func(requires_top_level=True)
+    def prepare_direction(self, direction: qd.template()):
+        if qd.static(self.has_constraints):
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
+                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+                self.constraint_state.search[i_d, i_b] = direction[i_global]
+                self.constraint_state.Mgrad[i_d, i_b] = -direction[i_global]
+            for i_b in range(self.n_instances):
+                if self.constraint_state.n_constraints[i_b] > 0:
+                    linesearch.func_mv_jv_dense(i_b, self.constraint_state, self.rigid_info)
+
+    @qd.func(requires_top_level=True)
+    def evaluate_energy_delta(self, alpha, energy_delta: qd.template()):
+        if qd.static(self.has_constraints):
+            alphas = qd.Vector.zero(gs.qd_float, 3)
+            alphas[0] = alpha
+            for i_b in range(self.n_instances):
+                if self.constraint_state.n_constraints[i_b] > 0:
+                    delta = gs.qd_float(0.0)
+                    for i_d in range(self.n_dofs_per_instance):
+                        search = self.constraint_state.search[i_d, i_b]
+                        delta = delta + alpha * search * (
+                            self.constraint_state.Ma[i_d, i_b] - self.dyn_state.dofs.qf_smooth[i_d, i_b]
+                        )
+                        delta = delta + 0.5 * alpha * alpha * search * self.constraint_state.mv[i_d, i_b]
+
+                    n_equalities = self.constraint_state.n_constraints_equality[i_b]
+                    n_frictionloss = n_equalities + self.constraint_state.n_constraints_frictionloss[i_b]
+                    n_cone = n_frictionloss
+                    if qd.static(self.rigid_config.enable_elliptic_friction):
+                        n_cone = n_cone + self.constraint_state.n_constraints_cone[i_b]
+                    for i_c in range(self.constraint_state.n_constraints[i_b]):
+                        if i_c < n_equalities:
+                            Jaref = self.constraint_state.Jaref[i_c, i_b]
+                            jv = self.constraint_state.jv[i_c, i_b]
+                            curvature = self.constraint_state.efc_D[i_c, i_b]
+                            delta = delta + curvature * (alpha * Jaref * jv + 0.5 * alpha * alpha * jv * jv)
+                        terms = linesearch.func_row_alpha_terms(
+                            i_c,
+                            i_b,
+                            1,
+                            alphas,
+                            n_equalities,
+                            n_frictionloss,
+                            n_cone,
+                            self.constraint_state,
+                            self.rigid_config,
+                            0,
+                        )
+                        delta = delta + terms[0] + alpha * terms[1] + alpha * alpha * terms[2]
+                    qd.atomic_add(energy_delta[()], self.h4 * delta)
+
+    @qd.func(requires_top_level=True)
+    def accept(self, alpha):
+        if qd.static(self.has_constraints):
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
+                self.constraint_state.qacc[i_d, i_b] = (
+                    self.constraint_state.qacc[i_d, i_b] + alpha * self.constraint_state.search[i_d, i_b]
+                )
+                self.constraint_state.Ma[i_d, i_b] = (
+                    self.constraint_state.Ma[i_d, i_b] + alpha * self.constraint_state.mv[i_d, i_b]
+                )
+            for i_c, i_b in qd.ndrange(self.constraint_state.Jaref.shape[0], self.n_instances):
+                if i_c < self.constraint_state.n_constraints[i_b]:
+                    self.constraint_state.Jaref[i_c, i_b] = (
+                        self.constraint_state.Jaref[i_c, i_b] + alpha * self.constraint_state.jv[i_c, i_b]
+                    )
+
+            solver.func_update_constraint(
+                qacc=self.constraint_state.qacc,
+                Ma=self.constraint_state.Ma,
+                cost=self.constraint_state.cost,
+                dyn_state=self.dyn_state,
+                constraint_state=self.constraint_state,
+                rigid_config=self.rigid_config,
+            )
+            self.set_newton_active(1)
+            solver.func_update_gradient_no_solve(
+                self.dyn_state,
+                self.constraint_state,
+                self.dyn_info,
+                self.rigid_info,
+                self.rigid_config,
+            )
+
+    @qd.func(requires_top_level=True)
+    def finalize(self):
+        if qd.static(self.has_constraints):
+            solver.func_update_qacc(self.dyn_state, self.constraint_state, self.rigid_config, self.errno)
+            if qd.static(self.has_collision):
+                solver.func_update_contact_force(
+                    self.dyn_state,
+                    self.collider_state,
+                    self.constraint_state,
+                    self.dyn_info,
+                    self.rigid_info,
+                    self.rigid_config,
+                )
+        func_step_2(
+            self.dyn_state,
+            self.constraint_state,
+            self.dyn_info,
+            self.rigid_info,
+            self.rigid_config,
+            False,
+            self.errno,
+        )

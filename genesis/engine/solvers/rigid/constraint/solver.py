@@ -308,12 +308,14 @@ class ConstraintSolver:
             self._n_iterations,
         )
 
-        func_update_qacc(self._solver.dyn_state, self.constraint_state, self._solver.rigid_config, self._solver._errno)
+        kernel_update_qacc(
+            self._solver.dyn_state, self.constraint_state, self._solver.rigid_config, self._solver._errno
+        )
 
         if self._solver._options.noslip_iterations > 0:
             self.noslip()
 
-        func_update_contact_force(
+        kernel_update_contact_force(
             self._solver.dyn_state,
             self._collider.collider_state,
             self.constraint_state,
@@ -1352,8 +1354,8 @@ def func_equality_joint(
     _sort_relevant_dofs_descending(n_con, i_b, con_n_dofs, constraint_state, rigid_config)
 
 
-@qd.kernel(fastcache=True)
-def add_equality_constraints(
+@qd.func
+def func_add_equality_constraints(
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
     constraint_state: array_class.ConstraintState,
@@ -1384,6 +1386,18 @@ def add_equality_constraints(
                 func_equality_weld(i_b, i_e, dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
             elif dyn_info.equalities.eq_type[i_e, i_b] == gs.EQUALITY_TYPE.JOINT:
                 func_equality_joint(i_b, i_e, dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
+
+
+@qd.kernel(fastcache=True)
+def add_equality_constraints(
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+):
+    func_add_equality_constraints(dyn_state, collider_state, constraint_state, dyn_info, rigid_info, rigid_config)
 
 
 @qd.func
@@ -1511,8 +1525,8 @@ def func_append_factor_worklist(
         constraint_state.island.factor_worklist_i_island[i_slot] = i_island
 
 
-@qd.kernel(fastcache=True)
-def add_inequality_constraints(
+@qd.func
+def func_add_inequality_constraints(
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
     constraint_state: array_class.ConstraintState,
@@ -1537,6 +1551,27 @@ def add_inequality_constraints(
         add_collision_constraints(dyn_state, collider_state, constraint_state, dyn_info, rigid_info, rigid_config)
     if qd.static(rigid_config.enable_joint_limit):
         add_joint_limit_constraints(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
+
+
+@qd.kernel(fastcache=True)
+def add_inequality_constraints(
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+    collider_static_config: qd.template(),
+):
+    func_add_inequality_constraints(
+        dyn_state,
+        collider_state,
+        constraint_state,
+        dyn_info,
+        rigid_info,
+        rigid_config,
+        collider_static_config,
+    )
 
 
 @qd.func
@@ -5163,7 +5198,7 @@ def initialize_Ma(
 # ======================================================= Core ========================================================
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_solve_init(
     dyn_state: array_class.DynState,
     constraint_state: array_class.ConstraintState,
@@ -5352,6 +5387,18 @@ def func_solve_init(
                     )
 
 
+@qd.kernel(fastcache=True)
+def kernel_solve_init(
+    dyn_state: array_class.DynState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+    write_L: bool,
+):
+    func_solve_init(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config, write_L)
+
+
 @qd.func
 def func_solve_iter(
     i_b,
@@ -5505,7 +5552,7 @@ def func_solve_body_monolith(dyn_state, constraint_state, dyn_info, rigid_info, 
     # consumes, then the solve kernel runs. Keeping the init inside the entrypoint (rather than in resolve, before the
     # dispatch) is what lets each arm declare its own init behavior - the dispatcher may run a different arm on the next
     # step during autotuning.
-    func_solve_init(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config, write_L=True)
+    kernel_solve_init(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config, write_L=True)
     _kernel_solve_monolith(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config, _n_iterations)
 
 
@@ -5514,7 +5561,7 @@ def func_solve_body_monolith(dyn_state, constraint_state, dyn_info, rigid_info, 
 # =====================================================================================================================
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_update_contact_force(
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
@@ -5593,7 +5640,7 @@ def func_update_contact_force(
                 )
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_update_qacc(
     dyn_state: array_class.DynState,
     constraint_state: array_class.ConstraintState,
@@ -5619,6 +5666,28 @@ def func_update_qacc(
     qd.loop_config(serialize=rigid_config.para_level < gs.PARA_LEVEL.ALL)
     for i_b in range(_B):
         constraint_state.is_warmstart[i_b] = True
+
+
+@qd.kernel(fastcache=True)
+def kernel_update_contact_force(
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+):
+    func_update_contact_force(dyn_state, collider_state, constraint_state, dyn_info, rigid_info, rigid_config)
+
+
+@qd.kernel(fastcache=True)
+def kernel_update_qacc(
+    dyn_state: array_class.DynState,
+    constraint_state: array_class.ConstraintState,
+    rigid_config: qd.template(),
+    errno: qd.Tensor,
+):
+    func_update_qacc(dyn_state, constraint_state, rigid_config, errno)
 
 
 from genesis.utils.deprecated_module_wrapper import create_virtual_deprecated_module

@@ -9,6 +9,7 @@ import genesis as gs
 import genesis.utils.geom as gu
 from genesis.engine.solvers.rigid.constraint import solver as constraint_solver
 from genesis.engine.solvers.rigid.constraint.solver import ConstraintSolver
+from genesis.engine.solvers.rigid.rigid_solver import step_rigid_core
 from genesis.utils.misc import qd_to_numpy, tensor_to_array
 
 from ..utils.assertions import assert_allclose, assert_equal
@@ -113,6 +114,59 @@ def test_all_fixed(show_viewer):
     assert_allclose(cube.get_vel(), 0, tol=gs.EPS)
     assert_allclose(cube.get_ang(), 0, tol=gs.EPS)
     assert_allclose(scene.rigid_solver.get_links_acc(), 0, tol=gs.EPS)
+
+
+@pytest.mark.required
+@pytest.mark.parametrize("model_name", ["double_ball_pendulum"])
+def test_rigid_core_step_matches_scene_step(xml_path, show_viewer):
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(
+            dt=0.01,
+        ),
+        viewer_options=gs.options.ViewerOptions(
+            camera_pos=(3.0, -3.0, 2.0),
+            camera_lookat=(0.5, 0.0, 0.5),
+        ),
+        show_viewer=show_viewer,
+    )
+    scene.add_entity(
+        morph=gs.morphs.Plane(),
+    )
+    scene.add_entity(
+        morph=gs.morphs.MJCF(
+            file=xml_path,
+            pos=(-0.5, 0.0, 1.0),
+        ),
+    )
+    sphere = scene.add_entity(
+        morph=gs.morphs.Sphere(
+            pos=(1.0, 0.0, 0.12),
+            radius=0.1,
+        ),
+    )
+    scene.build()
+    sphere.set_dofs_velocity((0.0, 0.0, -1.0, 0.0, 0.0, 0.0))
+    initial_state = scene.get_state()
+
+    for _ in range(5):
+        scene.step()
+    reference = scene.rigid_solver.get_state()
+    reference_qpos = reference.qpos.clone()
+    reference_dofs_vel = reference.dofs_vel.clone()
+    reference_dofs_acc = reference.dofs_acc.clone()
+    reference_links_pos = reference.links_pos.clone()
+    reference_links_quat = reference.links_quat.clone()
+
+    scene.reset(initial_state)
+    for _ in range(5):
+        step_rigid_core(scene.rigid_solver, 0)
+    actual = scene.rigid_solver.get_state()
+
+    assert_equal(actual.qpos, reference_qpos)
+    assert_equal(actual.dofs_vel, reference_dofs_vel)
+    assert_equal(actual.dofs_acc, reference_dofs_acc)
+    assert_equal(actual.links_pos, reference_links_pos)
+    assert_equal(actual.links_quat, reference_links_quat)
 
 
 @pytest.mark.required

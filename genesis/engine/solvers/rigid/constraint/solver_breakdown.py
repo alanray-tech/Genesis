@@ -327,7 +327,7 @@ def func_solve_decomposed(dyn_state, constraint_state, dyn_info, rigid_info, rig
     single island spanning every dof.
     """
     # The graph maintains the assembled Hessian in nt_H, so the seed leaves it there (write_L=False).
-    solver.func_solve_init(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config, write_L=False)
+    solver.kernel_solve_init(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config, write_L=False)
     if _n_iterations <= 0:
         return
     constraint_state.graph_counter.from_numpy(np.array(_n_iterations, dtype=np.int32))
