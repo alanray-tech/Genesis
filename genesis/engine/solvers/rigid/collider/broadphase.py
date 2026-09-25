@@ -72,8 +72,8 @@ def func_collision_clear(
         func_collider_clear_env(i_b, dyn_state, collider_state, dyn_info, rigid_info, rigid_config)
 
 
-@qd.kernel(fastcache=True)
-def _func_broad_phase_sap(
+@qd.func
+def func_broad_phase_sap(
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
     constraint_state: array_class.ConstraintState,
@@ -337,8 +337,8 @@ def _func_broad_phase_sap(
         collider_state.n_broad_pairs[i_b] = n_broad
 
 
-@qd.kernel(fastcache=True)
-def _func_broad_phase_all_vs_all(
+@qd.func
+def func_broad_phase_all_vs_all(
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
     constraint_state: array_class.ConstraintState,
@@ -389,15 +389,68 @@ def _func_broad_phase_all_vs_all(
             errno[i_b] = errno[i_b] | array_class.ErrorCode.OVERFLOW_CANDIDATE_CONTACTS
 
 
+@qd.func
+def func_broad_phase_device(
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    errno: qd.Tensor,
+):
+    if qd.static(rigid_config.broadphase_traversal == gs.broadphase_traversal.ALL_VS_ALL):
+        func_broad_phase_all_vs_all(
+            dyn_state, collider_state, constraint_state, dyn_info, rigid_info, collider_info, rigid_config, errno
+        )
+    else:
+        func_broad_phase_sap(
+            dyn_state, collider_state, constraint_state, dyn_info, rigid_info, collider_info, rigid_config, errno
+        )
+
+
+@qd.kernel(fastcache=True)
+def _kernel_broad_phase_sap(
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    errno: qd.Tensor,
+):
+    func_broad_phase_sap(
+        dyn_state, collider_state, constraint_state, dyn_info, rigid_info, collider_info, rigid_config, errno
+    )
+
+
+@qd.kernel(fastcache=True)
+def _kernel_broad_phase_all_vs_all(
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    errno: qd.Tensor,
+):
+    func_broad_phase_all_vs_all(
+        dyn_state, collider_state, constraint_state, dyn_info, rigid_info, collider_info, rigid_config, errno
+    )
+
+
 def func_broad_phase(
     dyn_state, dyn_info, rigid_info, rigid_config, constraint_state, collider_state, collider_info, errno
 ):
     """Dispatch to the appropriate broad-phase kernel based on config."""
     if rigid_config.broadphase_traversal == gs.broadphase_traversal.ALL_VS_ALL:
-        _func_broad_phase_all_vs_all(
+        _kernel_broad_phase_all_vs_all(
             dyn_state, collider_state, constraint_state, dyn_info, rigid_info, collider_info, rigid_config, errno
         )
     else:
-        _func_broad_phase_sap(
+        _kernel_broad_phase_sap(
             dyn_state, collider_state, constraint_state, dyn_info, rigid_info, collider_info, rigid_config, errno
         )

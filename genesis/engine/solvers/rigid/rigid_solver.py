@@ -4,12 +4,10 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 import numpy as np
+import quadrants as qd
 import torch
 
-import quadrants as qd
-
 import genesis as gs
-import genesis.utils.array_class as array_class
 import genesis.utils.geom as gu
 from genesis.constants import link_ref_frame
 from genesis.engine.entities import DroneEntity, RigidEntity, TerrainEntity
@@ -18,6 +16,7 @@ from genesis.engine.materials import Rigid
 from genesis.engine.states import KinematicSolverCheckpoint, QueriedStates, RigidSolverState
 from genesis.options.morphs import Drone, Morph, Terrain
 from genesis.options.solvers import RigidOptions
+from genesis.utils import array_class
 from genesis.utils.misc import (
     DeprecationError,
     assign_indexed_tensor,
@@ -39,85 +38,6 @@ from ..kinematic_solver import (
     _fill_base_link_geom_offsets,
     _offset_world_shift,
     _select_links_offset,
-)
-from .collider import Collider
-from .constraint import ConstraintSolver
-from .constraint.backward import (
-    kernel_accumulate_constraint_solver_grads,
-    kernel_load_dL_dqacc_from_acc_grad,
-    kernel_manual_add_collision_constraints_bw,
-    kernel_manual_add_equality_constraints_bw,
-    kernel_manual_add_frictionloss_constraints_bw,
-    kernel_manual_add_joint_limit_constraints_bw,
-)
-from .abd.misc import (
-    kernel_init_link_dynamics,
-    func_add_safe_backward,
-    func_apply_coupling_force,
-    func_atomic_add_if,
-    func_check_index_range,
-    func_clear_external_force,
-    func_read_field_if,
-    func_write_and_read_field_if,
-    func_write_field_if,
-    kernel_apply_links_external_wrench,
-    kernel_apply_links_external_wrench_at_pos,
-    kernel_bit_reduction,
-    kernel_clear_external_force,
-    kernel_init_dof_fields,
-    kernel_init_entity_fields,
-    kernel_init_equality_fields,
-    kernel_init_geom_fields,
-    kernel_init_joint_fields,
-    kernel_init_vert_fields,
-    kernel_init_vgeom_fields,
-    kernel_init_vvert_fields,
-    kernel_reset_hibernation,
-    kernel_set_zero,
-    kernel_update_heterogeneous_link_info,
-    kernel_wakeup_coupled_links,
-)
-from .abd.forward_kinematics import (
-    func_forward_kinematics_root,
-    func_forward_velocity,
-    func_update_all_verts,
-    func_update_cartesian_space,
-    func_update_geoms,
-    func_update_geoms_root,
-    func_update_verts_for_geom,
-    kernel_COM_links_replay,
-    kernel_forward_kinematics_links_geoms,
-    kernel_forward_kinematics_replay,
-    kernel_forward_velocity,
-    kernel_masked_forward_kinematics_links_geoms,
-    kernel_masked_forward_velocity,
-    kernel_update_all_verts,
-    kernel_update_cartesian_space,
-    kernel_update_geom_aabbs,
-    kernel_update_geoms_replay,
-    kernel_update_verts_for_geoms,
-    kernel_update_vgeoms,
-)
-from .abd.forward_dynamics import (
-    func_actuation,
-    func_bias_force,
-    func_compute_mass_matrix,
-    func_compute_qacc,
-    func_factor_mass,
-    func_forward_dynamics,
-    func_implicit_damping,
-    func_integrate,
-    func_solve_mass_batch,
-    func_torque_and_passive_force,
-    func_update_acc,
-    func_update_force,
-    func_vel_at_point,
-    kernel_forward_dynamics,
-    kernel_forward_dynamics_without_qacc,
-    kernel_refresh_invweight_and_meaninertia,
-    kernel_update_acc,
-    update_qacc_from_qvel_delta,
-    update_qvel,
 )
 from .abd.accessor import (
     ConstraintType,
@@ -179,10 +99,85 @@ from .abd.diff import (
     kernel_prepare_backward_substep,
     kernel_save_adjoint_cache,
 )
+from .abd.forward_dynamics import (
+    func_actuation,
+    func_bias_force,
+    func_compute_mass_matrix,
+    func_compute_qacc,
+    func_factor_mass,
+    func_forward_dynamics,
+    func_implicit_damping,
+    func_integrate,
+    func_solve_mass_batch,
+    func_torque_and_passive_force,
+    func_update_acc,
+    func_update_force,
+    func_vel_at_point,
+    kernel_forward_dynamics,
+    kernel_forward_dynamics_without_qacc,
+    kernel_refresh_invweight_and_meaninertia,
+    kernel_update_acc,
+)
+from .abd.forward_kinematics import (
+    func_forward_kinematics_root,
+    func_forward_velocity,
+    func_update_all_verts,
+    func_update_cartesian_space,
+    func_update_geoms,
+    func_update_geoms_root,
+    func_update_verts_for_geom,
+    kernel_COM_links_replay,
+    kernel_forward_kinematics_links_geoms,
+    kernel_forward_kinematics_replay,
+    kernel_forward_velocity,
+    kernel_masked_forward_kinematics_links_geoms,
+    kernel_masked_forward_velocity,
+    kernel_update_all_verts,
+    kernel_update_cartesian_space,
+    kernel_update_geom_aabbs,
+    kernel_update_geoms_replay,
+    kernel_update_verts_for_geoms,
+    kernel_update_vgeoms,
+)
 from .abd.manual_bw import (
     kernel_manual_compute_qacc_bw,
     kernel_manual_forward_kinematics_bw,
     kernel_manual_forward_velocity_bw,
+)
+from .abd.misc import (
+    func_add_safe_backward,
+    func_atomic_add_if,
+    func_check_index_range,
+    func_clear_external_force,
+    func_read_field_if,
+    func_write_and_read_field_if,
+    func_write_field_if,
+    kernel_apply_links_external_wrench,
+    kernel_apply_links_external_wrench_at_pos,
+    kernel_bit_reduction,
+    kernel_clear_external_force,
+    kernel_init_dof_fields,
+    kernel_init_entity_fields,
+    kernel_init_equality_fields,
+    kernel_init_geom_fields,
+    kernel_init_joint_fields,
+    kernel_init_link_dynamics,
+    kernel_init_vert_fields,
+    kernel_init_vgeom_fields,
+    kernel_init_vvert_fields,
+    kernel_reset_hibernation,
+    kernel_set_zero,
+    kernel_update_heterogeneous_link_info,
+)
+from .collider import Collider
+from .constraint import ConstraintSolver
+from .constraint.backward import (
+    kernel_accumulate_constraint_solver_grads,
+    kernel_load_dL_dqacc_from_acc_grad,
+    kernel_manual_add_collision_constraints_bw,
+    kernel_manual_add_equality_constraints_bw,
+    kernel_manual_add_frictionloss_constraints_bw,
+    kernel_manual_add_joint_limit_constraints_bw,
 )
 
 if TYPE_CHECKING:
@@ -242,6 +237,50 @@ def _sanitize_sol_params(
     width[:] = width.clip(0.0)
     power[:] = power.clip(1)
     return sol_params
+
+
+def step_rigid_core(solver: "RigidSolver", f):
+    """Advance one native rigid numerical substep directly."""
+    if solver._requires_grad and f == 0:
+        kernel_save_adjoint_cache(
+            f,
+            solver.dyn_state,
+            solver._rigid_adjoint_cache,
+            solver.rigid_info,
+            solver.rigid_config,
+        )
+
+    kernel_step_1(
+        solver.dyn_state,
+        solver.constraint_solver.constraint_state,
+        solver.dyn_info,
+        solver.rigid_info,
+        solver.rigid_config,
+        solver._is_forward_pos_updated,
+        solver._is_forward_vel_updated,
+        solver._is_backward,
+    )
+
+    solver._func_constraint_force()
+    kernel_step_2(
+        solver.dyn_state,
+        solver.constraint_solver.constraint_state,
+        solver.dyn_info,
+        solver.rigid_info,
+        solver.rigid_config,
+        solver._is_backward,
+        solver._errno,
+    )
+    solver._is_forward_pos_updated = not solver._enable_mujoco_compatibility
+    solver._is_forward_vel_updated = not solver._enable_mujoco_compatibility
+    if solver._requires_grad:
+        kernel_save_adjoint_cache(
+            f + 1,
+            solver.dyn_state,
+            solver._rigid_adjoint_cache,
+            solver.rigid_info,
+            solver.rigid_config,
+        )
 
 
 class RigidSolver(GravityMixin, TimeBasedMixin, KinematicSolver):
@@ -481,9 +520,8 @@ class RigidSolver(GravityMixin, TimeBasedMixin, KinematicSolver):
             self._geoms_offset_pos = torch.from_numpy(geoms_offset_pos).to(device=gs.device, dtype=gs.tc_float)
             self._geoms_offset_quat = torch.from_numpy(geoms_offset_quat).to(device=gs.device, dtype=gs.tc_float)
 
-        # FIXME: when the migration is finished, we will remove the about two lines
+        # FIXME: when the migration is finished, we will remove the compatibility alias.
         self._func_vel_at_point = func_vel_at_point
-        self._func_apply_coupling_force = func_apply_coupling_force
 
     def _resolve_broadphase_traversal(self):
         if self._options.broadphase_traversal is not None:
@@ -761,21 +799,13 @@ class RigidSolver(GravityMixin, TimeBasedMixin, KinematicSolver):
                 gs.raise_exception(
                     "Only approximate_implicitfast integrator is supported yet when requires_grad is True."
                 )
-            from genesis.engine.couplers import SAPCoupler, IPCCoupler
-
-            if isinstance(self.sim.coupler, (SAPCoupler, IPCCoupler)):
-                gs.raise_exception(
-                    f"{type(self.sim.coupler).__name__} is not supported yet when requires_grad is True."
-                )
-
             if self._options.noslip_iterations > 0:
                 gs.raise_exception("Noslip is not supported yet when requires_grad is True.")
             if self._options.enable_torsional_friction or self._options.enable_rolling_friction:
                 gs.raise_exception("Torsional and rolling friction are not supported yet when requires_grad is True.")
 
     def _create_data_manager(self):
-        # We initialize data even if the solver is not active because the coupler needs arguments like
-        # rigid_solver.dyn_state.links, etc. regardless of the solver is active or not.
+        # The solver owns one complete typed data set for its numerical kernels.
         self.data_manager = array_class.DataManager(self, kinematic_only=False)
         self._errno = self.data_manager.errno
 
@@ -1263,53 +1293,7 @@ class RigidSolver(GravityMixin, TimeBasedMixin, KinematicSolver):
         self._is_forward_pos_updated = True
 
     def substep(self, f):
-        # from genesis.utils.tools import create_timer
-        from genesis.engine.couplers import SAPCoupler
-
-        if self._requires_grad and f == 0:
-            kernel_save_adjoint_cache(f, self.dyn_state, self._rigid_adjoint_cache, self.rigid_info, self.rigid_config)
-
-        # Coupling forces from the previous coupling phase may target hibernated links (see
-        # kernel_wakeup_coupled_links in abd/misc.py). They can only exist when another solver is active.
-        if self._use_hibernation and len(self.sim.active_solvers) > 1:
-            kernel_wakeup_coupled_links(
-                self.dyn_state,
-                self.constraint_solver.constraint_state,
-                self.dyn_info,
-                self.rigid_info,
-                self.rigid_config,
-            )
-
-        kernel_step_1(
-            self.dyn_state,
-            self.constraint_solver.constraint_state,
-            self.dyn_info,
-            self.rigid_info,
-            self.rigid_config,
-            self._is_forward_pos_updated,
-            self._is_forward_vel_updated,
-            self._is_backward,
-        )
-
-        if isinstance(self.sim.coupler, SAPCoupler):
-            update_qvel(self.dyn_state, self.rigid_info, self.rigid_config)
-        else:
-            self._func_constraint_force()
-            kernel_step_2(
-                self.dyn_state,
-                self.constraint_solver.constraint_state,
-                self.dyn_info,
-                self.rigid_info,
-                self.rigid_config,
-                self._is_backward,
-                self._errno,
-            )
-            self._is_forward_pos_updated = not self._enable_mujoco_compatibility
-            self._is_forward_vel_updated = not self._enable_mujoco_compatibility
-            if self._requires_grad:
-                kernel_save_adjoint_cache(
-                    f + 1, self.dyn_state, self._rigid_adjoint_cache, self.rigid_info, self.rigid_config
-                )
+        step_rigid_core(self, f)
 
     def get_error_envs_mask(self):
         return qd_to_torch(self._errno) > 0
@@ -1543,16 +1527,6 @@ class RigidSolver(GravityMixin, TimeBasedMixin, KinematicSolver):
 
     def substep_pre_coupling(self, f):
         if self.is_active:
-            # Skip rigid body computation when using IPCCoupler (IPC handles rigid simulation)
-            from genesis.engine.couplers import IPCCoupler
-
-            if isinstance(self.sim.coupler, IPCCoupler):
-                # If any rigid entity is coupled to IPC, skip pre-coupling rigid simulation
-                # The rigid simulation will be done in post-coupling phase instead
-                if self.sim.coupler.has_any_rigid_coupling:
-                    return
-
-            # Run Genesis rigid simulation step for non-IPC couplers
             self.substep(f)
 
     def reset_grad(self):
@@ -1675,27 +1649,7 @@ class RigidSolver(GravityMixin, TimeBasedMixin, KinematicSolver):
         self._is_backward = False
 
     def substep_post_coupling(self, f):
-        from genesis.engine.couplers import SAPCoupler, IPCCoupler
-
-        if not self.is_active:
-            return
-
-        if isinstance(self.sim.coupler, SAPCoupler):
-            update_qacc_from_qvel_delta(self.dyn_state, self.rigid_info, self.rigid_config)
-            kernel_step_2(
-                self.dyn_state,
-                self.constraint_solver.constraint_state,
-                self.dyn_info,
-                self.rigid_info,
-                self.rigid_config,
-                self._is_backward,
-                self._errno,
-            )
-        elif isinstance(self.sim.coupler, IPCCoupler):
-            # If any rigid entity is coupled to IPC, perform rigid simulation in post-coupling phase.
-            # Collision exclusion for IPC-coupled links is handled in the collider at build time.
-            if self.sim.coupler.has_any_rigid_coupling:
-                self.substep(f)
+        pass
 
     # ------------------------------------------------------------------------------------
     # -------------------------------- state get/set -------------------------------------
@@ -3248,11 +3202,6 @@ class RigidSolver(GravityMixin, TimeBasedMixin, KinematicSolver):
         return qd_to_torch(self.dyn_info.geoms.friction_rolling, geoms_idx, copy=True)
 
     def get_AABB(self, entities_idx=None, envs_idx=None):
-        from genesis.engine.couplers import LegacyCoupler
-
-        if not isinstance(self.sim.coupler, LegacyCoupler):
-            gs.raise_exception("Method only supported when using 'LegacyCoupler' coupler type.")
-
         aabb_min = qd_to_torch(self.dyn_state.geoms.aabb_min, envs_idx, transpose=True)
         aabb_max = qd_to_torch(self.dyn_state.geoms.aabb_max, envs_idx, transpose=True)
 
@@ -3410,8 +3359,8 @@ class RigidSolver(GravityMixin, TimeBasedMixin, KinematicSolver):
         return gs.List(equality for entity in self._entities for equality in entity.equalities)
 
 
-@qd.kernel(fastcache=True)
-def kernel_step_1(
+@qd.func
+def func_step_1(
     dyn_state: array_class.DynState,
     constraint_state: array_class.ConstraintState,
     dyn_info: array_class.DynInfo,
@@ -3433,7 +3382,30 @@ def kernel_step_1(
 
 
 @qd.kernel(fastcache=True)
-def kernel_step_2(
+def kernel_step_1(
+    dyn_state: array_class.DynState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+    is_forward_pos_updated: qd.template(),
+    is_forward_vel_updated: qd.template(),
+    is_backward: qd.template(),
+):
+    func_step_1(
+        dyn_state,
+        constraint_state,
+        dyn_info,
+        rigid_info,
+        rigid_config,
+        is_forward_pos_updated,
+        is_forward_vel_updated,
+        is_backward,
+    )
+
+
+@qd.func
+def func_step_2(
     dyn_state: array_class.DynState,
     constraint_state: array_class.ConstraintState,
     dyn_info: array_class.DynInfo,
@@ -3462,3 +3434,16 @@ def kernel_step_2(
                 dyn_state, dyn_info, rigid_info, rigid_config, force_update_all_geoms=False, is_backward=is_backward
             )
             func_forward_velocity(dyn_state, dyn_info, rigid_info, rigid_config, is_backward)
+
+
+@qd.kernel(fastcache=True)
+def kernel_step_2(
+    dyn_state: array_class.DynState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+    is_backward: qd.template(),
+    errno: qd.Tensor,
+):
+    func_step_2(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config, is_backward, errno)

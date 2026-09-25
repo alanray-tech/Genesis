@@ -807,8 +807,8 @@ def kernel_update_all_verts(
     func_update_all_verts(dyn_state, dyn_info, rigid_config)
 
 
-@qd.kernel(fastcache=True)
-def kernel_update_geom_aabbs(
+@qd.func
+def func_update_geom_aabbs(
     geoms_init_AABB: array_class.GeomsInitAABB, dyn_state: array_class.DynState, rigid_config: qd.template()
 ):
     n_geoms = dyn_state.geoms.pos.shape[0]
@@ -828,6 +828,13 @@ def kernel_update_geom_aabbs(
 
         dyn_state.geoms.aabb_min[i_g, i_b] = lower
         dyn_state.geoms.aabb_max[i_g, i_b] = upper
+
+
+@qd.kernel(fastcache=True)
+def kernel_update_geom_aabbs(
+    geoms_init_AABB: array_class.GeomsInitAABB, dyn_state: array_class.DynState, rigid_config: qd.template()
+):
+    func_update_geom_aabbs(geoms_init_AABB, dyn_state, rigid_config)
 
 
 @qd.kernel(fastcache=True)

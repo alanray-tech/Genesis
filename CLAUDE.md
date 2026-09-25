@@ -1,5 +1,15 @@
 # Genesis Development Guidelines
 
+## Rigid Newton framework worktree
+
+On branch `newton/rigid-only-baseline`, read these documents before changing Rigid/Newton code:
+
+- [Rigid Newton Framework Roadmap](dev-docs/rigid-newton-roadmap.md)
+- [Rigid Newton Framework Development Guide](dev-docs/rigid-newton-development.md)
+
+The roadmap is the authoritative requirement and milestone handoff. Items marked **Open** require user approval before
+implementation.
+
 ## Miscellaneous
 
 * getattr / hasattr are prohibited; use None initialization and isinstance checks instead.

@@ -15,8 +15,8 @@ import torch
 import trimesh
 
 import genesis as gs
-import genesis.engine.solvers.rigid.rigid_solver as rigid_solver
-import genesis.utils.array_class as array_class
+from genesis.engine.solvers.rigid import rigid_solver
+from genesis.utils import array_class
 from genesis.utils.misc import assign_indexed_tensor, indices_to_mask, qd_to_numpy, qd_to_torch, tensor_to_array
 from genesis.utils.sdf import SDF
 
@@ -26,17 +26,17 @@ from .constants import CCD_ALGORITHM_CODE
 from .contact import (
     collider_kernel_get_contacts,
     collider_kernel_reset,
-    func_clamp_prune_contacts,
-    func_clamp_prune_contacts_coop,
     func_set_upstream_grad,
+    kernel_clamp_prune_contacts,
+    kernel_clamp_prune_contacts_coop,
     kernel_collider_clear,
     kernel_masked_collider_clear,
 )
 from .narrowphase import (
-    func_narrow_phase_any_vs_terrain,
-    func_narrow_phase_convex_specializations,
     func_narrow_phase_diff_convex_vs_convex,
-    func_narrow_phase_nonconvex_vs_nonterrain,
+    kernel_narrow_phase_any_vs_terrain,
+    kernel_narrow_phase_convex_specializations,
+    kernel_narrow_phase_nonconvex_vs_nonterrain,
 )
 
 if TYPE_CHECKING:
@@ -346,12 +346,6 @@ class Collider:
         Returns (n_possible_pairs, collision_pair_idx, pair_flags) where pair_flags is a dict of booleans
         for has_terrain, has_non_box_plane_convex_convex, has_convex_specialization, has_nonconvex_nonterrain.
         """
-        # Links whose contact is handled by an external solver (e.g. IPC) — exclude from GJK collision.
-        # Only applies when the IPC coupler is active. Mirrors the link filtering logic in
-        # IPCCoupler._add_rigid_geoms_to_ipc: for two_way_soft_constraint with a link filter,
-        # only the filtered links are in IPC; for all other coupling modes, all links are in IPC.
-        from genesis.engine.couplers import IPCCoupler
-
         n_geoms = self._solver.n_geoms
         geoms = self._solver.geoms
 
@@ -359,25 +353,6 @@ class Collider:
             empty_pairs = np.empty((0, 2), dtype=gs.np_int)
             empty_mask = np.zeros((0,), dtype=bool)
             return 0, np.full((0, 0), -1, dtype=gs.np_int), empty_pairs, False, False, False, False, empty_mask
-
-        # Links delegated to IPC coupler (skip pair only when BOTH are IPC-handled)
-        ipc_delegated_link_idxs = set()
-        ipc_only_link_idxs = set()
-        if isinstance(self._solver.sim.coupler, IPCCoupler):
-            for entity in self._solver._entities:
-                if not entity.material.needs_coup:
-                    continue
-                mode = entity.material.coup_type
-                if mode is None:
-                    continue
-                if mode == "ipc_only":
-                    ipc_only_link_idxs.update(l.idx for l in entity.links)
-                link_filter_names = entity.material.coup_links
-                if mode == "two_way_soft_constraint" and link_filter_names is not None:
-                    for name in link_filter_names:
-                        ipc_delegated_link_idxs.add(entity.get_link(name=name).idx)
-                else:
-                    ipc_delegated_link_idxs.update(l.idx for l in entity.links)
 
         # Pre-compute per-geom properties into numpy arrays for vectorized filtering
         geom_link_idx = np.array([g.link.idx for g in geoms], dtype=np.int32)
@@ -387,8 +362,6 @@ class Collider:
         geom_contype = np.array([g.contype for g in geoms], dtype=np.int64)
         geom_conaffinity = np.array([g.conaffinity for g in geoms], dtype=np.int64)
         geom_local_mask = np.array([g.entity.is_local_collision_mask for g in geoms], dtype=bool)
-        geom_is_ipc_only = np.array([g.link.idx in ipc_only_link_idxs for g in geoms], dtype=bool)
-        geom_is_ipc_deleg = np.array([g.link.idx in ipc_delegated_link_idxs for g in geoms], dtype=bool)
         geom_type = np.array([g.type for g in geoms], dtype=np.int32)
         geom_is_convex = np.array([g.is_convex for g in geoms], dtype=bool)
 
@@ -407,13 +380,6 @@ class Collider:
 
         # geoms in the same link
         valid = link_a != link_b
-
-        # Skip all pairs involving ipc_only links
-        valid &= ~geom_is_ipc_only[row]
-        valid &= ~geom_is_ipc_only[col]
-
-        # Skip pairs where both links are delegated to IPC
-        valid &= ~(geom_is_ipc_deleg[row] & geom_is_ipc_deleg[col])
 
         # pair of fixed links wrt the world
         valid &= ~(geom_is_fixed[row] & geom_is_fixed[col])
@@ -853,7 +819,7 @@ class Collider:
         )
 
     def _call_multicontact(self):
-        narrowphase._func_narrowphase_multicontact(
+        narrowphase.kernel_narrowphase_multicontact(
             self._solver.geoms_init_AABB,
             self._solver.dyn_state,
             self.collider_state,
@@ -890,8 +856,8 @@ class Collider:
             self._solver._errno,
         )
         if self._use_split_narrowphase:
-            narrowphase._func_reset_narrowphase_work_queues(self.collider_state)
-            narrowphase._func_narrowphase_contact0(
+            narrowphase.kernel_reset_narrowphase_work_queues(self.collider_state)
+            narrowphase.kernel_narrowphase_contact0(
                 self._solver.geoms_init_AABB,
                 self._solver.dyn_state,
                 self.collider_state,
@@ -908,7 +874,7 @@ class Collider:
             )
             self._call_multicontact()
         elif self.collider_config.has_non_box_plane_convex_convex:
-            narrowphase.func_narrow_phase_convex_vs_convex(
+            narrowphase.kernel_narrow_phase_convex_vs_convex(
                 self._solver.geoms_init_AABB,
                 self._solver.dyn_state,
                 self.collider_state,
@@ -924,7 +890,7 @@ class Collider:
                 self._solver._errno,
             )
         if self.collider_config.has_convex_specialization:
-            func_narrow_phase_convex_specializations(
+            kernel_narrow_phase_convex_specializations(
                 self._solver.geoms_init_AABB,
                 self._solver.dyn_state,
                 self.collider_state,
@@ -936,7 +902,7 @@ class Collider:
                 self._solver._errno,
             )
         if self.collider_config.has_terrain:
-            func_narrow_phase_any_vs_terrain(
+            kernel_narrow_phase_any_vs_terrain(
                 self._solver.geoms_init_AABB,
                 self._solver.dyn_state,
                 self.collider_state,
@@ -949,7 +915,7 @@ class Collider:
                 self._solver._errno,
             )
         if self.collider_config.has_nonconvex_nonterrain:
-            func_narrow_phase_nonconvex_vs_nonterrain(
+            kernel_narrow_phase_nonconvex_vs_nonterrain(
                 self._solver.geoms_init_AABB,
                 self._solver.dyn_state,
                 self.collider_state,
@@ -972,7 +938,7 @@ class Collider:
             and self._solver._B * 2 <= self._gpu_cores
         )
         if ran_fused_dedup_coop:
-            func_clamp_prune_contacts_coop(
+            kernel_clamp_prune_contacts_coop(
                 self._solver.dyn_state,
                 self.collider_state,
                 self._solver.rigid_info,
@@ -980,7 +946,7 @@ class Collider:
                 self._solver._errno,
             )
         else:
-            func_clamp_prune_contacts(
+            kernel_clamp_prune_contacts(
                 self._solver.dyn_state,
                 self.collider_state,
                 self._solver.rigid_info,

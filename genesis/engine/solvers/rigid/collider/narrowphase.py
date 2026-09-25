@@ -2679,8 +2679,8 @@ def _func_multicontact_mpr(
                 )
 
 
-@qd.kernel(fastcache=True)
-def _func_narrowphase_multicontact(
+@qd.func
+def func_narrowphase_multicontact(
     geoms_init_AABB: array_class.GeomsInitAABB,
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
@@ -2735,8 +2735,8 @@ def _func_narrowphase_multicontact(
             )
 
 
-@qd.kernel(fastcache=True)
-def _func_reset_narrowphase_work_queues(collider_state: array_class.ColliderState):
+@qd.func
+def func_reset_narrowphase_work_queues(collider_state: array_class.ColliderState):
     for _i in range(1):
         collider_state.narrowphase_work_queues.mpr_queue_size[0] = 0
         collider_state.narrowphase_work_queues.mpr_work_counter[0] = 0
@@ -2765,8 +2765,8 @@ def _func_enqueue_for_multicontact(
     collider_state.narrowphase_work_queues.mpr_prefer_gjk[idx] = 1 if prefer_gjk else 0
 
 
-@qd.kernel(fastcache=True)
-def _func_narrowphase_contact0(
+@qd.func
+def func_narrowphase_contact0(
     geoms_init_AABB: array_class.GeomsInitAABB,
     dyn_state: array_class.DynState,
     collider_state: array_class.ColliderState,
@@ -3016,7 +3016,7 @@ def _func_narrowphase_contact0(
                 collider_state.contact_cache.penetration[i_pair, i_b] = 0.0
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_narrow_phase_convex_vs_convex(
     geoms_init_AABB: array_class.GeomsInitAABB,
     dyn_state: array_class.DynState,
@@ -3217,7 +3217,7 @@ def kernel_fill_diff_contact_input_analytic(
                 collider_state.diff_contact_input.valid[i_b, i_c] = 1
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_narrow_phase_convex_specializations(
     geoms_init_AABB: array_class.GeomsInitAABB,
     dyn_state: array_class.DynState,
@@ -3273,7 +3273,7 @@ def func_narrow_phase_convex_specializations(
                     )
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_narrow_phase_any_vs_terrain(
     geoms_init_AABB: array_class.GeomsInitAABB,
     dyn_state: array_class.DynState,
@@ -3321,7 +3321,7 @@ def func_narrow_phase_any_vs_terrain(
                     )
 
 
-@qd.kernel(fastcache=True)
+@qd.func
 def func_narrow_phase_nonconvex_vs_nonterrain(
     geoms_init_AABB: array_class.GeomsInitAABB,
     dyn_state: array_class.DynState,
@@ -3485,3 +3485,186 @@ def func_narrow_phase_nonconvex_vs_nonterrain(
                                 seeded=True,
                                 errno=errno,
                             )
+
+
+@qd.kernel(fastcache=True)
+def kernel_narrowphase_multicontact(
+    geoms_init_AABB: array_class.GeomsInitAABB,
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    mpr_state: array_class.MPRState,
+    gjk_state: array_class.GJKState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    collider_static_config: qd.template(),
+    gjk_static_config: qd.template(),
+    n_total_threads: qd.template(),
+    max_items_per_thread: qd.template(),
+    errno: qd.Tensor,
+):
+    func_narrowphase_multicontact(
+        geoms_init_AABB,
+        dyn_state,
+        collider_state,
+        mpr_state,
+        gjk_state,
+        dyn_info,
+        rigid_info,
+        collider_info,
+        rigid_config,
+        collider_static_config,
+        gjk_static_config,
+        n_total_threads,
+        max_items_per_thread,
+        errno,
+    )
+
+
+@qd.kernel(fastcache=True)
+def kernel_reset_narrowphase_work_queues(collider_state: array_class.ColliderState):
+    func_reset_narrowphase_work_queues(collider_state)
+
+
+@qd.kernel(fastcache=True)
+def kernel_narrowphase_contact0(
+    geoms_init_AABB: array_class.GeomsInitAABB,
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    mpr_state: array_class.MPRState,
+    gjk_state: array_class.GJKState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    collider_static_config: qd.template(),
+    n_envs: qd.template(),
+    n_chunks: qd.template(),
+    errno: qd.Tensor,
+):
+    func_narrowphase_contact0(
+        geoms_init_AABB,
+        dyn_state,
+        collider_state,
+        mpr_state,
+        gjk_state,
+        dyn_info,
+        rigid_info,
+        collider_info,
+        rigid_config,
+        collider_static_config,
+        n_envs,
+        n_chunks,
+        errno,
+    )
+
+
+@qd.kernel(fastcache=True)
+def kernel_narrow_phase_convex_vs_convex(
+    geoms_init_AABB: array_class.GeomsInitAABB,
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    mpr_state: array_class.MPRState,
+    gjk_state: array_class.GJKState,
+    diff_contact_input: array_class.DiffContactInput,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    collider_static_config: qd.template(),
+    gjk_static_config: qd.template(),
+    errno: qd.Tensor,
+):
+    func_narrow_phase_convex_vs_convex(
+        geoms_init_AABB,
+        dyn_state,
+        collider_state,
+        mpr_state,
+        gjk_state,
+        diff_contact_input,
+        dyn_info,
+        rigid_info,
+        collider_info,
+        rigid_config,
+        collider_static_config,
+        gjk_static_config,
+        errno,
+    )
+
+
+@qd.kernel(fastcache=True)
+def kernel_narrow_phase_convex_specializations(
+    geoms_init_AABB: array_class.GeomsInitAABB,
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    collider_static_config: qd.template(),
+    errno: qd.Tensor,
+):
+    func_narrow_phase_convex_specializations(
+        geoms_init_AABB,
+        dyn_state,
+        collider_state,
+        dyn_info,
+        rigid_info,
+        collider_info,
+        rigid_config,
+        collider_static_config,
+        errno,
+    )
+
+
+@qd.kernel(fastcache=True)
+def kernel_narrow_phase_any_vs_terrain(
+    geoms_init_AABB: array_class.GeomsInitAABB,
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    mpr_state: array_class.MPRState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    collider_static_config: qd.template(),
+    errno: qd.Tensor,
+):
+    func_narrow_phase_any_vs_terrain(
+        geoms_init_AABB,
+        dyn_state,
+        collider_state,
+        mpr_state,
+        dyn_info,
+        rigid_info,
+        collider_info,
+        rigid_config,
+        collider_static_config,
+        errno,
+    )
+
+
+@qd.kernel(fastcache=True)
+def kernel_narrow_phase_nonconvex_vs_nonterrain(
+    geoms_init_AABB: array_class.GeomsInitAABB,
+    dyn_state: array_class.DynState,
+    collider_state: array_class.ColliderState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_info: array_class.ColliderInfo,
+    rigid_config: qd.template(),
+    collider_static_config: qd.template(),
+    errno: qd.Tensor,
+):
+    func_narrow_phase_nonconvex_vs_nonterrain(
+        geoms_init_AABB,
+        dyn_state,
+        collider_state,
+        dyn_info,
+        rigid_info,
+        collider_info,
+        rigid_config,
+        collider_static_config,
+        errno,
+    )
