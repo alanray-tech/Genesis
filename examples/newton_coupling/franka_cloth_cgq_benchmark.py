@@ -183,6 +183,10 @@ def main() -> None:
     pcg = []
     total_pcg = []
     line_search = []
+    ccd_alpha = []
+    accepted_alpha = []
+    max_disp = []
+    proxy_residual = []
     contact_info = []
     for frame in range(args.frames):
         profile_window_mark(args.warmup + frame)
@@ -194,6 +198,16 @@ def main() -> None:
         pcg.append(engine.get_max_pcg_iters())
         total_pcg.append(engine.get_total_pcg_iters())
         line_search.append(engine.get_max_ls_iters())
+        ccd_alpha.append(float(qd_to_numpy(engine.contact.ccd_alpha)))
+        accepted_alpha.append(float(qd_to_numpy(engine.alpha)))
+        max_disp.append(float(qd_to_numpy(engine.max_disp)))
+        proxy_residual.append(
+            float(
+                qd_to_numpy(
+                    engine.rigid_contact_proxy.max_surface_residual
+                )
+            )
+        )
         contact_info.append(
             [
                 int(qd_to_numpy(engine.contact.n_pairs_pt)),
@@ -212,6 +226,10 @@ def main() -> None:
         "pcg": pcg,
         "total_pcg": total_pcg,
         "line_search": line_search,
+        "ccd_alpha": ccd_alpha,
+        "accepted_alpha": accepted_alpha,
+        "max_disp": max_disp,
+        "proxy_residual": proxy_residual,
         "contact_info": contact_info,
         "build_seconds": build_seconds,
         "process_seconds": time.perf_counter() - process_start,

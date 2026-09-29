@@ -882,6 +882,25 @@ in the sampled trajectory. Algebraic, virtual-work, free-root, fixed-root, and
 Franka-Cloth integration gates pass; the normalized profile is the performance
 acceptance metric.
 
+The remaining fixed-pipeline multiplier is not caused by slower PT/EE kernels
+per invocation. In the matched convergence trace:
+
+- CGQ executes two Newton iterations per frame; Genesis executes three or
+  four;
+- both report CCD alpha 1.0, so the difference is not a shortened step;
+- both final displacement directions are below the same 5e-4 absolute
+  tolerance;
+- Genesis proxy residuals are 1e-10--1e-8, below the 1e-5 proxy tolerance;
+- CGQ proxy residuals are near machine precision.
+
+Genesis PT, EE, and friction assembly kernels are comparable to or faster than
+CGQ per invocation, but are repeated with every extra Newton iteration.
+Therefore no scene-specific tolerance, iteration cap, or contact disable is an
+admissible optimization. The next prerequisite is frozen-state numerical
+parity of contact candidates, energy, gradient, Hessian, and accepted Newton
+direction. Native rigid contact preprocessing may only be removed after QIPC
+owns the exact CGQ rigid-rigid contact filters.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size
