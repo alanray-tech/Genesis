@@ -10,12 +10,11 @@ from pathlib import Path
 
 import numpy as np
 import quadrants as qd
+from cloth_grid_asset import cloth_grid_asset
 
 import genesis as gs
 from genesis.engine.systems import ContactTabular, build_scene_engine
 from genesis.utils.misc import qd_to_numpy
-
-from cloth_grid_asset import cloth_grid_asset
 
 DT = 0.01
 GROUND_HEIGHT = 0.40
@@ -99,7 +98,10 @@ def main() -> None:
     process_start = time.perf_counter()
     gs.init(backend=gs.gpu, precision="64", logging_level="warning")
     scene = gs.Scene(
-        sim_options=gs.options.SimOptions(dt=DT),
+        sim_options=gs.options.SimOptions(
+            dt=DT,
+            gravity=(0.0, 0.0, -9.8),
+        ),
         coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
         show_viewer=False,
     )

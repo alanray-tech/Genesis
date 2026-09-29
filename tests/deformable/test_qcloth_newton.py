@@ -54,6 +54,7 @@ def test_qcloth_graph_step(tmp_path, show_viewer):
         engine.checkpoint_never_yield,
         engine.global_linear_system.triplet_overflow,
         engine.checkpoint_never_yield,
+        engine.checkpoint_never_yield,
     )
     graph_cache_used = impl.get_runtime().prog.get_graph_cache_used_on_last_call()
     graph_num_nodes = impl.get_runtime().prog.get_graph_num_nodes_on_last_call()
@@ -64,6 +65,61 @@ def test_qcloth_graph_step(tmp_path, show_viewer):
     assert np.isfinite(final).all()
     np.testing.assert_array_equal(final[[0, 2]], initial[[0, 2]])
     assert final[4, 2] < initial[4, 2]
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_qcloth_freefall_matches_cgq_converged_step(tmp_path, show_viewer):
+    path = tmp_path / "qcloth_freefall.obj"
+    make_grid(path)
+    dt = 0.01
+    gravity = np.array([0.0, 0.0, -9.8], dtype=np.float64)
+    bending_youngs_modulus = 3.0e3
+    thickness = 1.0e-3
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(
+            dt=dt,
+            gravity=tuple(gravity),
+        ),
+        show_viewer=show_viewer,
+    )
+    scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(path)),
+        material=gs.materials.FEM.QCloth(
+            E=2.0e4,
+            shear_modulus=2.0e3,
+            thickness=thickness,
+            bending_youngs_modulus=bending_youngs_modulus,
+        ),
+    )
+    scene.build(compile_kernels=False)
+    engine = build_scene_engine(
+        scene,
+        contact_config={
+            "contact/enable": 0,
+            "linear_system/tol_rate": 1.0e-10,
+        },
+    )
+
+    expected_bending_stiffness = bending_youngs_modulus * (2.0 * thickness) ** 3 / 12.0
+    np.testing.assert_allclose(
+        qd_to_numpy(engine.fem.quadratic_bending.k),
+        expected_bending_stiffness,
+        rtol=0.0,
+        atol=1.0e-18,
+    )
+
+    initial = qd_to_numpy(engine.fem.x)
+    engine.step()
+    displacement = qd_to_numpy(engine.fem.x) - initial
+    np.testing.assert_allclose(
+        displacement,
+        np.broadcast_to(dt * dt * gravity, displacement.shape),
+        rtol=0.0,
+        atol=2.0e-14,
+    )
+    assert engine.get_newton_iters() == 2
 
 
 @pytest.mark.required

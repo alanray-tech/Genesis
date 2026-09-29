@@ -46,7 +46,10 @@ def main() -> None:
 
     gs.init(backend=gs.gpu, precision="64", logging_level="warning")
     scene = gs.Scene(
-        sim_options=gs.options.SimOptions(dt=DT),
+        sim_options=gs.options.SimOptions(
+            dt=DT,
+            gravity=(0.0, 0.0, -9.8),
+        ),
         rigid_options=gs.options.RigidOptions(enable_collision=False),
         show_viewer=False,
     )

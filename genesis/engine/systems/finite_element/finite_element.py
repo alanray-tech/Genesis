@@ -269,7 +269,7 @@ class FiniteElement:
             effective_shear = material.shear_modulus if material.shear_modulus is not None else material.E / 2.0
             bending_E = material.bending_youngs_modulus if material.bending_youngs_modulus is not None else material.E
             physical_thickness = 2.0 * material.thickness
-            bending_stiffness = bending_E * physical_thickness**3 / (12.0 * (1.0 - material.nu * material.nu))
+            bending_stiffness = bending_E * physical_thickness**3 / 12.0
             local_hinges = _shell_hinges(local_triangles)
             entity_data.append(
                 (
@@ -337,9 +337,7 @@ class FiniteElement:
                     hinge_stiffness.append(np.full(len(local_hinges), bending_stiffness, dtype=np.float64))
 
                 body_ids.append(np.full(n_entity_verts, body_index, dtype=np.int32))
-                geometry_ids.append(
-                    np.full(n_entity_verts, body_index, dtype=np.int32)
-                )
+                geometry_ids.append(np.full(n_entity_verts, body_index, dtype=np.int32))
                 source_geometry_ids.append(
                     np.full(
                         n_entity_verts,
@@ -347,9 +345,7 @@ class FiniteElement:
                         dtype=np.int32,
                     )
                 )
-                geometry_environments.append(
-                    np.full(n_entity_verts, env, dtype=np.int32)
-                )
+                geometry_environments.append(np.full(n_entity_verts, env, dtype=np.int32))
                 body_environment.append(env)
                 body_vertex_offsets.append(body_vertex_offsets[-1] + n_entity_verts)
                 bridge_vertex.append(np.arange(entity._v_start, entity._v_start + n_entity_verts, dtype=np.int32))

@@ -917,13 +917,50 @@ vector applied in the benchmark:
 
 - first-frame pure-rigid joint-position maximum error is 1.85e-6;
 - 100-frame maximum error is 6.76e-6;
-- the coupled Genesis Newton counter drops from three/four to a stable one
-  (two actual loop evaluations), matching CGQ's two evaluations;
+- the coupled Genesis Newton work drops from three/four evaluations to two;
 - the ten-frame median drops from approximately 48.1 ms to 30.2 ms.
 
 This is parameter conformance, not a scene-tuned stopping rule. The global
 Genesis MJCF parser retains MuJoCo semantics; the CGQ conformance benchmark
 publishes the exact controller parameters explicitly.
+
+The subsequent contact-free QCloth gate exposed two more CGQ-conformance
+errors:
+
+- Genesis used the inherited `QCloth.nu=0.3` in bending rigidity, but CGQ's
+  Poisson-free Baraff-Witkin `Cloth` fixes `bending_nu=0`. Genesis now uses
+  `bending_E * (2*thickness)^3 / 12`.
+- Genesis detected convergence from the current Newton direction and then set
+  `alpha=0`, discarding that final direction. CGQ applies the converged
+  direction once and exits only after the second Newton evaluation. Genesis
+  now has the same accepted-step and public counter semantics.
+
+With matching quadratic bending, the first contact-free 25x25 cloth system has
+identical row/column arrays, maximum transformed Hessian error
+`6.94e-18` (relative Frobenius error `1.89e-16`), and maximum transformed RHS
+error `1.02e-21`. Before the pipeline correction, the discarded direction
+left `1.89e-8` of non-rigid displacement after frame one; frame-two PCG work
+was 73 iterations versus CGQ's 21 and later frames reached 90--97. After the
+correction, a 20-frame `tol_rate=1e-10` gate has:
+
+- maximum transformed trajectory error `1.55e-15`;
+- exactly two Newton evaluations per frame in both implementations;
+- an identical total-PCG sequence, including 21 iterations on 17 of 20 frames.
+
+This is a general Newton acceptance fix. It does not special-case free fall,
+cloth size, gravity, or the milestone scene. On the matched Franka-Cloth
+benchmark, both implementations now execute exactly two Newton evaluations
+per measured frame. Mean total PCG work is 72.40 in Genesis versus 72.54 in
+CGQ, so iteration count no longer explains the runtime gap. The synchronized
+100-frame medians are 30.136 ms and 14.491 ms respectively
+(`2.080x` Genesis/CGQ). A controller-aligned ten-frame Genesis trace improves
+from 34.799 ms before the final-step correction to 29.465 ms after it
+(`1.181x`).
+
+`FEM.QCloth.nu` remains an inherited Genesis material-base field and is not a
+CGQ `Cloth` parameter. The QIPC path deliberately ignores it for the
+Baraff-Witkin preset; this is the sole API naming/storage exception in this
+gate.
 
 ## Compile-time and memory-layout debt
 

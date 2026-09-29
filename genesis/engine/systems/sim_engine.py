@@ -359,7 +359,7 @@ class SimEngine:
             f"{float(qd_to_numpy(self.contact.frame_ccd_alpha)):.9g}"
         )
         if self.rigid_contact_assemble is not None:
-            contact_state += ", proxy_doublets=" f"{int(qd_to_numpy(self.rigid_contact_assemble.rigid_doublet_total))}"
+            contact_state += f", proxy_doublets={int(qd_to_numpy(self.rigid_contact_assemble.rigid_doublet_total))}"
         broad_phase = self.contact.broad_phase
         if broad_phase.use_dual_ee:
             dual = broad_phase.ee_dual_state
@@ -437,6 +437,8 @@ class SimEngine:
                     self.contact.count_active()
 
             with qd.checkpoint(ContactCheckpoint.FILTER, yield_on=self.checkpoint_never_yield):
+                for _ in range(1):
+                    self.newton_iter[()] = self.newton_iter[()] + 1
                 if qd.static(self.has_contact):
                     self.contact.adaptive_kappa_newton_tick()
                     self.contact.filter_assemble()
@@ -588,12 +590,12 @@ class SimEngine:
                             self.rigid_contact_proxy.fk_alpha[()],
                         )
                     self.alpha[()] = initial_alpha
-                    self.ls_cond[()] = qd.i32(self.converged[()] == 0)
+                    self.ls_cond[()] = 1
                     self.ls_iter[()] = 0
 
                 while qd.graph.do_while(self.ls_cond):
                     trial_alpha = self.alpha[()]
-                    if self.converged[()] != 0 or self.pcg_solver.linear_pcg.is_failed[()] != 0:
+                    if self.pcg_solver.linear_pcg.is_failed[()] != 0:
                         trial_alpha = qd.f64(0.0)
 
                     if qd.static(self.has_rigid):
@@ -637,18 +639,19 @@ class SimEngine:
                         guard_failed = False
                         if qd.static(self.has_rigid_contact_proxy):
                             guard_failed = self.rigid_contact_proxy.frame_failed[()] != 0
-                        accepted = self.energy_delta[()] <= 0.0
+                        accepted = self.converged[()] != 0 or self.energy_delta[()] <= 0.0
                         if qd.static(self.has_rigid_contact_proxy):
-                            exhausted = self.ls_iter[()] + 1 >= self.sim_config.max_ls_iter[()]
-                            accepted = self.rigid_contact_proxy.check_line_search(
-                                self.energy_buf[0],
-                                self.energy_buf[0] + self.energy_delta[()],
-                                trial_alpha,
-                                self.ls_iter[()],
-                                self.sim_config.max_ls_iter[()],
-                                exhausted,
-                                self.converged,
-                            )
+                            if self.converged[()] == 0:
+                                exhausted = self.ls_iter[()] + 1 >= self.sim_config.max_ls_iter[()]
+                                accepted = self.rigid_contact_proxy.check_line_search(
+                                    self.energy_buf[0],
+                                    self.energy_buf[0] + self.energy_delta[()],
+                                    trial_alpha,
+                                    self.ls_iter[()],
+                                    self.sim_config.max_ls_iter[()],
+                                    exhausted,
+                                    self.converged,
+                                )
                         else:
                             if not accepted and self.ls_iter[()] + 1 >= self.sim_config.max_ls_iter[()]:
                                 accepted = True
@@ -665,7 +668,7 @@ class SimEngine:
                                 self.ls_cond[()] = 0
 
                 for _ in range(1):
-                    if self.converged[()] != 0 or self.pcg_solver.linear_pcg.is_failed[()] != 0:
+                    if self.pcg_solver.linear_pcg.is_failed[()] != 0:
                         self.alpha[()] = qd.f64(0.0)
                 if qd.static(self.has_fem):
                     self.fem.step_forward(self.alpha[()])
@@ -690,12 +693,11 @@ class SimEngine:
                     if qd.static(self.has_rigid_contact_proxy):
                         linear_failed = linear_failed or self.rigid_contact_proxy.frame_failed[()] != 0
 
-                    if self.converged[()] == 0 and not rejected and not pcg_failed and not linear_failed:
-                        self.newton_iter[()] = self.newton_iter[()] + 1
                     exhausted = self.newton_iter[()] >= self.sim_config.max_newton_iter[()]
                     failed = rejected or pcg_failed or linear_failed or (exhausted and self.converged[()] == 0)
                     self.frame_failed[()] = qd.i32(failed)
-                    self.newton_cond[()] = qd.i32(self.converged[()] == 0 and not failed and not exhausted)
+                    converged = self.converged[()] != 0 and self.newton_iter[()] > 1
+                    self.newton_cond[()] = qd.i32(not converged and not failed and not exhausted)
 
                 if qd.static(self.has_rigid):
                     self.rigid.set_newton_active(self.newton_cond[()])
@@ -843,7 +845,7 @@ class SimEngine:
                     f"proxy_failed={int(qd_to_numpy(proxy.frame_failed))}"
                 )
                 raise RuntimeError(
-                    "KKT rigid proxy solve exhausted the Newton budget before " f"stationarity/feasibility ({details})"
+                    f"KKT rigid proxy solve exhausted the Newton budget before stationarity/feasibility ({details})"
                 )
             else:
                 raise RuntimeError(f"Unexpected timestep checkpoint {checkpoint}")
