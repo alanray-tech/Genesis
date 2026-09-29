@@ -165,8 +165,47 @@ def test_contact_rejects_initial_cloth_intersection(tmp_path, show_viewer):
                 "contact/intersection_check_capacity": 1,
             },
         )
-    assert "edge geometry_id" in str(error.value)
-    assert "face geometry_id" in str(error.value)
+    assert "edge geo_id" in str(error.value)
+    assert "face geo_id" in str(error.value)
+    assert "fem_solver.entities[" in str(error.value)
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_et_report_resolves_rigid_geometry(tmp_path, show_viewer):
+    path = tmp_path / "box_intersecting_grid.obj"
+    make_contact_grid(path, n=5, size=0.16, height=0.04)
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(dt=0.01),
+        coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
+        show_viewer=show_viewer,
+    )
+    scene.add_entity(
+        morph=gs.morphs.Box(
+            pos=(0.08, 0.08, 0.04),
+            size=(0.08, 0.08, 0.08),
+            fixed=True,
+        ),
+        vis_mode="collision",
+    )
+    scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(path)),
+        material=gs.materials.FEM.QCloth(E=1e4, thickness=1e-3),
+    )
+    scene.build(compile_kernels=False)
+
+    with pytest.raises(
+        RuntimeError,
+        match="ET check: initial state detected",
+    ) as error:
+        build_scene_engine(
+            scene,
+            contact_config={"contact/intersection_check": 1},
+        )
+    message = str(error.value)
+    assert "source RIGID" in message
+    assert "rigid_solver.geoms[0]" in message
 
 
 @pytest.mark.required

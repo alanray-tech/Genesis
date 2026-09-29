@@ -34,6 +34,8 @@ class RigidContactProxyGeometry:
         local_positions: list[np.ndarray] = []
         vertex_pair: list[np.ndarray] = []
         geometry_ids: list[np.ndarray] = []
+        source_geometry_ids: list[np.ndarray] = []
+        geometry_environments: list[np.ndarray] = []
         triangles: list[np.ndarray] = []
         n_mechanism_bodies = rigid_solver.n_links * rigid_solver._B
         vertex_offset = 0
@@ -55,6 +57,8 @@ class RigidContactProxyGeometry:
                 pair_positions = []
                 pair_triangles = []
                 pair_geometry_ids = []
+                pair_source_geometry_ids = []
+                pair_geometry_environments = []
                 pair_vertex_offset = 0
                 for geom in geoms:
                     geom_rotation = gu.quat_to_R(np.asarray(geom.init_quat, dtype=np.float64))
@@ -74,6 +78,12 @@ class RigidContactProxyGeometry:
                             dtype=np.int32,
                         )
                     )
+                    pair_source_geometry_ids.append(
+                        np.full(geom.n_verts, geom.idx, dtype=np.int32)
+                    )
+                    pair_geometry_environments.append(
+                        np.full(geom.n_verts, environment, dtype=np.int32)
+                    )
                     pair_vertex_offset += geom.n_verts
 
                 pair = len(mechanism_body)
@@ -85,6 +95,12 @@ class RigidContactProxyGeometry:
                 local_positions.append(positions)
                 vertex_pair.append(np.full(len(positions), pair, dtype=np.int32))
                 geometry_ids.append(np.concatenate(pair_geometry_ids))
+                source_geometry_ids.append(
+                    np.concatenate(pair_source_geometry_ids)
+                )
+                geometry_environments.append(
+                    np.concatenate(pair_geometry_environments)
+                )
                 triangles.append(faces + vertex_offset)
                 vertex_offset += len(positions)
 
@@ -101,6 +117,14 @@ class RigidContactProxyGeometry:
         self.vertex_pair = np.ascontiguousarray(np.concatenate(vertex_pair), dtype=np.int32)
         self.geometry_ids = np.ascontiguousarray(
             np.concatenate(geometry_ids),
+            dtype=np.int32,
+        )
+        self.source_geometry_ids = np.ascontiguousarray(
+            np.concatenate(source_geometry_ids),
+            dtype=np.int32,
+        )
+        self.geometry_environments = np.ascontiguousarray(
+            np.concatenate(geometry_environments),
             dtype=np.int32,
         )
         self.surf_triangles = np.ascontiguousarray(np.concatenate(triangles), dtype=np.int32)

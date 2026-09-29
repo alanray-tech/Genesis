@@ -33,6 +33,9 @@ class GlobalVertexManager(SimSystem):
         self.x_bar = qd.ndarray(qd.f64, shape=(capacity, 3))
         self.body_id = qd.ndarray(qd.i32, shape=(capacity,))
         self.geometry_id = qd.ndarray(qd.i32, shape=(capacity,))
+        self.geometry_source = qd.ndarray(qd.i32, shape=(capacity,))
+        self.source_geometry_id = qd.ndarray(qd.i32, shape=(capacity,))
+        self.geometry_environment = qd.ndarray(qd.i32, shape=(capacity,))
         self.thicknesses = qd.ndarray(qd.f64, shape=(capacity,))
         self.d_hats = qd.ndarray(qd.f64, shape=(capacity,))
         self.is_fixed = qd.ndarray(qd.i32, shape=(capacity,))
@@ -51,6 +54,9 @@ class GlobalVertexManager(SimSystem):
         self.x_bar.from_numpy(np.zeros((capacity, 3), dtype=np.float64))
         self.body_id.from_numpy(np.full(capacity, -1, dtype=np.int32))
         self.geometry_id.from_numpy(np.full(capacity, -1, dtype=np.int32))
+        self.geometry_source.from_numpy(np.full(capacity, -1, dtype=np.int32))
+        self.source_geometry_id.from_numpy(np.full(capacity, -1, dtype=np.int32))
+        self.geometry_environment.from_numpy(np.full(capacity, -1, dtype=np.int32))
         self.thicknesses.from_numpy(np.zeros(capacity, dtype=np.float64))
         self.d_hats.from_numpy(np.zeros(capacity, dtype=np.float64))
         self.is_fixed.from_numpy(np.zeros(capacity, dtype=np.int32))
@@ -94,6 +100,43 @@ class GlobalVertexManager(SimSystem):
         if np.any(values < 0):
             raise ValueError("GlobalVertexManager geometry IDs must be non-negative")
         self.geometry_id.from_numpy(values)
+
+    def wire_geometry_source_data(
+        self,
+        geometry_sources: np.ndarray,
+        source_geometry_ids: np.ndarray,
+        geometry_environments: np.ndarray,
+    ) -> None:
+        sources = np.ascontiguousarray(
+            geometry_sources,
+            dtype=np.int32,
+        ).reshape(-1)
+        source_ids = np.ascontiguousarray(
+            source_geometry_ids,
+            dtype=np.int32,
+        ).reshape(-1)
+        environments = np.ascontiguousarray(
+            geometry_environments,
+            dtype=np.int32,
+        ).reshape(-1)
+        if not (
+            len(sources)
+            == len(source_ids)
+            == len(environments)
+            == self.positions.shape[0]
+        ):
+            raise ValueError(
+                "GlobalVertexManager geometry source data must match n_verts"
+            )
+        if (
+            np.any((sources != 0) & (sources != 1))
+            or np.any(source_ids < 0)
+            or np.any(environments < 0)
+        ):
+            raise ValueError("GlobalVertexManager geometry source data is invalid")
+        self.geometry_source.from_numpy(sources)
+        self.source_geometry_id.from_numpy(source_ids)
+        self.geometry_environment.from_numpy(environments)
 
     @qd.func(requires_top_level=True)
     def record_safe_positions(self):

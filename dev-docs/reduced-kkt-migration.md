@@ -327,6 +327,8 @@ silently snapped to FK.
   suppression before reporting.
 - ET reports retain edge/face IDs and add global contact geometry/body IDs so
   a Genesis source geometry can be identified without a host object map.
+  Device metadata also reports source kind, source-local `geo_id`,
+  environment, and a direct lookup such as `rigid_solver.geoms[24]`.
 
 Rigid collision meshes are extracted from the built Genesis rigid geometry at
 build time, transformed into their owning link frame, merged per delegated

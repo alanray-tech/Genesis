@@ -381,6 +381,7 @@ class LBVH:
         # --- Tree buffers ---
         self.aabbs = qd.ndarray(qd.f64, (n_nodes, self.bounds_width))
         self.temp_aabbs = qd.ndarray(qd.f64, (n_prims, self.bounds_width))
+        self.temp_node_body_id = qd.ndarray(qd.i32, (n_prims,))
         self.indices = qd.ndarray(qd.u32, (n_prims,))
         self.nodes_parent = qd.ndarray(qd.u32, (n_nodes,))
         self.nodes_left = qd.ndarray(qd.u32, (n_nodes,))
@@ -595,6 +596,7 @@ class LBVH:
             leaf = n - 1 + idx
             for k in qd.static(range(self.bounds_width)):
                 self.temp_aabbs[idx, k] = self.aabbs[leaf, k]
+            self.temp_node_body_id[idx] = self.node_body_id[leaf]
 
     @qd.func(requires_top_level=True)
     def reorder_leaf_aabb(self):
@@ -608,6 +610,7 @@ class LBVH:
             src = qd.i32(self.indices[idx])
             for k in qd.static(range(self.bounds_width)):
                 self.aabbs[leaf, k] = self.temp_aabbs[src, k]
+            self.node_body_id[leaf] = self.temp_node_body_id[src]
 
     @qd.func(requires_top_level=True)
     def calc_leaf_nodes(self):

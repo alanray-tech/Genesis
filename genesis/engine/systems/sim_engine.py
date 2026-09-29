@@ -302,6 +302,15 @@ class SimEngine:
         positions = qd_to_numpy(self.global_vertex_manager.positions)
         body_ids = qd_to_numpy(self.global_vertex_manager.body_id)
         geometry_ids = qd_to_numpy(self.global_vertex_manager.geometry_id)
+        geometry_sources = qd_to_numpy(
+            self.global_vertex_manager.geometry_source
+        )
+        source_geometry_ids = qd_to_numpy(
+            self.global_vertex_manager.source_geometry_id
+        )
+        geometry_environments = qd_to_numpy(
+            self.global_vertex_manager.geometry_environment
+        )
         reports = []
         for edge, face in pairs[:8]:
             edge_vertex = int(edges[edge, 0])
@@ -309,10 +318,36 @@ class SimEngine:
             face_vertex = int(faces[face, 0])
             face_vertex_b = int(faces[face, 1])
             face_vertex_c = int(faces[face, 2])
+            edge_source = int(geometry_sources[edge_vertex])
+            face_source = int(geometry_sources[face_vertex])
+            edge_source_name = "FEM" if edge_source == 0 else "RIGID"
+            face_source_name = "FEM" if face_source == 0 else "RIGID"
+            edge_source_id = int(source_geometry_ids[edge_vertex])
+            face_source_id = int(source_geometry_ids[face_vertex])
+            edge_environment = int(geometry_environments[edge_vertex])
+            face_environment = int(geometry_environments[face_vertex])
+            edge_lookup = (
+                f"fem_solver.entities[{edge_source_id}]"
+                if edge_source == 0
+                else f"rigid_solver.geoms[{edge_source_id}]"
+            )
+            face_lookup = (
+                f"fem_solver.entities[{face_source_id}]"
+                if face_source == 0
+                else f"rigid_solver.geoms[{face_source_id}]"
+            )
             reports.append(
                 f"(edge {int(edge)}, face {int(face)}, "
-                f"edge geometry_id {int(geometry_ids[edge_vertex])}, "
-                f"face geometry_id {int(geometry_ids[face_vertex])}, "
+                f"edge global_geometry_id {int(geometry_ids[edge_vertex])}, "
+                f"face global_geometry_id {int(geometry_ids[face_vertex])}, "
+                f"edge source {edge_source_name}, "
+                f"edge geo_id {edge_source_id}, "
+                f"edge env {edge_environment}, "
+                f"edge lookup {edge_lookup}, "
+                f"face source {face_source_name}, "
+                f"face geo_id {face_source_id}, "
+                f"face env {face_environment}, "
+                f"face lookup {face_lookup}, "
                 f"edge body_id {int(body_ids[edge_vertex])}, "
                 f"face body_id {int(body_ids[face_vertex])}, "
                 f"edge_positions "
@@ -333,6 +368,21 @@ class SimEngine:
             contact_state += (
                 ", proxy_doublets="
                 f"{int(qd_to_numpy(self.rigid_contact_assemble.rigid_doublet_total))}"
+            )
+        broad_phase = self.contact.broad_phase
+        if broad_phase.use_dual_ee:
+            dual = broad_phase.ee_dual_state
+            contact_state += (
+                ", dual_selected="
+                f"{int(qd_to_numpy(dual.selected_count))}, "
+                "dual_parity="
+                f"{int(qd_to_numpy(dual.selected_parity))}, "
+                "dual_level="
+                f"{int(qd_to_numpy(dual.current_level))}, "
+                "dual_overflow="
+                f"{int(qd_to_numpy(dual.overflow_bits))}, "
+                "dual_next_task="
+                f"{int(qd_to_numpy(dual.next_task))}"
             )
         return (
             f"ET check: {stage} detected "

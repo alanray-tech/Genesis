@@ -287,3 +287,110 @@ def test_dop14_dual_ee_matches_per_edge_query():
     assert int(qd_to_numpy(overflow)) == 0
     replay = {tuple(pair) for pair in qd_to_numpy(dual_pairs)[: int(qd_to_numpy(dual_count))]}
     assert replay == warp
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_dual_ee_morton_reorders_body_metadata_with_leaves():
+    positions = np.array(
+        [
+            [-0.01, 0.0, 0.0],
+            [0.01, 0.0, 0.0],
+            [0.99, 0.0, 0.0],
+            [1.01, 0.0, 0.0],
+            [0.0, -0.01, 0.001],
+            [0.0, 0.01, 0.001],
+            [1.0, -0.01, 0.001],
+            [1.0, 0.01, 0.001],
+        ],
+        dtype=np.float64,
+    )
+    edges = np.array(
+        [[0, 1], [2, 3], [4, 5], [6, 7]],
+        dtype=np.int32,
+    )
+    vertex = GlobalVertexManager()
+    vertex.init(8)
+    vertex.positions.from_numpy(positions)
+    vertex.safe_positions.from_numpy(positions)
+    vertex.trajectory_end_positions.from_numpy(positions)
+    vertex.x_bar.from_numpy(positions)
+    vertex.body_id.from_numpy(
+        np.array([0, 0, 0, 0, 1, 1, 1, 1], dtype=np.int32)
+    )
+    vertex.wire_thickness_data(np.full(8, 0.001, dtype=np.float64))
+    vertex.wire_d_hat_data(np.full(8, 0.01, dtype=np.float64))
+    vertex.wire_is_fixed_data(np.zeros(8, dtype=np.int32))
+
+    surface = GlobalSurfaceManager()
+    surface.wire_surface_data(
+        np.empty((0, 3), dtype=np.int32),
+        edges,
+        np.arange(8, dtype=np.int32),
+    )
+    surface.wire_vert_dimensions(np.full(8, 2, dtype=np.int32))
+    surface.wire_area_weights(
+        np.full(8, 1.0 / 8.0, dtype=np.float64),
+        np.full(4, 0.25, dtype=np.float64),
+        np.empty(0, dtype=np.float64),
+    )
+    body = GlobalBodyManager()
+    body.init(2)
+    body.vertex_offsets.from_numpy(np.array([0, 4, 8], dtype=np.int32))
+    body.self_collision.from_numpy(np.ones(2, dtype=np.int32))
+    body.wire_body_contact_ignorance(
+        np.array([0, 0, 0], dtype=np.int32),
+        np.empty(0, dtype=np.int32),
+    )
+
+    bvh = LBVH(4, 4, "dop14")
+    dual_state = DualEEQueryState(4, 0, 24.0, 18)
+    dual_pairs = qd.ndarray(qd.i32, shape=(16, 2))
+    dual_count = qd.ndarray(qd.i32, shape=())
+    warp_pairs = qd.ndarray(qd.i32, shape=(16, 2))
+    warp_count = qd.ndarray(qd.i32, shape=())
+    overflow = qd.ndarray(qd.i32, shape=())
+    build_and_query_ee_dual(
+        bvh,
+        dual_state,
+        surface,
+        vertex,
+        body,
+        dual_pairs,
+        dual_count,
+        overflow,
+    )
+    query_ee_warp(
+        bvh,
+        surface,
+        vertex,
+        body,
+        warp_pairs,
+        warp_count,
+        overflow,
+    )
+
+    n = int(qd_to_numpy(bvh.n_prims))
+    elements = qd_to_numpy(bvh.nodes_element)[n - 1 : 2 * n - 1]
+    actual_bodies = qd_to_numpy(bvh.node_body_id)[n - 1 : 2 * n - 1]
+    expected_bodies = np.array(
+        [qd_to_numpy(vertex.body_id)[edges[element, 0]] for element in elements],
+        dtype=np.int32,
+    )
+    np.testing.assert_array_equal(actual_bodies, expected_bodies)
+
+    dual_pairs_set = {
+        tuple(pair)
+        for pair in qd_to_numpy(dual_pairs)[
+            : int(qd_to_numpy(dual_count))
+        ]
+    }
+    warp_pairs_set = {
+        tuple(pair)
+        for pair in qd_to_numpy(warp_pairs)[
+            : int(qd_to_numpy(warp_count))
+        ]
+    }
+    assert dual_pairs_set == warp_pairs_set
+    assert dual_pairs_set == {(0, 2), (1, 3)}

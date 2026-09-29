@@ -171,6 +171,12 @@ frontier stages were approximately 4.4--6.0 microseconds and config-gated
 stages approximately 1.3 microseconds. Cross-scene scaling conclusions remain
 owned by the pinned-CGQ experiments below, per the faithful-migration policy.
 
+The heterogeneous-body parity gate additionally requires Morton permutation
+to reorder leaf `node_body_id` metadata together with AABBs and element IDs.
+Without that reorder, dual traversal can incorrectly cull every cloth-rigid
+EE subtree while warp traversal remains correct. The interleaved-body
+dual/warp regression covers this exact failure.
+
 Pinned-CGQ evidence on RTX 5090: Kimono query-only aggregate improved 1.858x
 and build-plus-query improved 1.756x; node tests fell 3.119x with identical
 leaf tests. Production-auto query speedups were 1.678x on Kimono and 1.008x on

@@ -160,6 +160,14 @@ def build_scene_engine(
         )
         combined_is_fixed = finite_element.is_fixed
         combined_geometry_ids = finite_element.geometry_ids
+        combined_geometry_sources = np.zeros(
+            finite_element.n_verts,
+            dtype=np.int32,
+        )
+        combined_source_geometry_ids = finite_element.source_geometry_ids
+        combined_geometry_environments = (
+            finite_element.geometry_environments
+        )
         if rigid_proxy_geometry is not None:
             rigid_contact_proxy.configure(
                 str(resolved_contact_config["rigid_proxy/globalization"]),
@@ -198,6 +206,24 @@ def build_scene_engine(
                     + finite_element.n_bodies,
                 )
             )
+            combined_geometry_sources = np.concatenate(
+                (
+                    combined_geometry_sources,
+                    np.ones(proxy_vert_count, dtype=np.int32),
+                )
+            )
+            combined_source_geometry_ids = np.concatenate(
+                (
+                    finite_element.source_geometry_ids,
+                    rigid_proxy_geometry.source_geometry_ids,
+                )
+            )
+            combined_geometry_environments = np.concatenate(
+                (
+                    finite_element.geometry_environments,
+                    rigid_proxy_geometry.geometry_environments,
+                )
+            )
 
         global_vertex_manager.init(total_vert_count)
         global_vertex_manager.wire_thickness_data(combined_thicknesses)
@@ -206,6 +232,11 @@ def build_scene_engine(
         )
         global_vertex_manager.wire_is_fixed_data(combined_is_fixed)
         global_vertex_manager.wire_geometry_id_data(combined_geometry_ids)
+        global_vertex_manager.wire_geometry_source_data(
+            combined_geometry_sources,
+            combined_source_geometry_ids,
+            combined_geometry_environments,
+        )
 
         total_body_count = finite_element.n_bodies
         body_vertex_offsets = finite_element.body_vertex_offsets

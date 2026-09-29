@@ -67,6 +67,11 @@ def main() -> None:
         default=0.0,
         help="Headless check: command the hand below the tabletop",
     )
+    parser.add_argument(
+        "--ee-query",
+        choices=("dual", "warp"),
+        default="dual",
+    )
     args = parser.parse_args()
 
     gs.init(backend=gs.gpu, precision="64", logging_level="info")
@@ -147,6 +152,7 @@ def main() -> None:
             "contact/d_hat": 1e-3,
             "contact/init_collision_pair_capacity": 20_000,
             "contact/intersection_check": 1,
+            "bvh/ee_query": args.ee_query,
         },
         contact_tabular=contact_tabular,
     )
@@ -317,6 +323,7 @@ def main() -> None:
     max_newton = 0
     max_pcg = 0
     max_line_search = 0
+    max_ee_pairs = 0
     min_ccd_alpha = 1.0
     last_target_qpos = HOME_QPOS[:7].copy()
     try:
@@ -368,6 +375,10 @@ def main() -> None:
                 max_line_search,
                 engine.get_max_ls_iters(),
             )
+            max_ee_pairs = max(
+                max_ee_pairs,
+                int(qd_to_numpy(engine.contact.n_pairs_ee)),
+            )
             min_ccd_alpha = min(
                 min_ccd_alpha,
                 float(qd_to_numpy(engine.contact.frame_ccd_alpha)),
@@ -386,6 +397,7 @@ def main() -> None:
             max_newton,
             max_pcg,
             max_line_search,
+            f"max_ee_pairs={max_ee_pairs}",
             f"min_ccd_alpha={min_ccd_alpha:.9g}",
         )
         hand_position = end_effector.get_pos().cpu().numpy().reshape(3)
@@ -394,6 +406,16 @@ def main() -> None:
             f"hand_pos={hand_position.tolist()}, "
             f"target_qpos={last_target_qpos.tolist()}"
         )
+        if engine.contact.broad_phase.use_dual_ee:
+            dual = engine.contact.broad_phase.ee_dual_state
+            print(
+                "dual state:",
+                f"selected={int(qd_to_numpy(dual.selected_count))}",
+                f"parity={int(qd_to_numpy(dual.selected_parity))}",
+                f"level={int(qd_to_numpy(dual.current_level))}",
+                f"next_task={int(qd_to_numpy(dual.next_task))}",
+                f"overflow={int(qd_to_numpy(dual.overflow_bits))}",
+            )
 
 
 if __name__ == "__main__":

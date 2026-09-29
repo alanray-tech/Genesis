@@ -239,11 +239,13 @@ class FiniteElement:
         vert_bend_k: list[np.ndarray] = []
         body_ids: list[np.ndarray] = []
         geometry_ids: list[np.ndarray] = []
+        source_geometry_ids: list[np.ndarray] = []
+        geometry_environments: list[np.ndarray] = []
         body_environment: list[int] = []
         body_vertex_offsets = [0]
 
         entity_data = []
-        for entity in entities:
+        for source_geometry_id, entity in enumerate(entities):
             rest_positions = np.asarray(entity.init_positions.cpu(), dtype=np.float64)
             local_triangles = np.asarray(entity.elems, dtype=np.int32).reshape(-1, 3)
             local_Dm_inv, local_rest_areas = compute_Dm_inv_2d(rest_positions, local_triangles)
@@ -272,6 +274,7 @@ class FiniteElement:
             entity_data.append(
                 (
                     entity,
+                    source_geometry_id,
                     rest_positions,
                     local_triangles,
                     local_Dm_inv,
@@ -290,6 +293,7 @@ class FiniteElement:
         for env in range(n_envs):
             for (
                 entity,
+                source_geometry_id,
                 rest_positions,
                 local_triangles,
                 local_Dm_inv,
@@ -335,6 +339,16 @@ class FiniteElement:
                 body_ids.append(np.full(n_entity_verts, body_index, dtype=np.int32))
                 geometry_ids.append(
                     np.full(n_entity_verts, body_index, dtype=np.int32)
+                )
+                source_geometry_ids.append(
+                    np.full(
+                        n_entity_verts,
+                        source_geometry_id,
+                        dtype=np.int32,
+                    )
+                )
+                geometry_environments.append(
+                    np.full(n_entity_verts, env, dtype=np.int32)
                 )
                 body_environment.append(env)
                 body_vertex_offsets.append(body_vertex_offsets[-1] + n_entity_verts)
@@ -384,6 +398,14 @@ class FiniteElement:
         self.body_ids = np.ascontiguousarray(np.concatenate(body_ids), dtype=np.int32)
         self.geometry_ids = np.ascontiguousarray(
             np.concatenate(geometry_ids),
+            dtype=np.int32,
+        )
+        self.source_geometry_ids = np.ascontiguousarray(
+            np.concatenate(source_geometry_ids),
+            dtype=np.int32,
+        )
+        self.geometry_environments = np.ascontiguousarray(
+            np.concatenate(geometry_environments),
             dtype=np.int32,
         )
         self.body_vertex_offsets = np.asarray(body_vertex_offsets, dtype=np.int32)
