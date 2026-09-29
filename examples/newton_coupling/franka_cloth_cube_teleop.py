@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import time
 
 import numpy as np
 import quadrants as qd
@@ -22,6 +23,7 @@ import quadrants as qd
 import genesis as gs
 import genesis.utils.geom as gu
 from genesis.engine.systems import ContactTabular, build_scene_engine
+from genesis.ext.pyrender.overlay import ImGuiOverlayPlugin
 from genesis.utils.misc import qd_to_numpy
 from genesis.vis.keybindings import Key, KeyAction, Keybind
 
@@ -334,6 +336,48 @@ def main() -> None:
     max_ee_pairs = 0
     min_ccd_alpha = 1.0
     last_target_qpos = HOME_QPOS[:7].copy()
+    performance = {
+        "step_ms": 0.0,
+        "step_ms_ema": 0.0,
+        "newton": 0,
+        "pcg": 0,
+        "line_search": 0,
+        "ccd_alpha": 1.0,
+    }
+    if not args.no_gui:
+        overlay = next(
+            (
+                plugin
+                for plugin in scene.viewer.plugins
+                if isinstance(plugin, ImGuiOverlayPlugin)
+            ),
+            None,
+        )
+        if overlay is not None:
+
+            def draw_newton_performance(imgui) -> None:
+                imgui.separator()
+                imgui.text("Newton Coupling")
+                imgui.text(
+                    f"Step: {performance['step_ms']:.2f} ms  "
+                    f"EMA: {performance['step_ms_ema']:.2f} ms"
+                )
+                simulation_fps = (
+                    1000.0 / performance["step_ms_ema"]
+                    if performance["step_ms_ema"] > 0.0
+                    else 0.0
+                )
+                imgui.text(f"Simulation FPS: {simulation_fps:.1f}")
+                imgui.text(
+                    f"Newton: {performance['newton']}  "
+                    f"PCG: {performance['pcg']}  "
+                    f"LS: {performance['line_search']}"
+                )
+                imgui.text(
+                    f"CCD alpha: {performance['ccd_alpha']:.6f}"
+                )
+
+            overlay.register_panel(draw_newton_performance, section="side")
     try:
         while (
             is_running
@@ -376,7 +420,21 @@ def main() -> None:
                 dofs_idx_local=finger_dofs,
             )
 
+            step_begin = time.perf_counter()
             engine.step()
+            step_ms = (time.perf_counter() - step_begin) * 1000.0
+            performance["step_ms"] = step_ms
+            performance["step_ms_ema"] = (
+                step_ms
+                if performance["step_ms_ema"] == 0.0
+                else 0.9 * performance["step_ms_ema"] + 0.1 * step_ms
+            )
+            performance["newton"] = engine.get_newton_iters()
+            performance["pcg"] = engine.get_max_pcg_iters()
+            performance["line_search"] = engine.get_max_ls_iters()
+            performance["ccd_alpha"] = float(
+                qd_to_numpy(engine.contact.frame_ccd_alpha)
+            )
             max_newton = max(max_newton, engine.get_newton_iters())
             max_pcg = max(max_pcg, engine.get_max_pcg_iters())
             max_line_search = max(
