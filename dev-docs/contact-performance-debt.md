@@ -962,6 +962,39 @@ CGQ `Cloth` parameter. The QIPC path deliberately ignores it for the
 Baraff-Witkin preset; this is the sole API naming/storage exception in this
 gate.
 
+The next frozen-state gate enables contact without a rigid proxy, isolating
+Consistent IPC from reduced-KKT routing. Two exact CGQ/Genesis scene pairs
+were checked:
+
+- A 25x25 cloth at `xi + 0.5*d_hat` above one halfplane produces exactly 625
+  PH candidates and 625 active pairs in both implementations. Maximum
+  per-pair gradient and Hessian errors are `5.42e-20` and `6.66e-16`;
+  aggregate barrier-energy error is `6.44e-20`; CCD alpha is exactly 1.
+- A free triangle at the same normalized gap above a fixed triangle produces
+  exactly 3 PT and 6 EE candidates in both implementations. The same 3 PT
+  pairs are active and all 6 EE pairs are inactive. Aggregate contact-gradient
+  and Hessian maximum errors are `4.07e-20` and `3.33e-16`; barrier-energy
+  error is `3.64e-23`.
+
+For the fixed-triangle case, the complete first-Newton block system also
+matches: row/column arrays are identical, block-value maximum error is
+`3.33e-16` (relative Frobenius error `1.81e-16`), and RHS maximum error is
+`4.07e-20`. Reconstructing CGQ's production PCG iterate from its dumped final
+residual gives a Newton-direction maximum error of `3.60e-19` against
+Genesis (`1.68e-15` relative). No contact-algebra change was required.
+
+This gate deliberately represents the obstacle as fully fixed FEM surface
+vertices. It proves PH/PT/EE candidates, active filtering, barrier energy,
+gradient, Hessian, BCOO assembly, PCG, and accepted direction before adding
+the rigid-proxy pullback. It does not claim reduced-KKT coupling parity; that
+is the next gate.
+
+The one implementation defect exposed by the minimal triangle was unrelated
+to contact: a valid zero-live-hinge `QuadraticBending` allocation has capacity
+one, but its initializer uploaded a `(0,4)` array. Zero-live-hinge buffers are
+now initialized with zero-filled capacity storage while the authoritative
+device scalar remains `n_hinges[()] == 0`.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size

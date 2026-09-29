@@ -5,6 +5,7 @@ from quadrants.lang import impl
 
 import genesis as gs
 from genesis.engine.systems import build_scene_engine
+from genesis.engine.systems.finite_element import QuadraticBending
 from genesis.utils.misc import qd_to_numpy
 
 
@@ -27,6 +28,33 @@ def make_grid(path, n=3, size=0.2):
                 ]
             )
     trimesh.Trimesh(vertices, np.asarray(triangles), process=False).export(path)
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_qcloth_zero_hinge_capacity():
+    bending = QuadraticBending()
+    bending.wire_data(
+        hinge_indices=np.empty((0, 4), dtype=np.int32),
+        bending_stiffness=np.empty(0, dtype=np.float64),
+        Q0=np.empty((0, 4, 4), dtype=np.float64),
+        vert_bend_k=np.zeros(3, dtype=np.float64),
+    )
+
+    np.testing.assert_array_equal(qd_to_numpy(bending.n_hinges), 0)
+    np.testing.assert_array_equal(
+        qd_to_numpy(bending.hinge_indices),
+        np.zeros((1, 4), dtype=np.int32),
+    )
+    np.testing.assert_array_equal(
+        qd_to_numpy(bending.k),
+        np.zeros(1, dtype=np.float64),
+    )
+    np.testing.assert_array_equal(
+        qd_to_numpy(bending.Q0),
+        np.zeros((1, 16), dtype=np.float64),
+    )
 
 
 @pytest.mark.required

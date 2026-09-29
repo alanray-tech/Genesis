@@ -37,9 +37,14 @@ class QuadraticBending(FEMConstitution):
         self.Q0 = qd.ndarray(qd.f64, shape=(capacity, 16))
         self.vert_bend_k = qd.ndarray(qd.f64, shape=(max(len(vert_bend_k), 1),))
         self.n_hinges.from_numpy(np.array(self.n_hinges_host, dtype=np.int32))
-        self.hinge_indices.from_numpy(np.asarray(hinge_indices, dtype=np.int32))
-        self.k.from_numpy(np.asarray(bending_stiffness, dtype=np.float64))
-        self.Q0.from_numpy(np.asarray(Q0, dtype=np.float64).reshape(self.n_hinges_host, 16))
+        if self.n_hinges_host:
+            self.hinge_indices.from_numpy(np.asarray(hinge_indices, dtype=np.int32))
+            self.k.from_numpy(np.asarray(bending_stiffness, dtype=np.float64))
+            self.Q0.from_numpy(np.asarray(Q0, dtype=np.float64).reshape(self.n_hinges_host, 16))
+        else:
+            self.hinge_indices.from_numpy(np.zeros((capacity, 4), dtype=np.int32))
+            self.k.from_numpy(np.zeros(capacity, dtype=np.float64))
+            self.Q0.from_numpy(np.zeros((capacity, 16), dtype=np.float64))
         self.vert_bend_k.from_numpy(np.asarray(vert_bend_k, dtype=np.float64))
 
     def triplet_count(self) -> int:
