@@ -995,6 +995,27 @@ one, but its initializer uploaded a `(0,4)` array. Zero-live-hinge buffers are
 now initialized with zero-filled capacity storage while the authoritative
 device scalar remains `n_hinges[()] == 0`.
 
+The fixed-rigid-proxy gate then replaces the fixed FEM obstacle with a
+watertight tetrahedron owned by CGQ/Genesis minimal-coordinate rigid systems.
+CGQ allocates rigid global vertices before FEM while Genesis allocates FEM
+before rigid proxies, so comparison uses the exact coordinate-derived vertex
+bijection rather than assuming equal global IDs. Results are:
+
+- both produce 9 PT and 6 EE candidates, with the same coordinate stencils;
+- both activate the same 3 PT pairs and no EE pairs;
+- coordinate-mapped aggregate physical gradient and Hessian maximum errors are
+  `4.58e-18` and `2.59e-14` (`2.95e-14` and `2.49e-14` relative);
+- barrier-energy error is `1.32e-21`, and CCD alpha is exactly 1;
+- after one complete frame, cloth-position maximum error is `2.39e-18`;
+- both report Newton 2, total PCG 2, maximum PCG 1, and zero line-search
+  backtracks.
+
+This closes the fixed rigid-proxy contact-routing gate. Together with the
+previous gates, rigid dynamics, cloth elasticity, PH/PT/EE contact, physical
+contact assembly, fixed-proxy pullback, Newton acceptance, and PCG iteration
+counts are numerically aligned before profiling the remaining implementation
+cost.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size
