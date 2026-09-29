@@ -9,8 +9,10 @@ from genesis.utils import geom as gu
 
 from .finite_element.finite_element import _surface_area_weights, _surface_edges
 from .rigid_contact_proxy_kkt import (
+    fk_defect_prefix_cap,
     rigid_contact_proxy_constraint,
     rigid_contact_proxy_prepare_maps,
+    so3_left_jacobian,
 )
 from .rigid_system import RigidSystem
 from .sim_system import SimSystem
@@ -39,7 +41,7 @@ class RigidContactProxyGeometry:
             for link in rigid_solver.links:
                 geoms = []
                 for geom in link.geoms:
-                    if not geom.needs_coup or geom.n_verts == 0 or geom.n_faces == 0:
+                    if geom.contype == 0 or geom.n_verts == 0 or geom.n_faces == 0:
                         continue
                     if geom.active_envs_idx is not None and environment not in geom.active_envs_idx:
                         continue
@@ -123,9 +125,15 @@ class RigidContactProxySystem(SimSystem):
         self.globalization_mode_host = self.globalization_merit
         self.restoration_enabled_host = True
         self.test_merit_energy_bias_host = 0.0
+        self.ls_forensics_test_energy_bias_host = 0.0
+        self.has_forest = False
 
     def do_build(self) -> None:
+        from .rigid_joint_forest import RigidJointForestSystem
+
         self.rigid = self.require(RigidSystem)
+        self.forest = self.require(RigidJointForestSystem)
+        self.has_forest = True
         self.n_links_host = self.rigid.dyn_state.links.pos.shape[0]
         self.n_instances_host = self.rigid.n_instances_host
 
@@ -134,6 +142,7 @@ class RigidContactProxySystem(SimSystem):
         globalization: str = "merit",
         restoration: bool = True,
         test_merit_energy_bias: float = 0.0,
+        ls_forensics_test_energy_bias: float = 0.0,
     ) -> None:
         if globalization == "watchdog":
             mode = self.globalization_watchdog
@@ -143,9 +152,20 @@ class RigidContactProxySystem(SimSystem):
             raise ValueError("rigid_proxy/globalization must be 'watchdog' or 'merit'")
         if not math.isfinite(test_merit_energy_bias) or test_merit_energy_bias < 0.0:
             raise ValueError("rigid_proxy/test_merit_energy_bias must be finite and nonnegative")
+        if (
+            not math.isfinite(ls_forensics_test_energy_bias)
+            or ls_forensics_test_energy_bias < 0.0
+        ):
+            raise ValueError(
+                "extras/ls_forensics/test_energy_bias must be finite and "
+                "nonnegative"
+            )
         self.globalization_mode_host = mode
         self.restoration_enabled_host = bool(restoration)
         self.test_merit_energy_bias_host = float(test_merit_energy_bias)
+        self.ls_forensics_test_energy_bias_host = float(
+            ls_forensics_test_energy_bias
+        )
 
     def wire_data(
         self,
@@ -191,6 +211,7 @@ class RigidContactProxySystem(SimSystem):
         self.globalization_mode = qd.ndarray(qd.i32, shape=())
         self.restoration_enabled = qd.ndarray(qd.i32, shape=())
         self.test_merit_energy_bias = qd.ndarray(qd.f64, shape=())
+        self.ls_forensics_test_energy_bias = qd.ndarray(qd.f64, shape=())
 
         self.mechanism_body = qd.ndarray(qd.i32, shape=(pair_capacity,))
         self.proxy_body = qd.ndarray(qd.i32, shape=(pair_capacity,))
@@ -208,6 +229,7 @@ class RigidContactProxySystem(SimSystem):
         self.lambda_ = qd.ndarray(qd.f64, shape=(pair_capacity, 6))
         self.metric = qd.ndarray(qd.f64, shape=(pair_capacity, 6, 6))
         self.constraint = qd.ndarray(qd.f64, shape=(pair_capacity, 6))
+        self.trial_constraint = qd.ndarray(qd.f64, shape=(pair_capacity, 6))
         self.tangent_map = qd.ndarray(qd.f64, shape=(pair_capacity, 6, 6))
         self.normal_map = qd.ndarray(qd.f64, shape=(pair_capacity, 6, 6))
         self.particular = qd.ndarray(qd.f64, shape=(pair_capacity, 6))
@@ -254,6 +276,7 @@ class RigidContactProxySystem(SimSystem):
         self.restoration_dual_epochs = qd.ndarray(qd.i32, shape=())
         self.restoration_hard_probes = qd.ndarray(qd.i32, shape=())
         self.restoration_max_slack = qd.ndarray(qd.f64, shape=())
+        self.restoration_energy = qd.ndarray(qd.f64, shape=())
 
         pair_of_body = np.full(body_capacity, -1, dtype=np.int32)
         for pair, (mechanism_id, proxy_id) in enumerate(zip(mechanism, proxies, strict=True)):
@@ -270,6 +293,12 @@ class RigidContactProxySystem(SimSystem):
         self.globalization_mode.from_numpy(np.array(self.globalization_mode_host, dtype=np.int32))
         self.restoration_enabled.from_numpy(np.array(self.restoration_enabled_host, dtype=np.int32))
         self.test_merit_energy_bias.from_numpy(np.array(self.test_merit_energy_bias_host, dtype=np.float64))
+        self.ls_forensics_test_energy_bias.from_numpy(
+            np.array(
+                self.ls_forensics_test_energy_bias_host,
+                dtype=np.float64,
+            )
+        )
         self.mechanism_body.from_numpy(
             mechanism if n_pairs else np.zeros(pair_capacity, dtype=np.int32)
         )
@@ -292,6 +321,7 @@ class RigidContactProxySystem(SimSystem):
         self.lambda_.from_numpy(zero6)
         self.metric.from_numpy(zero66)
         self.constraint.from_numpy(zero6)
+        self.trial_constraint.from_numpy(zero6)
         self.tangent_map.from_numpy(zero66)
         self.normal_map.from_numpy(zero66)
         self.particular.from_numpy(zero6)
@@ -319,6 +349,7 @@ class RigidContactProxySystem(SimSystem):
             "merit_max_rho",
             "merit_max_gtd",
             "restoration_max_slack",
+            "restoration_energy",
         ):
             getattr(self, field).from_numpy(np.array(0.0, dtype=np.float64))
         self.fk_alpha.from_numpy(np.array(1.0, dtype=np.float64))
@@ -359,10 +390,182 @@ class RigidContactProxySystem(SimSystem):
         self.merit_gradient.from_numpy(np.zeros(capacity, dtype=np.float64))
         self.merit_gradient_capacity.from_numpy(np.array(capacity, dtype=np.int32))
 
+    @qd.func(requires_top_level=True)
+    def capture_physical_gradient(self, linear_system: qd.template()):
+        for dof in range(self.merit_gradient_capacity[()]):
+            self.merit_gradient[dof] = linear_system.b_rhs[dof]
+
+    @qd.func(requires_top_level=True)
+    def initialize_merit(self):
+        for _ in range(1):
+            self.merit_active[()] = 0
+            self.merit_probe[()] = 0
+            self.merit_evaluated[()] = 0
+            self.merit_rho[()] = 0.0
+            self.merit_slope[()] = 0.0
+
+    @qd.func
+    def check_line_search(
+        self,
+        energy0,
+        trial_energy,
+        alpha,
+        step,
+        max_steps,
+        exhausted,
+        converged: qd.template(),
+    ):
+        energy_roundoff = 1.0e-12 * (1.0 + qd.abs(energy0))
+        energy_ok = trial_energy <= energy0 + energy_roundoff
+        accepted_by_rule = energy_ok
+        decision_elastic_restoration = self.restoration_active[()] != 0
+        hard_probe = self.restoration_hard_probe[()] != 0
+        restoration_trigger_bias = (
+            self.ls_forensics_test_energy_bias[()] > 0.0
+            and self.restoration_triggered[()] == 0
+        )
+        residual = self.trial_max_residual[()]
+        residual0 = self.max_surface_residual[()]
+        tolerance = self.solve_tolerance[()]
+        merit_ok = False
+        feasibility_mode = False
+        anchor_h_ok = False
+        anchor_energy_ok = False
+
+        if (
+            not decision_elastic_restoration
+            and not restoration_trigger_bias
+        ):
+            residual_floor = qd.max(1.0e-12, 1.0e-6 * tolerance)
+            request_merit_probe = (
+                self.globalization_mode[()] == self.globalization_merit
+                and not energy_ok
+                and self.merit_active[()] == 0
+                and self.merit_evaluated[()] == 0
+                and self.filter_retry[()] == 0
+                and not hard_probe
+                and residual0 > residual_floor
+                and residual0 <= tolerance
+                and residual < residual0
+            )
+            if request_merit_probe:
+                self.merit_probe[()] = 1
+                self.merit_evaluated[()] = 1
+                self.merit_probes[()] = self.merit_probes[()] + 1
+                derivative = self.merit_gtd[()]
+                self.merit_max_gtd[()] = qd.max(
+                    self.merit_max_gtd[()],
+                    qd.abs(derivative),
+                )
+                derivative_floor = 1.0e-12 * (1.0 + qd.abs(energy0))
+                residual_rate = alpha * residual0
+                if (
+                    residual_rate > residual_floor
+                    and derivative > derivative_floor
+                ):
+                    margin = qd.max(derivative_floor, qd.abs(derivative))
+                    rho = (derivative + margin) / residual_rate
+                    self.merit_active[()] = 1
+                    self.merit_rho[()] = rho
+                    self.merit_slope[()] = derivative - rho * residual_rate
+                    self.merit_entries[()] = self.merit_entries[()] + 1
+                    self.merit_max_rho[()] = qd.max(
+                        self.merit_max_rho[()],
+                        rho,
+                    )
+                self.merit_probe[()] = 0
+
+            if self.merit_active[()] != 0 and not energy_ok:
+                self.merit_trials[()] = self.merit_trials[()] + 1
+                merit0 = energy0 + self.merit_rho[()] * residual0
+                merit = trial_energy + self.merit_rho[()] * residual
+                merit_rhs = merit0 + 1.0e-4 * alpha * self.merit_slope[()]
+                merit_roundoff = (
+                    64.0
+                    * 2.220446049250313e-16
+                    * (1.0 + qd.abs(merit0))
+                )
+                merit_ok = merit <= merit_rhs + merit_roundoff
+                accepted_by_rule = merit_ok
+
+            feasibility_mode = (
+                residual0 > tolerance or self.filter_retry[()] != 0
+            )
+            if feasibility_mode:
+                anchor_h_ok = residual <= (1.0 - 1.0e-4) * residual0
+                anchor_energy_ok = trial_energy <= energy0 - 1.0e-4 * residual0
+                accepted_by_rule = anchor_h_ok or anchor_energy_ok
+                for entry in range(self.filter_size[()]):
+                    filter_ok = (
+                        residual <= (1.0 - 1.0e-4) * self.filter_h[entry]
+                        or trial_energy
+                        <= self.filter_energy[entry] - 1.0e-4 * self.filter_h[entry]
+                    )
+                    accepted_by_rule = accepted_by_rule and filter_ok
+
+        exhausted_fallback = exhausted and not accepted_by_rule
+        accepted = accepted_by_rule or exhausted_fallback
+        if exhausted_fallback:
+            self.ls_exhaust_accept_count[()] = (
+                self.ls_exhaust_accept_count[()] + 1
+            )
+            if restoration_trigger_bias:
+                self.restoration_triggered[()] = 1
+            self.trigger_restoration()
+
+        if accepted and not decision_elastic_restoration:
+            if self.merit_active[()] != 0 and not energy_ok and merit_ok:
+                self.merit_accepts[()] = self.merit_accepts[()] + 1
+
+            deep_backtracking = (
+                accepted_by_rule
+                and not feasibility_mode
+                and not merit_ok
+                and step >= 3
+                and step + 3 >= max_steps
+            )
+            will_retry_filter = (
+                not feasibility_mode
+                and residual0 > qd.max(1.0e-12, 1.0e-6 * tolerance)
+                and residual < residual0
+                and (exhausted_fallback or deep_backtracking)
+            )
+            if will_retry_filter:
+                self.filter_retry[()] = 1
+                self.filter_retries[()] = self.filter_retries[()] + 1
+
+            if feasibility_mode:
+                output = 0
+                for entry in range(self.filter_size[()]):
+                    dominated = (
+                        residual <= self.filter_h[entry]
+                        and trial_energy <= self.filter_energy[entry]
+                    )
+                    if not dominated:
+                        self.filter_h[output] = self.filter_h[entry]
+                        self.filter_energy[output] = self.filter_energy[entry]
+                        output = output + 1
+                if output < self.filter_capacity[()]:
+                    self.filter_h[output] = residual
+                    self.filter_energy[output] = trial_energy
+                    output = output + 1
+                self.filter_size[()] = output
+                self.filter_retry[()] = 0
+            if exhausted_fallback:
+                stagnation_tolerance = 1.0e-10 * (1.0 + qd.abs(energy0))
+                if (
+                    self.physical_converged[()] != 0
+                    and residual <= tolerance
+                    and qd.abs(trial_energy - energy0) <= stagnation_tolerance
+                ):
+                    converged[()] = 1
+        return accepted
+
     def wire_geometry(
         self,
         global_vert_offset: int,
         geometry: RigidContactProxyGeometry,
+        global_body_offset: int = 0,
     ) -> None:
         if not self.is_initialized_host:
             raise RuntimeError("RigidContactProxySystem mappings must be wired before geometry")
@@ -372,16 +575,18 @@ class RigidContactProxySystem(SimSystem):
             raise ValueError("RigidContactProxySystem local position and pair counts must match")
         if np.any(vertex_pair < 0) or np.any(vertex_pair >= int(self.n_pairs.to_numpy())):
             raise ValueError("RigidContactProxySystem vertex pair is out of range")
-        if global_vert_offset < 0:
-            raise ValueError("RigidContactProxySystem global vertex offset must be non-negative")
+        if global_vert_offset < 0 or global_body_offset < 0:
+            raise ValueError("RigidContactProxySystem global offsets must be non-negative")
 
         capacity = max(len(local_positions), 1)
         self.n_verts = qd.ndarray(qd.i32, shape=())
         self.global_vert_offset = qd.ndarray(qd.i32, shape=())
+        self.global_body_offset = qd.ndarray(qd.i32, shape=())
         self.local_positions = qd.ndarray(qd.f64, shape=(capacity, 3))
         self.vertex_pair = qd.ndarray(qd.i32, shape=(capacity,))
         self.n_verts.from_numpy(np.array(len(local_positions), dtype=np.int32))
         self.global_vert_offset.from_numpy(np.array(global_vert_offset, dtype=np.int32))
+        self.global_body_offset.from_numpy(np.array(global_body_offset, dtype=np.int32))
         self.local_positions.from_numpy(
             local_positions if len(local_positions) else np.zeros((capacity, 3), dtype=np.float64)
         )
@@ -389,19 +594,46 @@ class RigidContactProxySystem(SimSystem):
             vertex_pair if len(vertex_pair) else np.zeros(capacity, dtype=np.int32)
         )
 
+    @qd.func
+    def _current_mechanism_pose(self, link, environment):
+        link_index = (
+            [link, environment]
+            if qd.static(self.rigid.rigid_config.batch_links_info)
+            else link
+        )
+        link_position = self.rigid.dyn_state.links.pos[link, environment]
+        link_quaternion = self.rigid.dyn_state.links.quat[link, environment]
+        inertial_position = self.rigid.dyn_info.links.inertial_pos[link_index]
+        inertial_quaternion = self.rigid.dyn_info.links.inertial_quat[
+            link_index
+        ]
+        position = link_position + gu.qd_transform_by_quat(
+            inertial_position,
+            link_quaternion,
+        )
+        quaternion = gu.qd_transform_quat_by_quat(
+            inertial_quaternion,
+            link_quaternion,
+        )
+        return position, quaternion
+
     @qd.func(requires_top_level=True)
     def initialize_proxy_state(self):
         for pair in range(self.n_pairs[()]):
             mechanism = self.mechanism_body[pair]
             link = mechanism % self.n_links_host
             environment = mechanism // self.n_links_host
+            position, quaternion = self._current_mechanism_pose(
+                link,
+                environment,
+            )
             for axis in qd.static(range(3)):
-                value = self.rigid.dyn_state.links.i_pos[link, environment][axis]
+                value = position[axis]
                 self.t[pair, axis] = value
                 self.t_prev[pair, axis] = value
                 self.t_temp[pair, axis] = value
             for axis in qd.static(range(4)):
-                value = self.rigid.dyn_state.links.i_quat[link, environment][axis]
+                value = quaternion[axis]
                 self.quat[pair, axis] = value
                 self.quat_prev[pair, axis] = value
                 self.quat_temp[pair, axis] = value
@@ -412,10 +644,14 @@ class RigidContactProxySystem(SimSystem):
             mechanism = self.mechanism_body[pair]
             link = mechanism % self.n_links_host
             environment = mechanism // self.n_links_host
-            link_index = [link, environment] if qd.static(self.rigid.rigid_config.batch_links_info) else link
+            link_index = (
+                [link, environment]
+                if qd.static(self.rigid.rigid_config.batch_links_info)
+                else link
+            )
             mass = self.rigid.dyn_info.links.inertial_mass[link_index]
             inertia = self.rigid.dyn_info.links.inertial_i[link_index]
-            quaternion = self.rigid.dyn_state.links.i_quat[link, environment]
+            _, quaternion = self._current_mechanism_pose(link, environment)
             rotation = gu.qd_quat_to_R(quaternion, qd.f64(1.0e-12))
             world_inertia = rotation @ inertia @ rotation.transpose()
             for row in qd.static(range(6)):
@@ -470,6 +706,240 @@ class RigidContactProxySystem(SimSystem):
             self.rigid.dyn_state.links.is_constrained[link, environment] = True
 
     @qd.func(requires_top_level=True)
+    def prepare_tolerance(self, sim_config: qd.template(), contact: qd.template()):
+        for _ in range(1):
+            self.solve_tolerance[()] = qd.min(
+                sim_config.tol[()],
+                0.01 * contact.d_hat[()],
+            )
+            self.fk_alpha[()] = 1.0
+
+    @qd.func(requires_top_level=True)
+    def initialize_newton(self):
+        for _ in range(1):
+            if self.restoration_active[()] != 0:
+                self.restoration_newton_epochs[()] = (
+                    self.restoration_newton_epochs[()] + 1
+                )
+            if self.restoration_hard_probe[()] != 0:
+                self.restoration_hard_probes[()] = (
+                    self.restoration_hard_probes[()] + 1
+                )
+            if (
+                self.dual_update_flag[()] != 0
+                or self.restoration_reprice_flag[()] != 0
+            ):
+                self.dual_update_flag[()] = 0
+                self.restoration_reprice_flag[()] = 0
+
+    @qd.func(requires_top_level=True)
+    def apply_convergence(self, converged: qd.template()):
+        for _ in range(1):
+            self.physical_converged[()] = converged[()]
+            if self.restoration_active[()] != 0:
+                converged[()] = 0
+            elif self.restoration_hard_probe[()] != 0:
+                if (
+                    converged[()] != 0
+                    and self.max_surface_residual[()] <= self.solve_tolerance[()]
+                ):
+                    self.restoration_hard_probe[()] = 0
+                else:
+                    converged[()] = 0
+            elif (
+                converged[()] != 0
+                and self.max_surface_residual[()] > self.solve_tolerance[()]
+            ):
+                converged[()] = 0
+            if self.fk_alpha[()] < 1.0:
+                converged[()] = 0
+
+    @qd.func(requires_top_level=True)
+    def prepare_path_limit(self, contact: qd.template()):
+        for _ in range(1):
+            self.fk_alpha[()] = 1.0
+        for pair in range(self.n_pairs[()]):
+            translation = qd.Vector(
+                [
+                    self.constraint[pair, 0],
+                    self.constraint[pair, 1],
+                    self.constraint[pair, 2],
+                ]
+            )
+            rotation = qd.Vector(
+                [
+                    self.constraint[pair, 3],
+                    self.constraint[pair, 4],
+                    self.constraint[pair, 5],
+                ]
+            )
+            residual = translation.norm() + self.surface_radius[pair] * rotation.norm()
+            limit = qd.max(0.1 * contact.d_hat[()], residual)
+            self.path_limit[pair] = limit
+            proxy_rotation = qd.Vector.zero(qd.f64, 3)
+            slack_translation = qd.Vector.zero(qd.f64, 3)
+            slack_rotation = qd.Vector.zero(qd.f64, 3)
+            for axis in qd.static(range(3)):
+                proxy_rotation[axis] = self.dq[pair, axis + 3]
+                slack_translation[axis] = self.slack[pair, axis]
+                slack_rotation[axis] = self.slack[pair, axis + 3]
+            proxy_curvature = (
+                proxy_rotation.dot(proxy_rotation)
+                * self.surface_radius[pair]
+            )
+            forest_curvature = self.forest.curvature_bound(
+                self.mechanism_body[pair],
+                self.surface_radius[pair],
+            )
+            slack_residual = (
+                slack_translation.norm()
+                + self.surface_radius[pair] * slack_rotation.norm()
+            )
+            alpha = fk_defect_prefix_cap(
+                residual,
+                slack_residual,
+                proxy_curvature + forest_curvature,
+                limit,
+            )
+            if alpha < 1.0:
+                qd.atomic_min(self.fk_alpha[()], alpha)
+
+    @qd.func(requires_top_level=True)
+    def evaluate_trial_guard(self):
+        for _ in range(1):
+            self.trial_max_residual[()] = 0.0
+        for pair in range(self.n_pairs[()]):
+            mechanism = self.mechanism_body[pair]
+            mechanism_position = qd.Vector.zero(qd.f64, 3)
+            mechanism_quaternion = qd.Vector.zero(qd.f64, 4)
+            proxy_position = qd.Vector.zero(qd.f64, 3)
+            proxy_quaternion = qd.Vector.zero(qd.f64, 4)
+            for axis in qd.static(range(3)):
+                mechanism_position[axis] = self.forest.endpoint_t[mechanism][axis]
+                proxy_position[axis] = self.t[pair, axis]
+            for axis in qd.static(range(4)):
+                mechanism_quaternion[axis] = self.forest.endpoint_quat[mechanism][axis]
+                proxy_quaternion[axis] = self.quat[pair, axis]
+            translation = qd.Vector.zero(qd.f64, 3)
+            rotation = qd.Vector.zero(qd.f64, 3)
+            rigid_contact_proxy_constraint(
+                mechanism_position,
+                mechanism_quaternion,
+                proxy_position,
+                proxy_quaternion,
+                translation,
+                rotation,
+            )
+            for component in qd.static(range(3)):
+                self.trial_constraint[pair, component] = translation[component]
+                self.trial_constraint[pair, component + 3] = rotation[component]
+            residual = translation.norm() + self.surface_radius[pair] * rotation.norm()
+            qd.atomic_max(self.trial_max_residual[()], residual)
+            tolerance = 1.0e-10 * (1.0 + self.path_limit[pair])
+            if residual > self.path_limit[pair] + tolerance:
+                self.frame_failed[()] = 1
+
+    @qd.func(requires_top_level=True)
+    def compute_restoration_energy(self, use_trial: qd.template()):
+        for _ in range(1):
+            self.restoration_energy[()] = 0.0
+        for pair in range(self.n_pairs[()]):
+            if self.restoration_active[()] != 0:
+                constraint = qd.Vector.zero(qd.f64, 6)
+                dual = qd.Vector.zero(qd.f64, 6)
+                metric = qd.Matrix.zero(qd.f64, 6, 6)
+                for row in qd.static(range(6)):
+                    if qd.static(use_trial):
+                        constraint[row] = self.trial_constraint[pair, row]
+                    else:
+                        constraint[row] = self.constraint[pair, row]
+                    dual[row] = self.lambda_[pair, row]
+                    for column in qd.static(range(6)):
+                        metric[row, column] = self.metric[pair, row, column]
+                value = dual.dot(constraint) + 0.5 * constraint.dot(
+                    metric @ constraint
+                )
+                qd.atomic_add(self.restoration_energy[()], value)
+
+    @qd.func
+    def trigger_restoration(self):
+        triggered = False
+        if (
+            self.restoration_enabled[()] != 0
+            and self.restoration_active[()] == 0
+            and self.max_surface_residual[()] > self.solve_tolerance[()]
+        ):
+            self.restoration_active[()] = 1
+            self.restoration_triggered[()] = 1
+            self.restoration_hard_probe[()] = 0
+            self.restoration_entries[()] = self.restoration_entries[()] + 1
+            self.restoration_reprice_flag[()] = 1
+            self.physical_converged[()] = 0
+            triggered = True
+        return triggered
+
+    @qd.func(requires_top_level=True)
+    def finalize_restoration_step(self, alpha):
+        for _ in range(1):
+            if (
+                self.restoration_active[()] != 0
+                and self.restoration_reprice_flag[()] == 0
+                and alpha > 0.0
+            ):
+                self.dual_update_flag[()] = qd.i32(
+                    self.trial_max_residual[()] > self.solve_tolerance[()]
+                )
+                if self.dual_update_flag[()] != 0:
+                    self.restoration_dual_epochs[()] = (
+                        self.restoration_dual_epochs[()] + 1
+                    )
+        for pair in range(self.n_pairs[()]):
+            if (
+                self.restoration_active[()] != 0
+                and self.restoration_reprice_flag[()] == 0
+                and alpha > 0.0
+                and self.dual_update_flag[()] != 0
+            ):
+                constraint = qd.Vector.zero(qd.f64, 6)
+                metric = qd.Matrix.zero(qd.f64, 6, 6)
+                for row in qd.static(range(6)):
+                    constraint[row] = self.trial_constraint[pair, row]
+                    for column in qd.static(range(6)):
+                        metric[row, column] = self.metric[pair, row, column]
+                update = metric @ constraint
+                for component in qd.static(range(6)):
+                    self.lambda_[pair, component] = (
+                        self.lambda_[pair, component] + update[component]
+                    )
+        for _ in range(1):
+            if (
+                self.restoration_active[()] != 0
+                and self.restoration_reprice_flag[()] == 0
+                and alpha > 0.0
+            ):
+                self.restoration_active[()] = 0
+                self.restoration_hard_probe[()] = 1
+                self.restoration_reprice_flag[()] = 1
+
+    @qd.func(requires_top_level=True)
+    def recover_reaction(self):
+        for pair in range(self.n_pairs[()]):
+            offset = self.forest.proxy_dof_offset[()] + pair * 6
+            rotation = qd.Vector.zero(qd.f64, 3)
+            gradient_translation = qd.Vector.zero(qd.f64, 3)
+            gradient_rotation = qd.Vector.zero(qd.f64, 3)
+            for axis in qd.static(range(3)):
+                rotation[axis] = self.constraint[pair, axis + 3]
+                gradient_translation[axis] = self.merit_gradient[offset + axis]
+                gradient_rotation[axis] = self.merit_gradient[offset + axis + 3]
+            reaction_rotation = -(
+                so3_left_jacobian(rotation).transpose() @ gradient_rotation
+            )
+            for axis in qd.static(range(3)):
+                self.reaction[pair, axis] = -gradient_translation[axis]
+                self.reaction[pair, axis + 3] = reaction_rotation[axis]
+
+    @qd.func(requires_top_level=True)
     def prepare_constraint(self):
         for _ in range(1):
             self.max_surface_residual[()] = 0.0
@@ -481,11 +951,20 @@ class RigidContactProxySystem(SimSystem):
             mechanism_quaternion = qd.Vector.zero(qd.f64, 4)
             proxy_position = qd.Vector.zero(qd.f64, 3)
             proxy_quaternion = qd.Vector.zero(qd.f64, 4)
+            current_position, current_quaternion = (
+                self._current_mechanism_pose(link, environment)
+            )
             for axis in qd.static(range(3)):
-                mechanism_position[axis] = self.rigid.dyn_state.links.i_pos[link, environment][axis]
+                if qd.static(self.has_forest):
+                    mechanism_position[axis] = self.forest.endpoint_t[mechanism][axis]
+                else:
+                    mechanism_position[axis] = current_position[axis]
                 proxy_position[axis] = self.t[pair, axis]
             for axis in qd.static(range(4)):
-                mechanism_quaternion[axis] = self.rigid.dyn_state.links.i_quat[link, environment][axis]
+                if qd.static(self.has_forest):
+                    mechanism_quaternion[axis] = self.forest.endpoint_quat[mechanism][axis]
+                else:
+                    mechanism_quaternion[axis] = current_quaternion[axis]
                 proxy_quaternion[axis] = self.quat[pair, axis]
 
             translation = qd.Vector.zero(qd.f64, 3)
@@ -534,6 +1013,9 @@ class RigidContactProxySystem(SimSystem):
                 quaternion[axis] = self.quat[pair, axis]
             world_position = translation + gu.qd_transform_by_quat(local_position, quaternion)
             global_vertex = self.global_vert_offset[()] + local_vertex
+            vertex.body_id[global_vertex] = (
+                self.global_body_offset[()] + self.proxy_body[pair]
+            )
             for axis in qd.static(range(3)):
                 vertex.positions[global_vertex, axis] = world_position[axis]
                 vertex.safe_positions[global_vertex, axis] = world_position[axis]

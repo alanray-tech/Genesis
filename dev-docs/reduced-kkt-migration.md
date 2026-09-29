@@ -92,6 +92,9 @@ Therefore:
 - `mechanism_body` identifies the Genesis link/environment owner;
 - `proxy_body` identifies the appended global contact-body row, not an entry
   fabricated inside native `RigidSolver`;
+- scene initialization derives each proxy pose from the built link pose and
+  its inertial transform. Genesis `links.i_pos/i_quat` are not valid staging
+  sources before the first native predict/FK pass;
 - proxy vertices and surfaces are published by
   `RigidContactProxySystem` into the existing global managers;
 - this ownership difference must not change any CGQ KKT field name, map,
@@ -112,6 +115,39 @@ constraint integration map whose position tangent is `dt^2`. Integrator
 conformance tests must verify this gate before `build_scene_engine` selects
 the proxy path; an integrator with a different constrained tangent must provide
 its exact map or be rejected explicitly.
+
+Genesis retains authored fixed MJCF links that CGQ's minimal forest does not
+represent as scalar joint edges. The mapped articulated preconditioner
+therefore:
+
+- stores the CGQ scalar `edge_*` state only for one-DOF revolute/prismatic
+  edges;
+- transports a fixed child's complete spatial block into its parent without a
+  scalar Schur elimination;
+- seeds each Genesis link's spatial mass/inertia block before gathering
+  physical proxy BCOO, because Genesis's native generalized rigid Hessian is
+  matrix-free and is not duplicated in physical BCOO;
+- adds Genesis's authored armature and timestep-scaled joint damping to the
+  matching scalar/root pivots, preserving the native mass augmentation;
+- uses the mandatory CGQ names `articulated_inertia`, `edge_u`,
+  `edge_hessian`, `edge_basis`, `edge_arm`, `edge_d`, `root_inverse`,
+  `precond_force`, `precond_a`, `precond_velocity`, and
+  `kkt_proxy_diagonal`.
+
+This is a storage/source adaptation, not a different preconditioner: reverse
+factorization, root solve, forward substitution, proxy tangent pullback, and
+restoration slack block remain the CGQ operations. Unsupported multi-DOF
+non-root joints and non-free moving roots are rejected at build time rather
+than entering an approximate path.
+
+Three Python/Genesis-only names are explicit exceptions to the CGQ field
+manifest:
+`root_dof_index` maps each native six-DOF free root into Genesis's compact
+generalized rows, and `body_twist` stores expanded link twists that CGQ stores
+in growable `RigidBodyDynamics::dq`; `lambda_` is the Python spelling of CGQ's
+`lambda` because `lambda` is a Python keyword. The first two exist only
+because Genesis's native generalized/link storage cannot be expanded or
+relaid out.
 
 ## RigidContactProxySystem state
 
@@ -148,6 +184,8 @@ Production config is fixed:
 
 `"watchdog"`, restoration-off, and nonzero test bias are diagnostic controls,
 not production alternatives.
+`extras/ls_forensics/test_energy_bias` is the pinned CGQ one-shot
+line-search-exhaustion test control; production fixes it to zero.
 
 ## Constraint maps
 
@@ -213,11 +251,12 @@ One minimal robot is an indivisible solve and trajectory component.
 - Component labels are device-resident and may grow only through the approved
   checkpoint protocol.
 
-Standard global PCG remains valid for algebraic bring-up and existing
-non-proxy scenes, but it is not accepted as a replacement for CGQ's
-partitioned production path. `build_scene_engine` must not select reduced KKT
-for Franka-Cloth until `ComponentPartitioner`, `CCDComponentPartitioner`, and
-the masked/component PCG route are present.
+The current authorized migration stage may select reduced KKT with the
+standard global `LinearPCG` and one global screw-CCD alpha. This is the
+functional standard path, not a claim of component-level performance or
+independent-component progress. `ComponentPartitioner`,
+`CCDComponentPartitioner`, forced forest/proxy edges, and masked PCG remain
+mandatory follow-up work and must not change the reduced-KKT mathematics.
 
 ## Pipeline order
 

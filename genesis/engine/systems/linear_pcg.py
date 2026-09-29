@@ -46,15 +46,15 @@ class LinearPCG:
             self.residual[i_d] = linear_system.b_rhs[i_d]
             self.preconditioned_residual[i_d] = qd.f64(0.0)
 
-        if qd.static(has_rigid):
-            rigid.apply_preconditioner(self.residual, self.preconditioned_residual)
-        if qd.static(has_fem):
-            fem_preconditioner.apply(self.residual, self.preconditioned_residual)
         if qd.static(has_rigid_forest):
-            rigid_forest.apply_proxy_preconditioner(
+            rigid_forest.apply_preconditioner(
                 self.residual,
                 self.preconditioned_residual,
             )
+        elif qd.static(has_rigid):
+            rigid.apply_preconditioner(self.residual, self.preconditioned_residual)
+        if qd.static(has_fem):
+            fem_preconditioner.apply(self.residual, self.preconditioned_residual)
 
         for i_d in range(self.total_dof[()]):
             self.direction[i_d] = self.preconditioned_residual[i_d]
@@ -129,15 +129,15 @@ class LinearPCG:
                 self.residual[i_d] = self.residual[i_d] - self.alpha[()] * self.operator_direction[i_d]
                 self.preconditioned_residual[i_d] = qd.f64(0.0)
 
-        if qd.static(has_rigid):
-            rigid.apply_preconditioner(self.residual, self.preconditioned_residual)
-        if qd.static(has_fem):
-            fem_preconditioner.apply(self.residual, self.preconditioned_residual)
         if qd.static(has_rigid_forest):
-            rigid_forest.apply_proxy_preconditioner(
+            rigid_forest.apply_preconditioner(
                 self.residual,
                 self.preconditioned_residual,
             )
+        elif qd.static(has_rigid):
+            rigid.apply_preconditioner(self.residual, self.preconditioned_residual)
+        if qd.static(has_fem):
+            fem_preconditioner.apply(self.residual, self.preconditioned_residual)
 
         for _ in range(1):
             self.residual_preconditioned_next[()] = qd.f64(0.0)

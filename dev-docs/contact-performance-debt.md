@@ -432,12 +432,12 @@ CGQ target:
 
 - Device component partition, segmented minimum, and per-body/component alpha.
 
-### PERF-D03: Divergent directional-CCD loops
+### PERF-D03: Divergent conservative-advancement loops
 
 Current:
 
-- One thread owns one pair's conservative-advancement loop up to 50,000
-  iterations.
+- One thread owns one directional or rigid-screw pair's
+  conservative-advancement loop up to 50,000 iterations.
 
 Target:
 
@@ -453,6 +453,20 @@ Current:
 Target:
 
 - Compile/runtime-gated diagnostics with zero traffic in production.
+
+### PERF-D05: Missing co-rotating screw certificate
+
+Current:
+
+- The standard unpartitioned screw CCD path includes the absolute
+  arc-curvature certificate but not CGQ's second certificate in the frame of
+  the faster-rotating side.
+
+CGQ target:
+
+- Evaluate absolute and co-rotating conservative bounds and advance by the
+  larger certified fraction. Co-moving rigid pairs must certify without
+  exhausting the iteration budget.
 
 ## Global linear system and PCG debt
 
@@ -601,6 +615,28 @@ Target:
 - Keep rendering outside the Newton graph, but profile and minimize the bridge;
   avoid it entirely in headless simulation.
 
+### PERF-P07: Eager exact-L1 directional reduction
+
+Current:
+
+- Exact-L1 activation and trial evaluation are lazy, but the physical
+  gradient-direction dot reduction is still evaluated once per Newton
+  iteration before line search.
+
+CGQ target:
+
+- Request the dot reduction only after physical-energy rejection also reduces
+  an in-tolerance equality residual.
+- Replay the same trial alpha after the conditional merit probe without
+  charging a line-search iteration.
+
+Rewrite:
+
+- Add the equivalent conditional graph region when Quadrants exposes the
+  required graph predicate, or an equally efficient static alternative with
+  measured zero-work overhead.
+- Do not serialize the DOF reduction inside the scalar line-search decision.
+
 ## Rigid and future coupling debt
 
 ### PERF-R01: Dense rigid matrix-free apply on large islands
@@ -619,12 +655,46 @@ Target:
 
 Current:
 
-- Rigid-Cloth routes are outside the current milestone.
+- Proxy-Cloth and proxy-proxy gradient/Hessian routes are implemented through
+  the reduced-KKT physical BCOO layout.
+- Route classification expands each vertex 3x3 block into generic
+  translation/rotation blocks before the global sort/reduce.
 
-Future target:
+Target:
 
-- CGQ-compatible reduced-KKT/proxy path with explicit RC/CR BCOO and optimized
-  coordinate pullback.
+- Match CGQ's specialized RC/CR block emission, geometric-term fusion, and
+  coordinate pullback traffic.
+
+### PERF-R03: Unfused mapped forest preconditioner
+
+Current:
+
+- The source-agnostic mapped articulated preconditioner gathers proxy BCOO,
+  factors the Genesis forest by reverse depth, and applies reverse/root/forward
+  substitution entirely on device.
+- Each body owns its 6x6 factor work in the level schedule. Fixed authored
+  MJCF links use exact rigid transport without a scalar Schur pivot.
+- Standard global PCG consumes this preconditioner during the explicitly
+  authorized pre-partition milestone.
+
+CGQ target:
+
+- `rigid_forest/fused=1`: one fused shared-memory tree solve for supported
+  trees, warp-cooperative 6x6 root inversion, and the CGQ singleton path.
+
+Rewrite:
+
+- Port the fused/shared tree factor and apply schedules after the standard-PCG
+  conformance gate.
+- Preserve the current source-agnostic BCOO gather and exact fixed-link
+  transport.
+- Replace generic per-body 6x6 inverse lowering with the CGQ warp inverse.
+
+Acceptance:
+
+- Preconditioner action parity against the unfused factorization.
+- Equal or lower PCG iterations on Franka-Cloth and rigid-proxy stress gates.
+- Nsight evidence for occupancy, synchronization, and shared/global traffic.
 
 ## Compile-time and memory-layout debt
 
@@ -651,6 +721,30 @@ Target:
 
 - Verify alignment, coalescing, vector loads, and cache-line behavior in PTX;
   introduce explicit packed layouts where the generic lowering is inferior.
+
+### PERF-COMP03: Fastcache misses arithmetic static-property dependencies
+
+Observed:
+
+- `qd.static(range(self.n_levels_host - 1))` did not include the nested
+  `n_levels_host` dependency in the fastcache specialization key.
+- A graph first compiled for a singleton/free-body forest (`n_levels=1`) was
+  reused for Franka (`n_levels=10`), so every mapped-forest factor/apply level
+  was absent. Rigid preconditioned residuals and directions were exactly zero.
+- The runtime fix does not retain a host live size. `max_depth` and `n_levels`
+  are zero-dimensional device scalars. The graph emits one stage per link
+  capacity and each stage reads `max_depth[()]` to select its live level.
+  The one-frame Franka-Cloth gate then converged in 3 Newton iterations,
+  9 PCG iterations, and 0 line-search backtracks.
+
+Quadrants target:
+
+- Used-property discovery must recurse through arithmetic expressions inside
+  static `range` arguments.
+- Add a fastcache regression that compiles `n_levels=1`, then `n_levels=10`,
+  and verifies distinct graph task counts and execution.
+- Keep graph topology based on allocation capacity and all live topology
+  extents device-resident, independent of that compiler fix.
 
 ## Exit criteria
 

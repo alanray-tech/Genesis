@@ -22,6 +22,9 @@ from .global_linear_system import GlobalLinearSystem
 from .global_surface_manager import GlobalSurfaceManager
 from .global_vertex_manager import GlobalVertexManager
 from .lbvh_broad_phase import InfoLBVHBatchedBroadPhaseDop14, LBVHBroadPhase
+from .rigid_contact_assemble import RigidContactAssemble
+from .rigid_contact_proxy import RigidContactProxyGeometry, RigidContactProxySystem
+from .rigid_joint_forest import RigidJointForestSystem
 from .rigid_system import RigidSystem
 from .sim_engine import SimEngine
 from .standard_pcg_solver import StandardPCGSolver
@@ -66,6 +69,11 @@ def build_scene_engine(
     enable_contact = contact_requested and bool(resolved_contact_config["contact/enable"])
     if enable_contact and not has_fem:
         raise RuntimeError("The current ContactSystem milestone requires FiniteElementMethod")
+    rigid_proxy_geometry = None
+    if enable_contact and scene.rigid_solver.is_active:
+        staging = RigidContactProxyGeometry()
+        if staging.init(scene, float(resolved_contact_config["contact/d_hat"])):
+            rigid_proxy_geometry = staging
 
     engine = SimEngine()
     engine.add_system(GlobalLinearSystem())
@@ -78,6 +86,9 @@ def build_scene_engine(
     membrane = None
     bending = None
     fem_preconditioner = None
+    rigid_contact_proxy = None
+    rigid_forest = None
+    rigid_contact_assemble = None
     if has_fem:
         global_body_manager = GlobalBodyManager()
         global_vertex_manager = GlobalVertexManager()
@@ -121,6 +132,16 @@ def build_scene_engine(
             contact_constitution = ConsistentIPCContactConstitution()
             for system in (contact_system, broad_phase_system, contact_constitution):
                 engine.add_system(system)
+            if rigid_proxy_geometry is not None:
+                rigid_contact_proxy = RigidContactProxySystem()
+                rigid_forest = RigidJointForestSystem(scene.rigid_solver)
+                rigid_contact_assemble = RigidContactAssemble()
+                for system in (
+                    rigid_contact_proxy,
+                    rigid_forest,
+                    rigid_contact_assemble,
+                ):
+                    engine.add_system(system)
 
     engine.build_systems()
 
@@ -129,33 +150,163 @@ def build_scene_engine(
         fem.receive_global_vertex_range(0, finite_element.n_verts)
         fem.receive_global_body_range(0, finite_element.n_bodies)
 
-        global_vertex_manager.init(finite_element.n_verts)
-        global_vertex_manager.wire_thickness_data(finite_element.thicknesses)
-        global_vertex_manager.wire_d_hat_data(
-            np.full(
-                finite_element.n_verts,
-                resolved_contact_config["contact/d_hat"],
-                dtype=np.float64,
+        proxy_vert_count = 0 if rigid_proxy_geometry is None else len(rigid_proxy_geometry.local_positions)
+        total_vert_count = finite_element.n_verts + proxy_vert_count
+        combined_thicknesses = finite_element.thicknesses
+        combined_d_hats = np.full(
+            finite_element.n_verts,
+            resolved_contact_config["contact/d_hat"],
+            dtype=np.float64,
+        )
+        combined_is_fixed = finite_element.is_fixed
+        if rigid_proxy_geometry is not None:
+            rigid_contact_proxy.configure(
+                str(resolved_contact_config["rigid_proxy/globalization"]),
+                bool(int(resolved_contact_config["rigid_proxy/restoration"])),
+                float(resolved_contact_config["rigid_proxy/test_merit_energy_bias"]),
+                float(
+                    resolved_contact_config[
+                        "extras/ls_forensics/test_energy_bias"
+                    ]
+                ),
             )
-        )
-        global_vertex_manager.wire_is_fixed_data(finite_element.is_fixed)
+            rigid_contact_proxy.wire_data(
+                rigid_proxy_geometry.n_rigid_bodies,
+                rigid_proxy_geometry.mechanism_body,
+                rigid_proxy_geometry.proxy_body,
+                rigid_proxy_geometry.surface_radius,
+            )
+            rigid_contact_proxy.wire_geometry(
+                finite_element.n_verts,
+                rigid_proxy_geometry,
+                finite_element.n_bodies,
+            )
+            combined_thicknesses = np.concatenate(
+                (finite_element.thicknesses, rigid_proxy_geometry.thicknesses)
+            )
+            combined_d_hats = np.concatenate(
+                (combined_d_hats, rigid_proxy_geometry.d_hats)
+            )
+            combined_is_fixed = np.concatenate(
+                (finite_element.is_fixed, rigid_proxy_geometry.is_fixed)
+            )
 
-        global_body_manager.init(finite_element.n_bodies)
-        global_body_manager.wire_body_contact_ignorance(
-            finite_element.body_contact_ignorance_ranges,
-            finite_element.body_contact_ignorance_body_ids,
+        global_vertex_manager.init(total_vert_count)
+        global_vertex_manager.wire_thickness_data(combined_thicknesses)
+        global_vertex_manager.wire_d_hat_data(
+            combined_d_hats
         )
+        global_vertex_manager.wire_is_fixed_data(combined_is_fixed)
+
+        total_body_count = finite_element.n_bodies
+        body_vertex_offsets = finite_element.body_vertex_offsets
+        body_self_collision = finite_element.self_collision
+        ignorance = [set() for _ in range(total_body_count)]
+        for body in range(finite_element.n_bodies):
+            begin = finite_element.body_contact_ignorance_ranges[body]
+            end = finite_element.body_contact_ignorance_ranges[body + 1]
+            ignorance[body].update(
+                int(target)
+                for target in finite_element.body_contact_ignorance_body_ids[begin:end]
+            )
+
+        if rigid_proxy_geometry is not None:
+            total_body_count += rigid_proxy_geometry.n_rigid_bodies
+            cursor = finite_element.n_verts
+            offsets = list(np.asarray(finite_element.body_vertex_offsets, dtype=np.int32))
+            offsets.extend([cursor] * rigid_proxy_geometry.n_mechanism_bodies)
+            pair_counts = np.bincount(
+                rigid_proxy_geometry.vertex_pair,
+                minlength=rigid_proxy_geometry.n_pairs,
+            )
+            for count in pair_counts:
+                cursor += int(count)
+                offsets.append(cursor)
+            body_vertex_offsets = np.asarray(offsets, dtype=np.int32)
+            body_self_collision = np.concatenate(
+                (
+                    finite_element.self_collision,
+                    np.ones(rigid_proxy_geometry.n_mechanism_bodies, dtype=np.int32),
+                    np.zeros(rigid_proxy_geometry.n_pairs, dtype=np.int32),
+                )
+            )
+            ignorance.extend(
+                set() for _ in range(rigid_proxy_geometry.n_rigid_bodies)
+            )
+            proxy_global_bodies = [
+                finite_element.n_bodies + int(body)
+                for body in rigid_proxy_geometry.proxy_body
+            ]
+            for source in proxy_global_bodies:
+                ignorance[source].update(
+                    target for target in proxy_global_bodies if target != source
+                )
+
+        ignorance_ranges = np.zeros(total_body_count + 1, dtype=np.int32)
+        ignorance_ids = []
+        for body, targets in enumerate(ignorance):
+            ignorance_ids.extend(sorted(targets))
+            ignorance_ranges[body + 1] = len(ignorance_ids)
+
+        global_body_manager.init(total_body_count)
+        global_body_manager.wire_body_layout(
+            body_vertex_offsets,
+            body_self_collision,
+        )
+        global_body_manager.wire_body_contact_ignorance(
+            ignorance_ranges,
+            np.asarray(ignorance_ids, dtype=np.int32),
+        )
+
+        surf_triangles = finite_element.surf_triangles
+        surf_edges = finite_element.surf_edges
+        surf_verts = finite_element.surf_verts
+        vert_dimensions = finite_element.vert_dimensions
+        vert_area_weights = finite_element.vert_area_weights
+        edge_area_weights = finite_element.edge_area_weights
+        face_area_weights = finite_element.face_area_weights
+        if rigid_proxy_geometry is not None:
+            surf_triangles = np.concatenate(
+                (
+                    surf_triangles,
+                    rigid_proxy_geometry.surf_triangles + finite_element.n_verts,
+                )
+            )
+            surf_edges = np.concatenate(
+                (
+                    surf_edges,
+                    rigid_proxy_geometry.surf_edges + finite_element.n_verts,
+                )
+            )
+            surf_verts = np.concatenate(
+                (
+                    surf_verts,
+                    rigid_proxy_geometry.surf_verts + finite_element.n_verts,
+                )
+            )
+            vert_dimensions = np.concatenate(
+                (vert_dimensions, rigid_proxy_geometry.vert_dimensions)
+            )
+            vert_area_weights = np.concatenate(
+                (vert_area_weights, rigid_proxy_geometry.vert_area_weights)
+            )
+            edge_area_weights = np.concatenate(
+                (edge_area_weights, rigid_proxy_geometry.edge_area_weights)
+            )
+            face_area_weights = np.concatenate(
+                (face_area_weights, rigid_proxy_geometry.face_area_weights)
+            )
 
         global_surface_manager.wire_surface_data(
-            finite_element.surf_triangles,
-            finite_element.surf_edges,
-            finite_element.surf_verts,
+            surf_triangles,
+            surf_edges,
+            surf_verts,
         )
-        global_surface_manager.wire_vert_dimensions(finite_element.vert_dimensions)
+        global_surface_manager.wire_vert_dimensions(vert_dimensions)
         global_surface_manager.wire_area_weights(
-            finite_element.vert_area_weights,
-            finite_element.edge_area_weights,
-            finite_element.face_area_weights,
+            vert_area_weights,
+            edge_area_weights,
+            face_area_weights,
         )
         bdf1.wire_data(finite_element.n_verts)
         membrane.wire_data(
@@ -201,12 +352,12 @@ def build_scene_engine(
             contact_system.set_adaptive_kappa(
                 str(resolved_contact_config["contact/adaptive_kappa_mode"]),
                 str(resolved_contact_config["contact/adaptive_kappa_tick"]),
-                finite_element.n_bodies,
+                total_body_count,
             )
-            contact_system.init(finite_element.n_verts)
+            contact_system.init(total_vert_count)
             broad_phase_system.init_bvh(
-                finite_element.n_tris,
-                len(finite_element.surf_edges),
+                len(surf_triangles),
+                len(surf_edges),
                 0,
             )
 

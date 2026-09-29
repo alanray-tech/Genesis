@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 import quadrants as qd
 
 import genesis as gs
+from genesis.engine.systems import ContactTabular, build_scene_engine
+from genesis.engine.systems.contact_function.screw_ccd import screw_halfplane_ccd
 from genesis.engine.systems.global_linear_system import GlobalLinearSystem
 from genesis.engine.systems.global_vertex_manager import GlobalVertexManager
 from genesis.engine.systems.rigid_contact_assemble import RigidContactAssemble
@@ -185,6 +189,7 @@ def evaluate_forest_virtual_work(
     proxy_wrench: qd.types.ndarray(qd.f64, ndim=1),
     reduced_wrench: qd.types.ndarray(qd.f64, ndim=1),
 ):
+    forest.compute_endpoint_fk()
     forest.expand_reduced_direction(reduced_direction)
     forest.clear_body_wrench()
     for component in range(6):
@@ -241,6 +246,35 @@ def assemble_proxy_contact(
     linear_system.zero_triplet()
     route.distribute()
     linear_system.body_sort_reduce()
+
+
+@qd.kernel(fastcache=True)
+def refresh_proxy_residual(
+    forest: qd.template(),
+    proxy: qd.template(),
+):
+    forest.compute_endpoint_fk()
+    proxy.prepare_constraint()
+
+
+@qd.kernel(fastcache=True)
+def evaluate_screw_halfplane(
+    vertex: qd.template(),
+    output: qd.types.ndarray(qd.f64, ndim=1),
+):
+    result = qd.Vector.zero(qd.f64, 1)
+    screw_halfplane_ccd(
+        vertex,
+        0,
+        qd.Vector([0.0, -1.0, 0.0]),
+        -0.7,
+        0.1,
+        0.0,
+        50_000,
+        result,
+    )
+    for _ in range(1):
+        output[0] = result[0]
 
 
 @pytest.mark.required
@@ -309,6 +343,30 @@ def test_cgq_fk_defect_prefix_cap():
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])
+def test_screw_halfplane_ccd_certifies_rotational_arc():
+    vertex = GlobalVertexManager()
+    vertex.init(1)
+    vertex.positions.from_numpy(np.array([[1.0, 0.0, 0.0]], dtype=np.float64))
+    vertex.trajectory_end_positions.from_numpy(
+        np.array([[0.0, 1.0, 0.0]], dtype=np.float64)
+    )
+    vertex.path_rot.from_numpy(
+        np.array([[0.0, 0.0, 0.5 * np.pi]], dtype=np.float64)
+    )
+    vertex.path_pivot.from_numpy(np.zeros((1, 3), dtype=np.float64))
+    vertex.path_pivot_disp.from_numpy(np.zeros((1, 3), dtype=np.float64))
+    output = qd.ndarray(qd.f64, shape=(1,))
+
+    evaluate_screw_halfplane(vertex, output)
+
+    time = float(qd_to_numpy(output)[0])
+    exact = np.arcsin(0.7) / (0.5 * np.pi)
+    assert 0.0 < time <= exact + 1.0e-12
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
 def test_proxy_system_initializes_on_genesis_inertial_pose():
     scene = gs.Scene()
     scene.add_entity(
@@ -336,6 +394,11 @@ def test_proxy_system_initializes_on_genesis_inertial_pose():
 
     initialize_and_prepare_proxy(proxy, vertex)
 
+    np.testing.assert_allclose(
+        qd_to_numpy(proxy.t)[0],
+        np.array([0.1, -0.2, 0.4]),
+        atol=1.0e-14,
+    )
     np.testing.assert_allclose(qd_to_numpy(proxy.constraint)[0], 0.0, atol=1.0e-14)
     np.testing.assert_allclose(qd_to_numpy(proxy.particular)[0], 0.0, atol=1.0e-14)
     np.testing.assert_allclose(qd_to_numpy(proxy.tangent_map)[0], np.eye(6), atol=1.0e-14)
@@ -534,3 +597,257 @@ def test_proxy_contact_routes_emit_cgq_block_counts():
     angular += np.cross(np.array([0.0, 0.5, 0.0]), np.array([-0.1, 0.5, 0.2]))
     np.testing.assert_allclose(rhs[3:6], gradient, atol=1.0e-12)
     np.testing.assert_allclose(rhs[6:9], angular, atol=1.0e-12)
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_standard_pcg_kkt_builder_path():
+    scene = gs.Scene(
+        coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
+    )
+    scene.add_entity(
+        morph=gs.morphs.Sphere(
+            pos=(2.0, 0.0, 1.0),
+            radius=0.1,
+        ),
+        vis_mode="collision",
+    )
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(
+            file=str(
+                Path(__file__).parents[2]
+                / "examples"
+                / "newton_coupling"
+                / "assets"
+                / "qcloth_grid.obj"
+            ),
+            pos=(-5.0, 0.0, 0.0),
+        ),
+        material=gs.materials.FEM.QCloth(E=1.0e4, thickness=1.0e-3),
+    )
+    scene.build(compile_kernels=False)
+    cloth.set_vertex_constraints([0, 4, 20, 24])
+
+    engine = build_scene_engine(scene, contact_config={})
+    assert engine.rigid_contact_proxy is not None
+    assert engine.rigid_forest is not None
+    assert engine.rigid_contact_assemble is not None
+    engine.step()
+
+    mechanism = int(qd_to_numpy(engine.rigid_contact_proxy.mechanism_body)[0])
+    link = mechanism % engine.rigid_contact_proxy.n_links_host
+    mechanism_position = scene.rigid_solver.get_links_pos(
+        links_idx=np.array([link], dtype=np.int32)
+    ).cpu().numpy().reshape(-1, 3)[0]
+    proxy_position = qd_to_numpy(engine.rigid_contact_proxy.t)[0]
+    residual = float(np.linalg.norm(proxy_position - mechanism_position))
+    tolerance = min(
+        float(qd_to_numpy(engine.sim_config.tol)),
+        0.01 * float(qd_to_numpy(engine.contact.d_hat)),
+    )
+    assert np.isfinite(residual)
+    assert residual <= tolerance, (
+        residual,
+        proxy_position,
+        mechanism_position,
+        qd_to_numpy(engine.rigid_contact_proxy.mechanism_body),
+    )
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_kkt_restoration_returns_through_hard_probe():
+    scene = gs.Scene(
+        coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
+    )
+    scene.add_entity(
+        morph=gs.morphs.Sphere(pos=(2.0, 0.0, 1.0), radius=0.1),
+        vis_mode="collision",
+    )
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(
+            file=str(
+                Path(__file__).parents[2]
+                / "examples"
+                / "newton_coupling"
+                / "assets"
+                / "qcloth_grid.obj"
+            ),
+            pos=(-5.0, 0.0, 0.0),
+        ),
+        material=gs.materials.FEM.QCloth(E=1.0e4, thickness=1.0e-3),
+    )
+    scene.build(compile_kernels=False)
+    cloth.set_vertex_constraints([0, 4, 20, 24])
+    engine = build_scene_engine(
+        scene,
+        contact_config={"extras/ls_forensics/test_energy_bias": 1.0},
+    )
+
+    proxy = engine.rigid_contact_proxy
+    perturbed = qd_to_numpy(proxy.t).copy()
+    perturbed[0, 0] += 0.02
+    proxy.t.from_numpy(perturbed)
+    engine.step()
+
+    assert int(qd_to_numpy(proxy.restoration_entries)) == 1
+    assert int(qd_to_numpy(proxy.restoration_newton_epochs)) >= 1
+    assert int(qd_to_numpy(proxy.restoration_hard_probes)) >= 1
+    assert int(qd_to_numpy(proxy.restoration_active)) == 0
+    assert int(qd_to_numpy(proxy.restoration_hard_probe)) == 0
+    assert float(qd_to_numpy(proxy.max_surface_residual)) <= float(
+        qd_to_numpy(proxy.solve_tolerance)
+    )
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_kkt_newton_exhaustion_does_not_commit_previous_state():
+    scene = gs.Scene(
+        coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
+    )
+    scene.add_entity(
+        morph=gs.morphs.Sphere(pos=(2.0, 0.0, 1.0), radius=0.1),
+        vis_mode="collision",
+    )
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(
+            file=str(
+                Path(__file__).parents[2]
+                / "examples"
+                / "newton_coupling"
+                / "assets"
+                / "qcloth_grid.obj"
+            ),
+            pos=(-5.0, 0.0, 0.0),
+        ),
+        material=gs.materials.FEM.QCloth(E=1.0e4, thickness=1.0e-3),
+    )
+    scene.build(compile_kernels=False)
+    cloth.set_vertex_constraints([0, 4, 20, 24])
+    engine = build_scene_engine(scene, contact_config={})
+    engine.sim_config.max_newton_iter.from_numpy(np.array(1, dtype=np.int64))
+
+    proxy = engine.rigid_contact_proxy
+    perturbed = qd_to_numpy(proxy.t).copy()
+    perturbed[0, 0] += 0.02
+    proxy.t.from_numpy(perturbed)
+    proxy_t_prev = qd_to_numpy(proxy.t_prev).copy()
+    proxy_quat_prev = qd_to_numpy(proxy.quat_prev).copy()
+    rigid_velocity = qd_to_numpy(scene.rigid_solver.dyn_state.dofs.vel).copy()
+
+    with pytest.raises(RuntimeError, match="exhausted the Newton budget"):
+        engine.step()
+
+    np.testing.assert_array_equal(qd_to_numpy(proxy.t_prev), proxy_t_prev)
+    np.testing.assert_array_equal(qd_to_numpy(proxy.quat_prev), proxy_quat_prev)
+    np.testing.assert_array_equal(
+        qd_to_numpy(scene.rigid_solver.dyn_state.dofs.vel),
+        rigid_velocity,
+    )
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_rigid_proxy_cloth_contact_step():
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(dt=0.01),
+        coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
+    )
+    sphere = scene.add_entity(
+        morph=gs.morphs.Sphere(pos=(0.0, 0.0, 0.15), radius=0.1),
+        vis_mode="collision",
+    )
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(
+            file=str(
+                Path(__file__).parents[2]
+                / "examples"
+                / "newton_coupling"
+                / "assets"
+                / "qcloth_grid.obj"
+            ),
+        ),
+        material=gs.materials.FEM.QCloth(E=1.0e4, thickness=1.0e-3),
+    )
+    scene.build(compile_kernels=False)
+    cloth.set_vertex_constraints(np.arange(25, dtype=np.int32))
+    sphere.set_dofs_velocity([0.0, 0.0, -5.0, 0.0, 0.0, 0.0])
+
+    engine = build_scene_engine(scene, contact_config={})
+    engine.step()
+
+    assert int(qd_to_numpy(engine.contact.intersection_flag)) == 0
+    assert float(qd_to_numpy(engine.contact.ccd_alpha)) > 0.0
+    assert int(
+        qd_to_numpy(engine.rigid_contact_assemble.rigid_doublet_total)
+    ) > 0
+    assert np.linalg.norm(qd_to_numpy(engine.rigid_contact_proxy.reaction)) > 0.0
+    assert float(qd_to_numpy(engine.rigid_contact_proxy.max_surface_residual)) <= float(
+        qd_to_numpy(engine.rigid_contact_proxy.solve_tolerance)
+    )
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_franka_cloth_reduced_kkt_step():
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(dt=0.01),
+        coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
+    )
+    franka = scene.add_entity(
+        morph=gs.morphs.MJCF(
+            file="xml/franka_emika_panda/panda.xml",
+        ),
+        vis_mode="collision",
+    )
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(
+            file=str(
+                Path(__file__).parents[2]
+                / "examples"
+                / "newton_coupling"
+                / "assets"
+                / "qcloth_grid.obj"
+            ),
+            pos=(0.9, 0.0, 0.7),
+        ),
+        material=gs.materials.FEM.QCloth(
+            E=2e4,
+            shear_modulus=2e3,
+            rho=200.0,
+            thickness=1e-3,
+            bending_youngs_modulus=1e6,
+        ),
+    )
+    scene.build(compile_kernels=False)
+    cloth.set_vertex_constraints([20, 24])
+    contact_tabular = ContactTabular()
+    contact_tabular.default_model(friction_rate=1.0, resistance=1e4)
+    engine = build_scene_engine(
+        scene,
+        contact_config={
+            "contact/d_hat": 1e-3,
+            "contact/init_collision_pair_capacity": 20_000,
+        },
+        contact_tabular=contact_tabular,
+    )
+
+    franka.control_dofs_position(franka.get_qpos()[:7], list(range(7)))
+    engine.step()
+
+    edge_count = int(qd_to_numpy(engine.rigid_forest.n_edges))
+    assert edge_count == 9
+    assert np.all(
+        qd_to_numpy(engine.rigid_forest.edge_d)[:edge_count] > 0.0
+    )
+    assert engine.get_newton_iters() < 1024
+    assert int(qd_to_numpy(engine.frame_failed)) == 0
+    assert float(qd_to_numpy(engine.rigid_contact_proxy.max_surface_residual)) <= float(
+        qd_to_numpy(engine.rigid_contact_proxy.solve_tolerance)
+    )

@@ -20,6 +20,7 @@ CONTACT_CONFIG_DEFAULTS = MappingProxyType(
         "friction/eps_v": 1e-2,
         "extras/capacity_grow_factor": 1.2,
         "extras/capacity_shrink_threshold": 0.8,
+        "extras/ls_forensics/test_energy_bias": 0.0,
         "topo/grow_factor": 1.5,
         "bvh/type": "info_lbvh_batched_dop14",
         "bvh/ee_query": "dual",

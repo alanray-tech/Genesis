@@ -13,13 +13,13 @@ from quadrants.algorithms import (
 
 from .contact import CONTACT_CONFIG_DEFAULTS, ContactTabular
 from .contact_function.codim_thickness import pair_thickness_ee, pair_thickness_ph, pair_thickness_pt
-from .contact_function.directional_ccd import (
-    directional_edge_edge_ccd,
-    directional_point_triangle_ccd,
-    halfplane_ccd,
-)
 from .contact_function.halfplane_contact import halfplane_signed_distance
 from .contact_function.pair_d_hat import pair_d_hat_ph
+from .contact_function.screw_ccd import (
+    screw_edge_edge_ccd,
+    screw_halfplane_ccd,
+    screw_point_triangle_ccd,
+)
 from .sim_system import SimSystem
 
 _CONTACT_SORT_MIN_CAPACITY = 4_865
@@ -642,38 +642,13 @@ class ContactSystem(SimSystem):
                     self.surface.surf_triangles[face, 2],
                 ]
             )
-            displacement = qd.Matrix.zero(qd.f64, 4, 3)
-            for point in qd.static(range(4)):
-                for axis in qd.static(range(3)):
-                    displacement[point, axis] = (
-                        self.vertex.trajectory_end_positions[ids[point], axis] - self.vertex.positions[ids[point], axis]
-                    )
             result = qd.Vector.zero(qd.f64, 1)
-            directional_point_triangle_ccd(
-                self.vertex.positions[ids[0], 0],
-                self.vertex.positions[ids[0], 1],
-                self.vertex.positions[ids[0], 2],
-                self.vertex.positions[ids[1], 0],
-                self.vertex.positions[ids[1], 1],
-                self.vertex.positions[ids[1], 2],
-                self.vertex.positions[ids[2], 0],
-                self.vertex.positions[ids[2], 1],
-                self.vertex.positions[ids[2], 2],
-                self.vertex.positions[ids[3], 0],
-                self.vertex.positions[ids[3], 1],
-                self.vertex.positions[ids[3], 2],
-                displacement[0, 0],
-                displacement[0, 1],
-                displacement[0, 2],
-                displacement[1, 0],
-                displacement[1, 1],
-                displacement[1, 2],
-                displacement[2, 0],
-                displacement[2, 1],
-                displacement[2, 2],
-                displacement[3, 0],
-                displacement[3, 1],
-                displacement[3, 2],
+            screw_point_triangle_ccd(
+                self.vertex,
+                ids[0],
+                ids[1],
+                ids[2],
+                ids[3],
                 self.ccd_eta[()],
                 pair_thickness_pt(self.vertex.thicknesses, ids[0], ids[1], ids[2], ids[3]),
                 self.ccd_max_iters,
@@ -693,38 +668,13 @@ class ContactSystem(SimSystem):
                     self.surface.surf_edges[edge_b, 1],
                 ]
             )
-            displacement = qd.Matrix.zero(qd.f64, 4, 3)
-            for point in qd.static(range(4)):
-                for axis in qd.static(range(3)):
-                    displacement[point, axis] = (
-                        self.vertex.trajectory_end_positions[ids[point], axis] - self.vertex.positions[ids[point], axis]
-                    )
             result = qd.Vector.zero(qd.f64, 1)
-            directional_edge_edge_ccd(
-                self.vertex.positions[ids[0], 0],
-                self.vertex.positions[ids[0], 1],
-                self.vertex.positions[ids[0], 2],
-                self.vertex.positions[ids[1], 0],
-                self.vertex.positions[ids[1], 1],
-                self.vertex.positions[ids[1], 2],
-                self.vertex.positions[ids[2], 0],
-                self.vertex.positions[ids[2], 1],
-                self.vertex.positions[ids[2], 2],
-                self.vertex.positions[ids[3], 0],
-                self.vertex.positions[ids[3], 1],
-                self.vertex.positions[ids[3], 2],
-                displacement[0, 0],
-                displacement[0, 1],
-                displacement[0, 2],
-                displacement[1, 0],
-                displacement[1, 1],
-                displacement[1, 2],
-                displacement[2, 0],
-                displacement[2, 1],
-                displacement[2, 2],
-                displacement[3, 0],
-                displacement[3, 1],
-                displacement[3, 2],
+            screw_edge_edge_ccd(
+                self.vertex,
+                ids[0],
+                ids[1],
+                ids[2],
+                ids[3],
                 self.ccd_eta[()],
                 pair_thickness_ee(self.vertex.thicknesses, ids[0], ids[1], ids[2], ids[3]),
                 self.ccd_max_iters,
@@ -738,21 +688,28 @@ class ContactSystem(SimSystem):
             plane = self.pairs_ph[pair_index, 1]
             vertex_id = self.surface.surf_verts[surface_vertex]
             result = qd.Vector.zero(qd.f64, 1)
-            halfplane_ccd(
-                self.vertex.positions[vertex_id, 0],
-                self.vertex.positions[vertex_id, 1],
-                self.vertex.positions[vertex_id, 2],
-                self.vertex.trajectory_end_positions[vertex_id, 0] - self.vertex.positions[vertex_id, 0],
-                self.vertex.trajectory_end_positions[vertex_id, 1] - self.vertex.positions[vertex_id, 1],
-                self.vertex.trajectory_end_positions[vertex_id, 2] - self.vertex.positions[vertex_id, 2],
-                self.halfplane_positions[plane, 0],
-                self.halfplane_positions[plane, 1],
-                self.halfplane_positions[plane, 2],
-                self.halfplane_normals[plane, 0],
-                self.halfplane_normals[plane, 1],
-                self.halfplane_normals[plane, 2],
+            normal = qd.Vector(
+                [
+                    self.halfplane_normals[plane, 0],
+                    self.halfplane_normals[plane, 1],
+                    self.halfplane_normals[plane, 2],
+                ]
+            )
+            plane_position = qd.Vector(
+                [
+                    self.halfplane_positions[plane, 0],
+                    self.halfplane_positions[plane, 1],
+                    self.halfplane_positions[plane, 2],
+                ]
+            )
+            screw_halfplane_ccd(
+                self.vertex,
+                vertex_id,
+                normal,
+                normal.dot(plane_position),
                 self.ccd_eta[()],
                 pair_thickness_ph(self.vertex.thicknesses, vertex_id),
+                self.ccd_max_iters,
                 result,
             )
             self.ccd_alpha_ph[pair_index] = result[0]

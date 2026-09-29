@@ -6,7 +6,7 @@ from pathlib import Path
 import quadrants as qd
 
 import genesis as gs
-from genesis.engine.systems import build_scene_engine
+from genesis.engine.systems import ContactTabular, build_scene_engine
 
 
 def main():
@@ -49,7 +49,16 @@ def main():
     scene.build(compile_kernels=False)
     cloth.set_vertex_constraints([20, 24])
 
-    engine = build_scene_engine(scene)
+    contact_tabular = ContactTabular()
+    contact_tabular.default_model(friction_rate=1.0, resistance=1e4)
+    engine = build_scene_engine(
+        scene,
+        contact_config={
+            "contact/d_hat": 1e-3,
+            "contact/init_collision_pair_capacity": 20_000,
+        },
+        contact_tabular=contact_tabular,
+    )
     reference_qpos = franka.get_qpos()
     motor_dofs = list(range(7))
 
