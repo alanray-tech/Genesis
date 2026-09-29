@@ -4,6 +4,8 @@ This document is the implementation handoff for agents working in `Genesis-Rigid
 
 Read [rigid-newton-roadmap.md](rigid-newton-roadmap.md) first. The roadmap owns requirements and milestone order.
 This guide records the current workspace, relevant source code, development procedure, and verification commands.
+Read [qipc-simulation-system-design.md](qipc-simulation-system-design.md) for the SimSystem, SimEngine, lifecycle,
+data-scope, and Manager + Reporter contracts.
 
 ## Repository state
 
@@ -15,9 +17,11 @@ This guide records the current workspace, relevant source code, development proc
 
 Reference checkouts beside this worktree:
 
-- `..\quadrants`: Quadrants `v1.3.1`, commit `e20eed09`
+- `..\quadrants`: local Quadrants checkpoint implementation rooted at
+  `459a3eb57a36781e3abcd6272232c074a98f87a7`
 - `..\qipc`: QIPC Quadrants migration, commit `b17773cf`
-- `..\cuda-graph-qipc`: CGQ reference, commit `23459d72`
+- `..\cuda-graph-qipc`: CGQ ground truth, commit
+  `42e7d4cbbad08739107ad830a17918f5f0f209ff`
 
 The QIPC and CGQ repositories are read-only references for this project. Do not add either as a dependency and do not
 develop the new framework inside them.
@@ -30,10 +34,27 @@ develop the new framework inside them.
 4. Do not decide an item marked **Open** in the roadmap.
 5. Do not use the existing Legacy/SAP/IPC coupler lifecycle as an integration surface.
 6. Do not create an eager or host-loop implementation.
-7. Do not implement checkpoint in the current milestone.
+7. Use checkpoint only for CGQ contact-capacity overflow and exact phase resume.
 8. Do not create a participant-private PCG.
 9. Do not copy numerical formulas into a second implementation. Refactor shared `qd.func` entry points instead.
-10. Run the relevant CPU and RTX 5090 tests before handoff.
+10. Run the relevant RTX 5090 tests before handoff; CPU execution must be
+    rejected.
+11. Reject every non-load-balanced scene-scale GPU implementation. This is a
+    hard code-admission rule, not an optimization suggestion.
+12. Traversal, compaction, reduction, segmented reduction, candidate emission,
+    sparse assembly, and other irregular work must use the most efficient
+    applicable warp/subgroup-level algorithm. Reject scalar or thread-local
+    code when CGQ provides a warp-frontier, warp-DFS, warp-batched, or
+    warp-segmented production path.
+13. Do not admit one-task whole-scene traversal, unbounded per-lane work,
+    per-item global reservation when warp batching applies, or scalar global
+    reduction when warp/block reduction applies.
+14. A simpler diagnostic implementation may exist only in isolated tests or
+    offline comparison tools. It must not be registered by a builder or be
+    reachable from a production or milestone runtime.
+15. Numerical parity, a passing example, or a temporary-performance-debt entry
+    never waives rules 11--14. Production work must match or exceed the
+    highest-performance applicable CGQ path.
 
 ## Local environment
 
@@ -42,7 +63,7 @@ The worktree has a local `.venv` using Python 3.13.
 Required versions:
 
 ```text
-Quadrants 1.3.1 / e20eed09
+Quadrants local checkpoint build / 459a3eb57
 PyTorch 2.11.0+cu128
 CUDA 12.8
 RTX 5090 / SM 12.0
@@ -95,13 +116,20 @@ mechanical extraction, not the final framework API.
 The independent graph runtime is implemented under `genesis/engine/systems`:
 
 - `sim_system.py`: system registration and dependency lookup;
-- `physics_system.py`: marker contract for systems participating in the nonlinear solve;
-- `solve_plan.py`: build-time lowering from registered participants to compile-time graph dispatch;
-- `global_layout.py`: participant DOF ranges and 3x3 block packing;
+- `sim_engine.py`: direct build-time lowering of registered timestep lifecycle functions;
 - `global_linear_system.py`: global vectors and symmetric BCOO;
-- `linear_pcg.py`: composable device-resident PCG;
+- `linear_pcg.py`: composable device-resident PCG and direct static lowering of operator/preconditioner contributions;
 - `rigid_system.py`: Genesis Rigid numerical participant;
-- `sim_engine.py`: the graph-native timestep driver and build-time Rigid adapter.
+- `rigid_contact_proxy.py`: massless proxy SE(3) state and reduced-KKT workspace;
+- `rigid_contact_proxy_kkt.py`: shared `A^-1`, `P`, `P^T`, slack, and FK-defect algebra;
+- `rigid_joint_forest.py`: Genesis minimal-coordinate link expansion/restriction and reduced operator hooks;
+- `rigid_contact_assemble.py`: proxy-proxy and proxy-FEM physical contact routes;
+- `sim_engine.py`: the graph-native timestep driver and static pipeline.
+
+Read [reduced-kkt-migration.md](reduced-kkt-migration.md) before changing any
+of the proxy, forest, contact-route, PCG, CCD, globalization, or commit-gate
+code. These files are under active migration and are not selected by
+`build_scene_engine` until the complete pinned-CGQ production path is wired.
 
 The existing Rigid kernels expose shared `qd.func` stages for the graph path while retaining their native kernel
 wrappers. The dependency remains one-way from the new framework to the Rigid numerical core.
@@ -180,7 +208,10 @@ Newton graph_do_while
 There is no eager reference implementation of the new solver. Tests may call individual numerical functions, but those
 functions must be the same functions used by the graph path.
 
-The current milestone uses no `qd.checkpoint`. All required topology and capacity are fixed at build time.
+The completed Rigid and cloth-elasticity milestones used no `qd.checkpoint`.
+The contact milestone uses `qd.checkpoint` for pair, contact-assembly, and
+global-triplet capacity growth. Live counts remain device scalars; ordinary
+frames remain one graph launch.
 
 ## Candidate-row and active-set lifecycle
 
@@ -367,17 +398,14 @@ Quadrants:
 
 ## Checkpoint status
 
-The current milestone does not use checkpoint.
+[Quadrants #750](https://github.com/Genesis-Embodied-AI/quadrants/issues/750)
+tracked checkpoint regions containing child graph loops. The pinned local
+Quadrants build supports that structure and is required for the contact
+pipeline.
 
-[Quadrants #750](https://github.com/Genesis-Embodied-AI/quadrants/issues/750) tracks the missing ability to represent a
-checkpoint region containing a child graph loop. It is not a current blocker. Do not add a flat-checkpoint workaround
-to the present framework.
-
-Local reproducer:
-
-```text
-..\repro_qd_checkpoint_loop_level_fallback.py
-```
+Every yielded launch must identify one CGQ phase. The host may only grow the
+owner's buffers, clear the corresponding overflow scalar, and resume from that
+phase. A flat-checkpoint or fixed-capacity workaround is prohibited.
 
 ## Verification
 

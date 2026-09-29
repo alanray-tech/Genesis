@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import quadrants as qd
 
 import genesis as gs
@@ -8,15 +9,14 @@ from genesis.engine.solvers.rigid.collider import broadphase, contact, narrowpha
 from genesis.engine.solvers.rigid.constraint import linesearch, solver
 from genesis.engine.solvers.rigid.rigid_solver import RigidSolver, func_step_1, func_step_2
 
-from .global_layout import DofRange
-from .physics_system import PhysicsSystem
+from .sim_system import SimSystem
 
 
 @qd.data_oriented
-class RigidSystem(PhysicsSystem):
+class RigidSystem(SimSystem):
     """Expose the Genesis minimal-coordinate Rigid numerical core to the global Newton runtime."""
 
-    def __init__(self, rigid_solver: RigidSolver, dof_range: DofRange) -> None:
+    def __init__(self, rigid_solver: RigidSolver) -> None:
         super().__init__()
         if gs.qd_float != qd.f64:
             raise RuntimeError("The Rigid Newton framework requires double precision")
@@ -62,20 +62,35 @@ class RigidSystem(PhysicsSystem):
             self.multicontact_n_total_threads = rigid_solver.collider._multicontact_n_total_threads
             self.multicontact_max_items_per_thread = rigid_solver.collider._multicontact_max_items_per_thread
 
-        self.n_dofs_per_instance = rigid_solver.n_dofs
-        self.n_instances = rigid_solver._B
-        self.n_dofs = self.n_dofs_per_instance * self.n_instances
-        if dof_range.n_dofs != self.n_dofs:
-            raise ValueError("The Rigid global range does not match the built RigidSolver state")
-        self.scalar_offset = dof_range.scalar_offset
-        self.n_storage_dofs = dof_range.n_storage_dofs
+        self.n_dofs_per_instance_host = rigid_solver.n_dofs
+        self.n_instances_host = rigid_solver._B
+        self.dof_count_host = self.n_dofs_per_instance_host * self.n_instances_host
+        self.storage_dof_count_host = ((self.dof_count_host + 2) // 3) * 3
+        self.n_dofs_per_instance = qd.ndarray(qd.i32, shape=())
+        self.n_instances = qd.ndarray(qd.i32, shape=())
+        self.n_dofs = qd.ndarray(qd.i32, shape=())
+        self.dof_offset = qd.ndarray(qd.i32, shape=())
+        self.n_storage_dofs = qd.ndarray(qd.i32, shape=())
+        self.gradient_squared = qd.ndarray(qd.f64, shape=())
+        self.rigid_energy = qd.ndarray(qd.f64, shape=())
+        self.qacc_temp = qd.ndarray(qd.f64, shape=self.constraint_state.qacc.shape)
+        self.Ma_temp = qd.ndarray(qd.f64, shape=self.constraint_state.Ma.shape)
+        self.Jaref_temp = qd.ndarray(qd.f64, shape=self.constraint_state.Jaref.shape)
+        self.n_dofs_per_instance.from_numpy(np.array(self.n_dofs_per_instance_host, dtype=np.int32))
+        self.n_instances.from_numpy(np.array(self.n_instances_host, dtype=np.int32))
+        self.n_dofs.from_numpy(np.array(self.dof_count_host, dtype=np.int32))
+        self.dof_offset.from_numpy(np.array(0, dtype=np.int32))
+        self.n_storage_dofs.from_numpy(np.array(self.storage_dof_count_host, dtype=np.int32))
         self.h = rigid_solver._substep_dt
         self.h4 = self.h**4
         self.is_forward_pos_updated = rigid_solver._is_forward_pos_updated
         self.is_forward_vel_updated = rigid_solver._is_forward_vel_updated
 
-    def build(self) -> None:
+    def do_build(self) -> None:
         pass
+
+    def init(self, dof_offset: int) -> None:
+        self.dof_offset.from_numpy(np.array(dof_offset, dtype=np.int32))
 
     @qd.func(requires_top_level=True)
     def predict(self):
@@ -128,7 +143,7 @@ class RigidSystem(PhysicsSystem):
                     self.collider_info,
                     self.rigid_config,
                     self.collider_config,
-                    self.n_instances,
+                    self.n_instances[()],
                     self.contact0_n_chunks,
                     self.errno,
                 )
@@ -256,7 +271,7 @@ class RigidSystem(PhysicsSystem):
 
     @qd.func(requires_top_level=True)
     def set_newton_active(self, is_active):
-        for i_b in range(self.n_instances):
+        for i_b in range(self.n_instances[()]):
             has_constraints = self.constraint_state.n_constraints[i_b] > 0 and is_active != 0
             self.constraint_state.improved[i_b] = has_constraints
             for i_island in range(self.constraint_state.island.n_islands[i_b]):
@@ -273,9 +288,11 @@ class RigidSystem(PhysicsSystem):
         )
 
     @qd.func(requires_top_level=True)
-    def assemble_gradient(self, linear_system: qd.template(), gradient_squared: qd.template()):
-        for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
-            i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+    def assemble(self, sim_config: qd.template(), global_linear_system: qd.template()):
+        for _ in range(1):
+            self.gradient_squared[()] = qd.f64(0.0)
+        for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+            i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
             gradient = qd.f64(0.0)
             gradient_unscaled = qd.f64(0.0)
             has_live_constraints = False
@@ -284,31 +301,33 @@ class RigidSystem(PhysicsSystem):
             if has_live_constraints:
                 gradient_unscaled = self.constraint_state.grad[i_d, i_b]
                 gradient = self.h4 * gradient_unscaled
-            linear_system.rhs[i_global] = gradient
-            qd.atomic_add(gradient_squared[()], gradient_unscaled * gradient_unscaled)
+            global_linear_system.b_rhs[i_global] = gradient
+            qd.atomic_add(self.gradient_squared[()], gradient_unscaled * gradient_unscaled)
 
-        for i_padding in range(self.n_dofs, self.n_storage_dofs):
-            linear_system.rhs[self.scalar_offset + i_padding] = qd.f64(0.0)
+        for i_padding in range(self.n_dofs[()], self.n_storage_dofs[()]):
+            global_linear_system.b_rhs[self.dof_offset[()] + i_padding] = qd.f64(0.0)
 
     @qd.func(requires_top_level=True)
-    def add_current_energy(self, energy: qd.template()):
+    def energy(self, sim_config: qd.template()):
+        for _ in range(1):
+            self.rigid_energy[()] = qd.f64(0.0)
         if qd.static(self.has_constraints):
-            for i_b in range(self.n_instances):
-                qd.atomic_add(energy[()], self.h4 * self.constraint_state.cost[i_b])
+            for i_b in range(self.n_instances[()]):
+                qd.atomic_add(self.rigid_energy[()], self.h4 * self.constraint_state.cost[i_b])
 
     @qd.func(requires_top_level=True)
     def apply_hessian(self, x: qd.template(), y: qd.template()):
         if qd.static(self.has_constraints):
-            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
-                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+                i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
                 self.constraint_state.search[i_d, i_b] = x[i_global]
 
-            for i_b in range(self.n_instances):
+            for i_b in range(self.n_instances[()]):
                 if self.constraint_state.n_constraints[i_b] > 0:
                     for i_island in range(self.constraint_state.island.n_islands[i_b]):
                         n_dofs = self.constraint_state.island.dof_slices.n[i_island, i_b]
                         if qd.static(self.rigid_config.is_single_island):
-                            n_dofs = self.n_dofs_per_instance
+                            n_dofs = self.n_dofs_per_instance[()]
                         i_dof_start = self.constraint_state.island.dof_slices.start[i_island, i_b]
 
                         for j_d_local in range(n_dofs):
@@ -347,23 +366,23 @@ class RigidSystem(PhysicsSystem):
                                 scale = self.constraint_state.nt_jacobi[i_d, i_b]
                             self.constraint_state.grad[i_d, i_b] = value / scale
 
-            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
-                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+                i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
                 if self.constraint_state.n_constraints[i_b] > 0:
                     y[i_global] = y[i_global] + self.h4 * self.constraint_state.grad[i_d, i_b]
 
-        for i_padding in range(self.n_dofs, self.n_storage_dofs):
-            i_global = self.scalar_offset + i_padding
+        for i_padding in range(self.n_dofs[()], self.n_storage_dofs[()]):
+            i_global = self.dof_offset[()] + i_padding
             y[i_global] = y[i_global] + x[i_global]
 
     @qd.func(requires_top_level=True)
     def apply_preconditioner(self, residual: qd.template(), result: qd.template()):
         if qd.static(self.has_constraints):
-            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
-                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+                i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
                 self.constraint_state.grad[i_d, i_b] = residual[i_global]
 
-            for i_b in range(self.n_instances):
+            for i_b in range(self.n_instances[()]):
                 if self.constraint_state.n_constraints[i_b] > 0:
                     for i_island in range(self.constraint_state.island.n_islands[i_b]):
                         solver.func_cholesky_solve_batch(
@@ -375,81 +394,49 @@ class RigidSystem(PhysicsSystem):
                             rigid_config=self.rigid_config,
                         )
 
-            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
-                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+                i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
                 if self.constraint_state.n_constraints[i_b] > 0:
                     result[i_global] = self.constraint_state.Mgrad[i_d, i_b] / self.h4
 
-        for i_padding in range(self.n_dofs, self.n_storage_dofs):
-            i_global = self.scalar_offset + i_padding
+        for i_padding in range(self.n_dofs[()], self.n_storage_dofs[()]):
+            i_global = self.dof_offset[()] + i_padding
             result[i_global] = residual[i_global]
 
     @qd.func(requires_top_level=True)
-    def prepare_direction(self, direction: qd.template()):
+    def negate_dq(self, global_linear_system: qd.template()):
         if qd.static(self.has_constraints):
-            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
-                i_global = self.scalar_offset + i_b * self.n_dofs_per_instance + i_d
-                self.constraint_state.search[i_d, i_b] = direction[i_global]
-                self.constraint_state.Mgrad[i_d, i_b] = -direction[i_global]
-            for i_b in range(self.n_instances):
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+                i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
+                direction = global_linear_system.x_sol[i_global]
+                self.constraint_state.search[i_d, i_b] = -direction
+                self.constraint_state.Mgrad[i_d, i_b] = direction
+            for i_b in range(self.n_instances[()]):
                 if self.constraint_state.n_constraints[i_b] > 0:
                     linesearch.func_mv_jv_dense(i_b, self.constraint_state, self.rigid_info)
 
     @qd.func(requires_top_level=True)
-    def evaluate_energy_delta(self, alpha, energy_delta: qd.template()):
+    def record_start_point(self):
         if qd.static(self.has_constraints):
-            alphas = qd.Vector.zero(gs.qd_float, 3)
-            alphas[0] = alpha
-            for i_b in range(self.n_instances):
-                if self.constraint_state.n_constraints[i_b] > 0:
-                    delta = gs.qd_float(0.0)
-                    for i_d in range(self.n_dofs_per_instance):
-                        search = self.constraint_state.search[i_d, i_b]
-                        delta = delta + alpha * search * (
-                            self.constraint_state.Ma[i_d, i_b] - self.dyn_state.dofs.qf_smooth[i_d, i_b]
-                        )
-                        delta = delta + 0.5 * alpha * alpha * search * self.constraint_state.mv[i_d, i_b]
-
-                    n_equalities = self.constraint_state.n_constraints_equality[i_b]
-                    n_frictionloss = n_equalities + self.constraint_state.n_constraints_frictionloss[i_b]
-                    n_cone = n_frictionloss
-                    if qd.static(self.rigid_config.enable_elliptic_friction):
-                        n_cone = n_cone + self.constraint_state.n_constraints_cone[i_b]
-                    for i_c in range(self.constraint_state.n_constraints[i_b]):
-                        if i_c < n_equalities:
-                            Jaref = self.constraint_state.Jaref[i_c, i_b]
-                            jv = self.constraint_state.jv[i_c, i_b]
-                            curvature = self.constraint_state.efc_D[i_c, i_b]
-                            delta = delta + curvature * (alpha * Jaref * jv + 0.5 * alpha * alpha * jv * jv)
-                        terms = linesearch.func_row_alpha_terms(
-                            i_c,
-                            i_b,
-                            1,
-                            alphas,
-                            n_equalities,
-                            n_frictionloss,
-                            n_cone,
-                            self.constraint_state,
-                            self.rigid_config,
-                            0,
-                        )
-                        delta = delta + terms[0] + alpha * terms[1] + alpha * alpha * terms[2]
-                    qd.atomic_add(energy_delta[()], self.h4 * delta)
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+                self.qacc_temp[i_d, i_b] = self.constraint_state.qacc[i_d, i_b]
+                self.Ma_temp[i_d, i_b] = self.constraint_state.Ma[i_d, i_b]
+            for i_c, i_b in qd.ndrange(self.constraint_state.Jaref.shape[0], self.n_instances[()]):
+                if i_c < self.constraint_state.n_constraints[i_b]:
+                    self.Jaref_temp[i_c, i_b] = self.constraint_state.Jaref[i_c, i_b]
 
     @qd.func(requires_top_level=True)
-    def accept(self, alpha):
+    def step_forward(self, alpha):
         if qd.static(self.has_constraints):
-            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance, self.n_instances):
+            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
                 self.constraint_state.qacc[i_d, i_b] = (
-                    self.constraint_state.qacc[i_d, i_b] + alpha * self.constraint_state.search[i_d, i_b]
+                    self.qacc_temp[i_d, i_b] + alpha * self.constraint_state.search[i_d, i_b]
                 )
-                self.constraint_state.Ma[i_d, i_b] = (
-                    self.constraint_state.Ma[i_d, i_b] + alpha * self.constraint_state.mv[i_d, i_b]
-                )
-            for i_c, i_b in qd.ndrange(self.constraint_state.Jaref.shape[0], self.n_instances):
+                self.constraint_state.Ma[i_d, i_b] = self.Ma_temp[i_d, i_b] + alpha * self.constraint_state.mv[i_d, i_b]
+            for i_c, i_b in qd.ndrange(self.constraint_state.Jaref.shape[0], self.n_instances[()]):
                 if i_c < self.constraint_state.n_constraints[i_b]:
                     self.constraint_state.Jaref[i_c, i_b] = (
-                        self.constraint_state.Jaref[i_c, i_b] + alpha * self.constraint_state.jv[i_c, i_b]
+                        self.Jaref_temp[i_c, i_b] + alpha * self.constraint_state.jv[i_c, i_b]
                     )
 
             solver.func_update_constraint(
@@ -470,7 +457,7 @@ class RigidSystem(PhysicsSystem):
             )
 
     @qd.func(requires_top_level=True)
-    def finalize(self):
+    def update_velocity(self):
         if qd.static(self.has_constraints):
             solver.func_update_qacc(self.dyn_state, self.constraint_state, self.rigid_config, self.errno)
             if qd.static(self.has_collision):

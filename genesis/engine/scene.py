@@ -374,7 +374,10 @@ class Scene(RBC):
             surface.smooth = False
 
         if surface.double_sided is None:
-            surface.double_sided = isinstance(material, (gs.materials.PBD.Cloth, gs.materials.FEM.Cloth))
+            surface.double_sided = isinstance(
+                material,
+                (gs.materials.PBD.Cloth, gs.materials.FEM.Cloth, gs.materials.FEM.QCloth),
+            )
 
         if vis_mode is not None:
             surface.vis_mode = vis_mode
@@ -831,6 +834,7 @@ class Scene(RBC):
         env_spacing=(0.0, 0.0),
         n_envs_per_row: int | None = None,
         center_envs_at_origin=True,
+        compile_kernels: bool = True,
     ):
         """
         Builds the scene once all entities have been added. This operation is required before running the simulation.
@@ -848,6 +852,8 @@ class Scene(RBC):
             The number of environments per row for visualization. If None, it will be set to `sqrt(n_envs)`.
         center_envs_at_origin : bool
             Whether to put the center of all the environments at the origin (for visualization only).
+        compile_kernels : bool
+            Whether to warm up the legacy Simulator step kernels. The graph-native QIPC engine sets this to False.
         """
 
         # Start tracking the scene right away, so that destroy is called even if some error fires during build
@@ -873,9 +879,10 @@ class Scene(RBC):
             self._desc_digest = description_digest(self._desc)
             self._is_built = True
 
-        with gs.logger.timer("Compiling simulation kernels..."):
-            self._sim.step()
-            self._reset()
+        if compile_kernels:
+            with gs.logger.timer("Compiling simulation kernels..."):
+                self._sim.step()
+                self._reset()
 
         # visualizer
         with gs.logger.timer("Building visualizer..."):

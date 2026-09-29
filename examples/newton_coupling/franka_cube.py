@@ -13,6 +13,8 @@ def main():
     parser.add_argument("-v", "--vis", action="store_true", help="Show visualization GUI")
     parser.add_argument("-g", "--gpu", action="store_true", help="Run on GPU instead of CPU")
     args = parser.parse_args()
+    if args.runtime == "newton" and not args.gpu:
+        parser.error("the graph-native newton runtime is GPU-only; pass --gpu")
 
     gs.init(backend=gs.gpu if args.gpu else gs.cpu, precision="64")
     scene = gs.Scene(
@@ -46,7 +48,7 @@ def main():
         ),
         vis_mode="collision",
     )
-    scene.build()
+    scene.build(compile_kernels=args.runtime == "native")
 
     motors_dof = [0, 1, 2, 3, 4, 5, 6]
     fingers_dof = [7, 8]
@@ -111,9 +113,9 @@ def main():
     if engine is not None:
         print(
             "iterations:",
-            engine.n_newton_iterations,
-            engine.n_pcg_iterations,
-            engine.n_line_search_iterations,
+            engine.get_newton_iters(),
+            engine.get_max_pcg_iters(),
+            engine.get_max_ls_iters(),
         )
 
 

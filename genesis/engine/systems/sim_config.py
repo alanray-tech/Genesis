@@ -9,22 +9,13 @@ from .sim_system import SimSystem
 class SimConfig(SimSystem):
     """Store the numerical controls shared by the global Newton pipeline."""
 
-    def __init__(
-        self,
-        h: float,
-        max_newton: int,
-        max_pcg: int,
-        max_line_search: int,
-        newton_tolerance: float,
-        pcg_tolerance: float,
-    ) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.h = h
-        self.max_newton = max_newton
-        self.max_pcg = max_pcg
-        self.max_line_search = max_line_search
-        self.newton_tolerance = newton_tolerance
-        self.pcg_tolerance = pcg_tolerance
+        self.dt = qd.ndarray(qd.f64, shape=())
+        self.tol = qd.ndarray(qd.f64, shape=())
+        self.max_newton_iter = qd.ndarray(qd.i64, shape=())
+        self.max_pcg_iter = qd.ndarray(qd.i64, shape=())
+        self.max_ls_iter = qd.ndarray(qd.i64, shape=())
 
-    def build(self) -> None:
+    def do_build(self) -> None:
         pass

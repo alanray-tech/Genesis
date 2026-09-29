@@ -1,0 +1,113 @@
+import numpy as np
+import pytest
+import trimesh
+from quadrants.lang import impl
+
+import genesis as gs
+from genesis.engine.systems import build_scene_engine
+from genesis.utils.misc import qd_to_numpy
+
+
+def make_grid(path, n=3, size=0.2):
+    vertices = np.array(
+        [[x * size / (n - 1), y * size / (n - 1), 0.5] for y in range(n) for x in range(n)],
+        dtype=np.float64,
+    )
+    triangles = []
+    for y in range(n - 1):
+        for x in range(n - 1):
+            lower_left = y * n + x
+            lower_right = lower_left + 1
+            upper_left = lower_left + n
+            upper_right = upper_left + 1
+            triangles.extend(
+                [
+                    [lower_left, lower_right, upper_left],
+                    [lower_right, upper_right, upper_left],
+                ]
+            )
+    trimesh.Trimesh(vertices, np.asarray(triangles), process=False).export(path)
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_qcloth_graph_step(tmp_path, show_viewer):
+    path = tmp_path / "qcloth_grid.obj"
+    make_grid(path)
+    scene = gs.Scene(show_viewer=show_viewer)
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(path)),
+        material=gs.materials.FEM.QCloth(E=1e4, thickness=1e-3),
+    )
+    scene.build(compile_kernels=False)
+    cloth.set_vertex_constraints([0, 2])
+
+    engine = build_scene_engine(scene)
+    initial = qd_to_numpy(engine.fem.x)
+    for _ in range(5):
+        engine.step()
+    # Inspect the graph launch directly: engine.step() performs scene
+    # writeback and a scalar failure read after this kernel.
+    engine._step_kernel(
+        engine.checkpoint_never_yield,
+        engine.checkpoint_never_yield,
+        engine.global_linear_system.triplet_overflow,
+        engine.checkpoint_never_yield,
+    )
+    graph_cache_used = impl.get_runtime().prog.get_graph_cache_used_on_last_call()
+    graph_num_nodes = impl.get_runtime().prog.get_graph_num_nodes_on_last_call()
+    final = qd_to_numpy(engine.fem.x)
+
+    assert graph_cache_used
+    assert graph_num_nodes > 0
+    assert np.isfinite(final).all()
+    np.testing.assert_array_equal(final[[0, 2]], initial[[0, 2]])
+    assert final[4, 2] < initial[4, 2]
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_qcloth_global_managers_two_entities(tmp_path, show_viewer):
+    path = tmp_path / "qcloth_grid.obj"
+    make_grid(path)
+    scene = gs.Scene(show_viewer=show_viewer)
+    material = gs.materials.FEM.QCloth(E=1e4, thickness=1e-3)
+    scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(path)),
+        material=material,
+    )
+    scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(path), pos=(0.3, 0.0, 0.2)),
+        material=material,
+    )
+    scene.build(compile_kernels=False)
+
+    engine = build_scene_engine(scene)
+    np.testing.assert_array_equal(qd_to_numpy(engine.global_vertex_manager.n_verts), 18)
+    np.testing.assert_array_equal(qd_to_numpy(engine.global_body_manager.n_bodies), 2)
+    np.testing.assert_array_equal(
+        qd_to_numpy(engine.global_body_manager.vertex_offsets)[:3],
+        np.array([0, 9, 18], dtype=np.int32),
+    )
+    np.testing.assert_array_equal(
+        qd_to_numpy(engine.global_vertex_manager.body_id)[:18],
+        np.repeat(np.arange(2, dtype=np.int32), 9),
+    )
+    np.testing.assert_allclose(
+        qd_to_numpy(engine.global_vertex_manager.positions)[:18],
+        qd_to_numpy(engine.fem.x)[:18],
+    )
+    np.testing.assert_array_equal(qd_to_numpy(engine.global_surface_manager.n_surf_triangles), 16)
+    np.testing.assert_array_equal(qd_to_numpy(engine.global_surface_manager.n_surf_edges), 32)
+    np.testing.assert_allclose(
+        qd_to_numpy(engine.global_surface_manager.face_area_weights)[:16].sum(),
+        0.08,
+    )
+
+    engine.step()
+    np.testing.assert_allclose(
+        qd_to_numpy(engine.global_vertex_manager.positions)[:18],
+        qd_to_numpy(engine.fem.x)[:18],
+    )
