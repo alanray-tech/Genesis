@@ -44,6 +44,8 @@ class ContactCheckpoint(IntEnum):
     KKT_FAILURE = 9
     FINALIZE = 10
     INITIAL_INTERSECTION = 11
+    ET_OVERFLOW = 12
+    ET_FAILURE = 13
 
 
 @qd.data_oriented
@@ -287,35 +289,57 @@ class SimEngine:
                 et_overflow,
                 from_checkpoint=resume_from,
             )
-        count = int(qd_to_numpy(self.contact.n_et_pairs))
-        if count > 0:
-            pairs = qd_to_numpy(self.contact.et_pairs)[:count]
-            edges = qd_to_numpy(self.global_surface_manager.surf_edges)
-            faces = qd_to_numpy(self.global_surface_manager.surf_triangles)
-            body_ids = qd_to_numpy(self.global_vertex_manager.body_id)
-            geometry_ids = qd_to_numpy(
-                self.global_vertex_manager.geometry_id
-            )
-            reports = []
-            for edge, face in pairs[:8]:
-                edge_vertex = int(edges[edge, 0])
-                face_vertex = int(faces[face, 0])
-                reports.append(
-                    f"(edge {int(edge)}, face {int(face)}, "
-                    f"edge geometry_id {int(geometry_ids[edge_vertex])}, "
-                    f"face geometry_id {int(geometry_ids[face_vertex])}, "
-                    f"edge body_id {int(body_ids[edge_vertex])}, "
-                    f"face body_id {int(body_ids[face_vertex])})"
-                )
-            more = f", ... +{count - 8} more" if count > 8 else ""
-            message = (
-                "ET check: initial state detected "
-                f"{count} edge-triangle intersection pair(s). "
-                "Initialization was rejected. "
-                f"Pairs: {', '.join(reports)}{more}"
-            )
+        if int(qd_to_numpy(self.contact.n_et_pairs)) > 0:
+            message = self._et_report_message("initial state")
             gs.logger.error(message)
             raise RuntimeError(message)
+
+    def _et_report_message(self, stage: str) -> str:
+        count = int(qd_to_numpy(self.contact.n_et_pairs))
+        pairs = qd_to_numpy(self.contact.et_pairs)[:count]
+        edges = qd_to_numpy(self.global_surface_manager.surf_edges)
+        faces = qd_to_numpy(self.global_surface_manager.surf_triangles)
+        positions = qd_to_numpy(self.global_vertex_manager.positions)
+        body_ids = qd_to_numpy(self.global_vertex_manager.body_id)
+        geometry_ids = qd_to_numpy(self.global_vertex_manager.geometry_id)
+        reports = []
+        for edge, face in pairs[:8]:
+            edge_vertex = int(edges[edge, 0])
+            edge_vertex_b = int(edges[edge, 1])
+            face_vertex = int(faces[face, 0])
+            face_vertex_b = int(faces[face, 1])
+            face_vertex_c = int(faces[face, 2])
+            reports.append(
+                f"(edge {int(edge)}, face {int(face)}, "
+                f"edge geometry_id {int(geometry_ids[edge_vertex])}, "
+                f"face geometry_id {int(geometry_ids[face_vertex])}, "
+                f"edge body_id {int(body_ids[edge_vertex])}, "
+                f"face body_id {int(body_ids[face_vertex])}, "
+                f"edge_positions "
+                f"{positions[[edge_vertex, edge_vertex_b]].tolist()}, "
+                f"face_positions "
+                f"{positions[[face_vertex, face_vertex_b, face_vertex_c]].tolist()})"
+            )
+        more = f", ... +{count - 8} more" if count > 8 else ""
+        contact_state = (
+            f"pt_pairs={int(qd_to_numpy(self.contact.n_pairs_pt))}, "
+            f"ee_pairs={int(qd_to_numpy(self.contact.n_pairs_ee))}, "
+            f"active_pairs={int(qd_to_numpy(self.contact.n_active_pairs))}, "
+            f"ccd_alpha={float(qd_to_numpy(self.contact.ccd_alpha)):.9g}, "
+            "frame_ccd_alpha="
+            f"{float(qd_to_numpy(self.contact.frame_ccd_alpha)):.9g}"
+        )
+        if self.rigid_contact_assemble is not None:
+            contact_state += (
+                ", proxy_doublets="
+                f"{int(qd_to_numpy(self.rigid_contact_assemble.rigid_doublet_total))}"
+            )
+        return (
+            f"ET check: {stage} detected "
+            f"{count} edge-triangle intersection pair(s). "
+            f"{contact_state}. "
+            f"Pairs: {', '.join(reports)}{more}"
+        )
 
     @qd.kernel(graph=True, checkpoints=True, fastcache=True)
     def _step_kernel(
@@ -324,10 +348,12 @@ class SimEngine:
         assembly_overflow: qd.types.ndarray(qd.i32, ndim=0),
         triplet_overflow: qd.types.ndarray(qd.i32, ndim=0),
         friction_overflow: qd.types.ndarray(qd.i32, ndim=0),
+        et_overflow: qd.types.ndarray(qd.i32, ndim=0),
     ):
         with qd.checkpoint(ContactCheckpoint.FRAME, yield_on=self.checkpoint_never_yield):
             if qd.static(self.has_contact):
                 self.contact.adaptive_kappa_update()
+                self.contact.reset_frame_ccd()
             if qd.static(self.has_rigid):
                 self.rigid.predict()
                 self.rigid.assemble_candidate_rows()
@@ -443,13 +469,27 @@ class SimEngine:
                     self.max_disp[()] = qd.f64(0.0)
                 if qd.static(self.has_fem):
                     self.fem.contribute_newton_max_disp(self.max_disp)
+                if qd.static(self.has_rigid_contact_proxy):
+                    self.rigid_contact_proxy.contribute_newton_max_disp(
+                        self.global_vertex_manager,
+                        self.max_disp,
+                    )
 
                 for _ in range(1):
                     rigid_converged = True
                     fem_converged = True
-                    if qd.static(self.has_rigid):
+                    if qd.static(self.has_rigid_contact_proxy):
+                        rigid_converged = (
+                            self.max_disp[()]
+                            <= self.sim_config.tol[()]
+                            * self.sim_config.dt[()]
+                        )
+                    elif qd.static(self.has_rigid):
                         rigid_converged = self.rigid.gradient_squared[()] <= self.sim_config.tol[()] ** 2
-                    if qd.static(self.has_fem):
+                    if qd.static(
+                        self.has_fem
+                        and not self.has_rigid_contact_proxy
+                    ):
                         fem_converged = self.max_disp[()] <= self.sim_config.tol[()] * self.sim_config.dt[()]
                     self.converged[()] = qd.i32(rigid_converged and fem_converged)
                 if qd.static(self.has_rigid_contact_proxy):
@@ -665,6 +705,24 @@ class SimEngine:
                     self.rigid.set_newton_active(self.newton_cond[()])
                     self.rigid.build_preconditioner(compute_envelope=False)
 
+        if qd.static(self.has_contact):
+            with qd.checkpoint(
+                ContactCheckpoint.ET_OVERFLOW,
+                yield_on=et_overflow,
+            ):
+                if qd.static(True):
+                    self.contact.reset_initial_intersections()
+                    self.contact.detect_initial_intersections()
+                    self.contact.flag_et_intersections()
+            with qd.checkpoint(
+                ContactCheckpoint.ET_FAILURE,
+                yield_on=self.contact.et_yield_flag,
+            ):
+                for _ in range(1):
+                    self.contact.et_yield_flag[()] = (
+                        self.contact.et_yield_flag[()]
+                    )
+
         if qd.static(self.has_rigid_contact_proxy):
             with qd.checkpoint(
                 ContactCheckpoint.KKT_FAILURE,
@@ -694,6 +752,11 @@ class SimEngine:
             pair_overflow = self.contact.overflow_flag
             assembly_overflow = self.contact.count_overflow_flag
             friction_overflow = self.contact.friction_overflow_flag
+        et_overflow = (
+            self.checkpoint_never_yield
+            if self.contact is None
+            else self.contact.et_overflow_flag
+        )
         triplet_overflow = self.global_linear_system.triplet_overflow
 
         status = self._step_kernel(
@@ -701,6 +764,7 @@ class SimEngine:
             assembly_overflow,
             triplet_overflow,
             friction_overflow,
+            et_overflow,
         )
         while status.yielded:
             checkpoint = status.checkpoint
@@ -737,6 +801,14 @@ class SimEngine:
             elif self.contact is not None and checkpoint == ContactCheckpoint.QUERY:
                 self._handle_pair_overflow()
                 resume_from = ContactCheckpoint.QUERY
+            elif self.contact is not None and checkpoint == ContactCheckpoint.ET_OVERFLOW:
+                required = int(qd_to_numpy(self.contact.n_et_pairs))
+                self.contact.realloc_et_pairs(required)
+                resume_from = ContactCheckpoint.ET_OVERFLOW
+            elif self.contact is not None and checkpoint == ContactCheckpoint.ET_FAILURE:
+                message = self._et_report_message("step")
+                gs.logger.error(message)
+                raise RuntimeError(message)
             elif checkpoint == ContactCheckpoint.KKT_FAILURE:
                 proxy = self.rigid_contact_proxy
                 rigid_dofs = self.rigid.dof_count_host
@@ -808,6 +880,7 @@ class SimEngine:
                 assembly_overflow,
                 triplet_overflow,
                 friction_overflow,
+                et_overflow,
                 from_checkpoint=resume_from,
             )
         if self.fem is not None:

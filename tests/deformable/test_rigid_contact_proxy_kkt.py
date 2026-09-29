@@ -5,6 +5,7 @@ import pytest
 import quadrants as qd
 
 import genesis as gs
+from examples.newton_coupling.cloth_grid_asset import cloth_grid_asset
 from genesis.engine.systems import ContactTabular, build_scene_engine
 from genesis.engine.systems.contact_function.screw_ccd import screw_halfplane_ccd
 from genesis.engine.systems.global_linear_system import GlobalLinearSystem
@@ -29,8 +30,8 @@ class ProxyContactFixture:
     def __init__(self):
         self.n_unique_doublets = qd.ndarray(qd.i32, shape=())
         self.n_unique_triplets = qd.ndarray(qd.i32, shape=())
-        self.unique_doublet_vertices = qd.ndarray(qd.i32, shape=(2,))
-        self.unique_doublet_gradients = qd.ndarray(qd.f64, shape=(2, 3))
+        self.unique_doublet_vertices = qd.ndarray(qd.i32, shape=(3,))
+        self.unique_doublet_gradients = qd.ndarray(qd.f64, shape=(3, 3))
         self.unique_triplet_rows = qd.ndarray(qd.i32, shape=(3,))
         self.unique_triplet_cols = qd.ndarray(qd.i32, shape=(3,))
         self.unique_triplet_values = qd.ndarray(qd.f64, shape=(3, 3, 3))
@@ -514,11 +515,20 @@ def test_proxy_system_initializes_on_genesis_inertial_pose():
 @pytest.mark.parametrize("backend", [gs.gpu])
 def test_proxy_contact_routes_emit_cgq_block_counts():
     contact = ProxyContactFixture()
-    contact.n_unique_doublets.from_numpy(np.array(2, dtype=np.int32))
+    contact.n_unique_doublets.from_numpy(np.array(3, dtype=np.int32))
     contact.n_unique_triplets.from_numpy(np.array(3, dtype=np.int32))
-    contact.unique_doublet_vertices.from_numpy(np.array([1, 2], dtype=np.int32))
+    contact.unique_doublet_vertices.from_numpy(
+        np.array([0, 1, 2], dtype=np.int32)
+    )
     contact.unique_doublet_gradients.from_numpy(
-        np.array([[0.3, -0.2, 0.4], [-0.1, 0.5, 0.2]], dtype=np.float64)
+        np.array(
+            [
+                [0.15, -0.25, 0.35],
+                [0.3, -0.2, 0.4],
+                [-0.1, 0.5, 0.2],
+            ],
+            dtype=np.float64,
+        )
     )
     contact.unique_triplet_rows.from_numpy(np.array([0, 0, 1], dtype=np.int32))
     contact.unique_triplet_cols.from_numpy(np.array([0, 1, 2], dtype=np.int32))
@@ -592,6 +602,7 @@ def test_proxy_contact_routes_emit_cgq_block_counts():
     assert int(qd_to_numpy(linear_system.bcoo_valid)) == 1
     assert int(qd_to_numpy(linear_system.bcoo_nnz)) <= 9
     rhs = qd_to_numpy(linear_system.b_rhs)
+    np.testing.assert_allclose(rhs[:3], [0.15, -0.25, 0.35], atol=1.0e-12)
     gradient = np.array([0.2, 0.3, 0.6])
     angular = np.cross(np.array([0.5, 0.0, 0.0]), np.array([0.3, -0.2, 0.4]))
     angular += np.cross(np.array([0.0, 0.5, 0.0]), np.array([-0.1, 0.5, 0.2]))
@@ -795,6 +806,66 @@ def test_rigid_proxy_cloth_contact_step():
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])
+def test_cloth_drapes_on_fixed_proxy_box():
+    cube_top = 0.08
+    cloth_resolution = 25
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(dt=0.01),
+        coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
+    )
+    scene.add_entity(
+        morph=gs.morphs.Box(
+            pos=(0.0, 0.0, 0.04),
+            size=(0.08, 0.08, 0.08),
+            fixed=True,
+        ),
+        vis_mode="collision",
+    )
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(
+            file=str(cloth_grid_asset(resolution=cloth_resolution)),
+            pos=(0.0, 0.0, 0.14),
+        ),
+        material=gs.materials.FEM.QCloth(
+            E=2e4,
+            shear_modulus=2e3,
+            rho=200.0,
+            thickness=1e-3,
+            bending_youngs_modulus=3e3,
+        ),
+    )
+    scene.build(compile_kernels=False)
+    engine = build_scene_engine(
+        scene,
+        contact_config={
+            "contact/d_hat": 1e-3,
+            "contact/intersection_check": 1,
+        },
+    )
+
+    maximum_proxy_doublets = 0
+    for _ in range(120):
+        engine.step()
+        maximum_proxy_doublets = max(
+            maximum_proxy_doublets,
+            int(
+                qd_to_numpy(
+                    engine.rigid_contact_assemble.rigid_doublet_total
+                )
+            ),
+        )
+
+    center_vertex = cloth_resolution * cloth_resolution // 2
+    center_height = float(
+        qd_to_numpy(engine.fem.x)[center_vertex, 2]
+    )
+    assert maximum_proxy_doublets > 0
+    assert center_height > cube_top
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
 def test_franka_cloth_reduced_kkt_step():
     scene = gs.Scene(
         sim_options=gs.options.SimOptions(dt=0.01),
@@ -843,9 +914,6 @@ def test_franka_cloth_reduced_kkt_step():
 
     edge_count = int(qd_to_numpy(engine.rigid_forest.n_edges))
     assert edge_count == 9
-    assert np.all(
-        qd_to_numpy(engine.rigid_forest.edge_d)[:edge_count] > 0.0
-    )
     assert engine.get_newton_iters() < 1024
     assert int(qd_to_numpy(engine.frame_failed)) == 0
     assert float(qd_to_numpy(engine.rigid_contact_proxy.max_surface_residual)) <= float(

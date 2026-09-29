@@ -68,6 +68,7 @@ class RigidSystem(SimSystem):
         self.storage_dof_count_host = ((self.dof_count_host + 2) // 3) * 3
         self.n_dofs_per_instance = qd.ndarray(qd.i32, shape=())
         self.n_instances = qd.ndarray(qd.i32, shape=())
+        self.n_links = qd.ndarray(qd.i32, shape=())
         self.n_dofs = qd.ndarray(qd.i32, shape=())
         self.dof_offset = qd.ndarray(qd.i32, shape=())
         self.n_storage_dofs = qd.ndarray(qd.i32, shape=())
@@ -78,6 +79,9 @@ class RigidSystem(SimSystem):
         self.Jaref_temp = qd.ndarray(qd.f64, shape=self.constraint_state.Jaref.shape)
         self.n_dofs_per_instance.from_numpy(np.array(self.n_dofs_per_instance_host, dtype=np.int32))
         self.n_instances.from_numpy(np.array(self.n_instances_host, dtype=np.int32))
+        self.n_links.from_numpy(
+            np.array(rigid_solver.n_links, dtype=np.int32)
+        )
         self.n_dofs.from_numpy(np.array(self.dof_count_host, dtype=np.int32))
         self.dof_offset.from_numpy(np.array(0, dtype=np.int32))
         self.n_storage_dofs.from_numpy(np.array(self.storage_dof_count_host, dtype=np.int32))

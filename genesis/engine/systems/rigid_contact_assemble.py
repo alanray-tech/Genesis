@@ -145,7 +145,15 @@ class RigidContactAssemble(SimSystem):
         )
         for index in range(self.contact.n_unique_doublets[()]):
             global_vertex = self.contact.unique_doublet_vertices[index]
-            if global_vertex >= proxy_vertex_begin:
+            if global_vertex < proxy_vertex_begin:
+                if self.fem.is_fixed[global_vertex] == 0:
+                    offset = self.fem.dof_offset[()] + global_vertex * 3
+                    for axis in qd.static(range(3)):
+                        qd.atomic_add(
+                            self.linear_system.b_rhs[offset + axis],
+                            self.contact.unique_doublet_gradients[index, axis],
+                        )
+            else:
                 data = self._proxy_vertex_data(global_vertex)
                 pair = qd.i32(data[0])
                 lever = qd.Vector([data[1], data[2], data[3]])

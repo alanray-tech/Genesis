@@ -102,6 +102,7 @@ class ContactSystem(SimSystem):
         self.max_et_pairs = qd.ndarray(qd.i32, shape=())
         self.n_et_pairs = qd.ndarray(qd.i32, shape=())
         self.et_overflow_flag = qd.ndarray(qd.i32, shape=())
+        self.et_yield_flag = qd.ndarray(qd.i32, shape=())
         self.et_pairs = qd.ndarray(
             qd.i32,
             shape=(intersection_check_capacity, 2),
@@ -130,6 +131,7 @@ class ContactSystem(SimSystem):
         )
         self.n_et_pairs.from_numpy(np.array(0, dtype=np.int32))
         self.et_overflow_flag.from_numpy(np.array(0, dtype=np.int32))
+        self.et_yield_flag.from_numpy(np.array(0, dtype=np.int32))
         self.et_pairs.from_numpy(
             np.zeros((intersection_check_capacity, 2), dtype=np.int32)
         )
@@ -299,6 +301,7 @@ class ContactSystem(SimSystem):
         self.friction_energy = qd.ndarray(qd.f64, shape=())
         self.contact_energy_value = qd.ndarray(qd.f64, shape=())
         self.ccd_alpha = qd.ndarray(qd.f64, shape=())
+        self.frame_ccd_alpha = qd.ndarray(qd.f64, shape=())
         self.max_accd_iters = qd.ndarray(qd.i32, shape=())
         self.min_gap_ratio = qd.ndarray(qd.f64, shape=())
         self.iter_min_gap_ratio = qd.ndarray(qd.f64, shape=())
@@ -323,6 +326,7 @@ class ContactSystem(SimSystem):
         self.friction_energy.from_numpy(np.array(0.0, dtype=np.float64))
         self.contact_energy_value.from_numpy(np.array(0.0, dtype=np.float64))
         self.ccd_alpha.from_numpy(np.array(1.0, dtype=np.float64))
+        self.frame_ccd_alpha.from_numpy(np.array(1.0, dtype=np.float64))
         self.min_gap_ratio.from_numpy(np.array(1e300, dtype=np.float64))
         self.iter_min_gap_ratio.from_numpy(np.array(1e300, dtype=np.float64))
         self.contact_constitution = self._contact_constitution
@@ -444,6 +448,7 @@ class ContactSystem(SimSystem):
         self.max_et_pairs.from_numpy(np.array(capacity, dtype=np.int32))
         self.n_et_pairs.from_numpy(np.array(0, dtype=np.int32))
         self.et_overflow_flag.from_numpy(np.array(0, dtype=np.int32))
+        self.et_yield_flag.from_numpy(np.array(0, dtype=np.int32))
 
     def handle_broad_phase_overflow(self) -> bool:
         return self.broad_phase.handle_ee_query_overflow()
@@ -453,6 +458,7 @@ class ContactSystem(SimSystem):
         for _ in range(1):
             self.n_et_pairs[()] = 0
             self.et_overflow_flag[()] = 0
+            self.et_yield_flag[()] = 0
 
     @qd.func(requires_top_level=True)
     def detect_initial_intersections(self):
@@ -467,6 +473,11 @@ class ContactSystem(SimSystem):
                 self.max_et_pairs[()],
                 self.et_overflow_flag,
             )
+
+    @qd.func(requires_top_level=True)
+    def flag_et_intersections(self):
+        for _ in range(1):
+            self.et_yield_flag[()] = qd.i32(self.n_et_pairs[()] > 0)
 
     def realloc_assembly_buffers(self, required_doublets: int, required_triplets: int) -> None:
         current_doublets = self.contact_doublet_vertices.shape[0]
@@ -686,6 +697,11 @@ class ContactSystem(SimSystem):
             self.max_accd_iters[()] = 0
 
     @qd.func(requires_top_level=True)
+    def reset_frame_ccd(self):
+        for _ in range(1):
+            self.frame_ccd_alpha[()] = 1.0
+
+    @qd.func(requires_top_level=True)
     def ccd(self):
         for pair_index in range(self.n_pairs_pt[()]):
             surface_vertex = self.pairs_pt[pair_index, 0]
@@ -770,6 +786,11 @@ class ContactSystem(SimSystem):
             )
             self.ccd_alpha_ph[pair_index] = result[0]
             qd.atomic_min(self.ccd_alpha[()], result[0])
+        for _ in range(1):
+            self.frame_ccd_alpha[()] = qd.min(
+                self.frame_ccd_alpha[()],
+                self.ccd_alpha[()],
+            )
 
     @qd.func(requires_top_level=True)
     def check_assembly_capacity(self):

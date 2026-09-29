@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 
 import numpy as np
 import quadrants as qd
@@ -23,7 +22,10 @@ import quadrants as qd
 import genesis as gs
 import genesis.utils.geom as gu
 from genesis.engine.systems import ContactTabular, build_scene_engine
+from genesis.utils.misc import qd_to_numpy
 from genesis.vis.keybindings import Key, KeyAction, Keybind
+
+from cloth_grid_asset import cloth_grid_asset
 
 DT = 0.01
 TARGET_TRANSLATION_STEP = 0.003
@@ -59,6 +61,12 @@ def main() -> None:
         help="Run headless for --steps frames",
     )
     parser.add_argument("--steps", type=int, default=1)
+    parser.add_argument(
+        "--press-depth",
+        type=float,
+        default=0.0,
+        help="Headless check: command the hand below the tabletop",
+    )
     args = parser.parse_args()
 
     gs.init(backend=gs.gpu, precision="64", logging_level="info")
@@ -98,7 +106,7 @@ def main() -> None:
     )
     scene.add_entity(
         morph=gs.morphs.Mesh(
-            file=str(Path(__file__).parent / "assets" / "qcloth_grid.obj"),
+            file=str(cloth_grid_asset()),
             pos=CLOTH_CENTER,
         ),
         material=gs.materials.FEM.QCloth(
@@ -148,6 +156,13 @@ def main() -> None:
     target_home_quat = end_effector.get_quat().cpu().numpy().reshape(4)
     target_pos = target_home_pos.copy()
     target_quat = target_home_quat.copy()
+    press_target = target_home_pos.copy()
+    press_quaternion = target_home_quat.copy()
+    if args.no_gui and args.press_depth > 0.0:
+        press_target[0] = 0.55
+        press_target[1] = 0.0
+        press_quaternion[:] = (0.0, 1.0, 0.0, 0.0)
+    press_target[2] = TABLE_TOP - args.press_depth
     gripper_closed = np.array(False, dtype=bool)
     is_running = True
 
@@ -299,6 +314,11 @@ def main() -> None:
 
     print(__doc__)
     frame = 0
+    max_newton = 0
+    max_pcg = 0
+    max_line_search = 0
+    min_ccd_alpha = 1.0
+    last_target_qpos = HOME_QPOS[:7].copy()
     try:
         while (
             is_running
@@ -307,6 +327,13 @@ def main() -> None:
                 or (args.no_gui and frame < args.steps)
             )
         ):
+            if args.no_gui and args.press_depth > 0.0:
+                target_pos[:] += np.clip(
+                    press_target - target_pos,
+                    -TARGET_TRANSLATION_STEP,
+                    TARGET_TRANSLATION_STEP,
+                )
+                target_quat[:] = press_quaternion
             if target_frame is not None:
                 scene.update_debug_objects(
                     (target_frame,),
@@ -317,8 +344,14 @@ def main() -> None:
                 link=end_effector,
                 pos=target_pos,
                 quat=target_quat,
+                init_qpos=franka.get_qpos(),
+                max_samples=8 if args.press_depth > 0.0 else 1,
+                max_solver_iters=8,
+                damping=0.05,
+                max_step_size=0.1,
                 dofs_idx_local=arm_dofs,
             )
+            last_target_qpos = target_qpos[arm_dofs].cpu().numpy()
             franka.control_dofs_position(
                 target_qpos[arm_dofs],
                 dofs_idx_local=arm_dofs,
@@ -329,6 +362,16 @@ def main() -> None:
             )
 
             engine.step()
+            max_newton = max(max_newton, engine.get_newton_iters())
+            max_pcg = max(max_pcg, engine.get_max_pcg_iters())
+            max_line_search = max(
+                max_line_search,
+                engine.get_max_ls_iters(),
+            )
+            min_ccd_alpha = min(
+                min_ccd_alpha,
+                float(qd_to_numpy(engine.contact.frame_ccd_alpha)),
+            )
             if not args.no_gui:
                 scene.viewer.update(force=True)
             frame += 1
@@ -339,10 +382,17 @@ def main() -> None:
     finally:
         qd.sync()
         print(
-            "iterations:",
-            engine.get_newton_iters(),
-            engine.get_max_pcg_iters(),
-            engine.get_max_ls_iters(),
+            "max iterations:",
+            max_newton,
+            max_pcg,
+            max_line_search,
+            f"min_ccd_alpha={min_ccd_alpha:.9g}",
+        )
+        hand_position = end_effector.get_pos().cpu().numpy().reshape(3)
+        print(
+            f"target_pos={target_pos.tolist()}, "
+            f"hand_pos={hand_position.tolist()}, "
+            f"target_qpos={last_target_qpos.tolist()}"
         )
 
 

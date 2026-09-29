@@ -635,8 +635,8 @@ class RigidContactProxySystem(SimSystem):
     def initialize_proxy_state(self):
         for pair in range(self.n_pairs[()]):
             mechanism = self.mechanism_body[pair]
-            link = mechanism % self.n_links_host
-            environment = mechanism // self.n_links_host
+            link = mechanism % self.rigid.n_links[()]
+            environment = mechanism // self.rigid.n_links[()]
             position, quaternion = self._current_mechanism_pose(
                 link,
                 environment,
@@ -656,8 +656,8 @@ class RigidContactProxySystem(SimSystem):
     def prepare_metric(self):
         for pair in range(self.n_pairs[()]):
             mechanism = self.mechanism_body[pair]
-            link = mechanism % self.n_links_host
-            environment = mechanism // self.n_links_host
+            link = mechanism % self.rigid.n_links[()]
+            environment = mechanism // self.rigid.n_links[()]
             link_index = (
                 [link, environment]
                 if qd.static(self.rigid.rigid_config.batch_links_info)
@@ -715,8 +715,8 @@ class RigidContactProxySystem(SimSystem):
     def mark_mechanism_constrained(self):
         for pair in range(self.n_pairs[()]):
             mechanism = self.mechanism_body[pair]
-            link = mechanism % self.n_links_host
-            environment = mechanism // self.n_links_host
+            link = mechanism % self.rigid.n_links[()]
+            environment = mechanism // self.rigid.n_links[()]
             self.rigid.dyn_state.links.is_constrained[link, environment] = True
 
     @qd.func(requires_top_level=True)
@@ -959,8 +959,8 @@ class RigidContactProxySystem(SimSystem):
             self.max_surface_residual[()] = 0.0
         for pair in range(self.n_pairs[()]):
             mechanism = self.mechanism_body[pair]
-            link = mechanism % self.n_links_host
-            environment = mechanism // self.n_links_host
+            link = mechanism % self.rigid.n_links[()]
+            environment = mechanism // self.rigid.n_links[()]
             mechanism_position = qd.Vector.zero(qd.f64, 3)
             mechanism_quaternion = qd.Vector.zero(qd.f64, 4)
             proxy_position = qd.Vector.zero(qd.f64, 3)
@@ -1090,6 +1090,37 @@ class RigidContactProxySystem(SimSystem):
             vertex.path_speed[global_vertex] = (
                 pivot_displacement.norm() + rotation.norm() * lever_length
             )
+
+    @qd.func(requires_top_level=True)
+    def contribute_newton_max_disp(
+        self,
+        vertex: qd.template(),
+        max_disp: qd.template(),
+    ):
+        for local_vertex in range(self.n_verts[()]):
+            pair = self.vertex_pair[local_vertex]
+            global_vertex = self.global_vert_offset[()] + local_vertex
+            pivot = qd.Vector.zero(qd.f64, 3)
+            pivot_displacement = qd.Vector.zero(qd.f64, 3)
+            rotation = qd.Vector.zero(qd.f64, 3)
+            start = qd.Vector.zero(qd.f64, 3)
+            for axis in qd.static(range(3)):
+                pivot[axis] = self.t[pair, axis]
+                pivot_displacement[axis] = self.dq[pair, axis]
+                rotation[axis] = self.dq[pair, axis + 3]
+                start[axis] = vertex.positions[global_vertex, axis]
+            lever = start - pivot
+            delta_quaternion = gu.qd_rotvec_to_quat(
+                rotation,
+                qd.f64(1.0e-12),
+            )
+            displacement = (
+                pivot_displacement
+                + gu.qd_transform_by_quat(lever, delta_quaternion)
+                - lever
+            )
+            for axis in qd.static(range(3)):
+                qd.atomic_max(max_disp[()], qd.abs(displacement[axis]))
 
     @qd.func(requires_top_level=True)
     def record_start_point(self):

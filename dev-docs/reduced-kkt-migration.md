@@ -103,6 +103,8 @@ Therefore:
 No host object map is permitted. Host geometry extraction is build-time
 staging only; all live counts, modes, capacities, residuals, and iteration
 state are zero-dimensional device scalars accessed with `[()]`.
+Mechanism/environment decoding reads `RigidSystem.n_links[()]`; the host link
+count is allocation capacity only and must never specialize runtime indexing.
 
 Genesis currently solves for native trial acceleration, whereas CGQ's forest
 direction is already a configuration-space body twist. For ordinary
@@ -301,6 +303,11 @@ Before commit:
 - no hard probe is pending;
 - `frame_failed == 0`.
 
+Physical convergence follows CGQ's world-displacement criterion. FEM and
+proxy screw directions contribute to one device maximum compared against
+`velocity_tol * dt`; the native rigid gradient norm is diagnostic only on the
+Reduced-KKT path.
+
 Failure yields before previous-state and velocity commit. Proxy state is never
 silently snapped to FK.
 
@@ -312,9 +319,12 @@ silently snapped to FK.
 - Rigid-Cloth uses proxy-Cloth IPC.
 - Delegated rigid geometry is removed from the matching native pair route.
 - Every geometry pair has exactly one owner.
-- Optional initial penetration validation uses CGQ's exact edge-triangle
-  predicate over the triangle BVH. It applies same-body self-collision,
-  body-contact-ignorance, and contact-table suppression before reporting.
+- When `RigidContactAssemble` owns mixed proxy/FEM routes, it still scatters
+  every FEM contact doublet; only the rigid endpoint is replaced.
+- Optional penetration validation uses CGQ's exact edge-triangle predicate
+  over the triangle BVH at initialization and before every frame commit. It
+  applies same-body self-collision, body-contact-ignorance, and contact-table
+  suppression before reporting.
 - ET reports retain edge/face IDs and add global contact geometry/body IDs so
   a Genesis source geometry can be identified without a host object map.
 

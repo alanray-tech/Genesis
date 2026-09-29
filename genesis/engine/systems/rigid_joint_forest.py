@@ -345,7 +345,7 @@ class RigidJointForestSystem(SimSystem):
         if joint_type == gs.JOINT_TYPE.REVOLUTE:
             angular = self.endpoint_joint_xaxis[joint, environment]
             linear = angular.cross(
-                self.endpoint_t[environment * self.n_links_host + link]
+                self.endpoint_t[environment * self.rigid.n_links[()] + link]
                 - self.endpoint_joint_xanchor[joint, environment]
             )
         elif joint_type == gs.JOINT_TYPE.PRISMATIC:
@@ -357,7 +357,7 @@ class RigidJointForestSystem(SimSystem):
             else:
                 angular = self.rigid.dyn_info.dofs.motion_ang[dof_index]
                 linear = angular.cross(
-                    self.endpoint_t[environment * self.n_links_host + link]
+                    self.endpoint_t[environment * self.rigid.n_links[()] + link]
                     - self.endpoint_joint_xanchor[joint, environment]
                 )
         result = qd.Vector.zero(qd.f64, 6)
@@ -379,7 +379,7 @@ class RigidJointForestSystem(SimSystem):
             ]
 
         for link, environment in qd.ndrange(
-            self.n_links_host,
+            self.rigid.n_links[()],
             self.n_instances_host,
         ):
             link_index = (
@@ -514,8 +514,8 @@ class RigidJointForestSystem(SimSystem):
             )
 
         for body in range(self.n_mechanism_bodies[()]):
-            environment = body // self.n_links_host
-            link = body - environment * self.n_links_host
+            environment = body // self.rigid.n_links[()]
+            link = body - environment * self.rigid.n_links[()]
             link_index = (
                 [link, environment]
                 if qd.static(self.rigid.rigid_config.batch_links_info)
@@ -547,8 +547,8 @@ class RigidJointForestSystem(SimSystem):
         for level in qd.static(range(self.n_links_host)):
             for body in range(self.n_mechanism_bodies[()]):
                 if level < self.n_levels[()] and self.depth[body] == level:
-                    environment = body // self.n_links_host
-                    link = body - environment * self.n_links_host
+                    environment = body // self.rigid.n_links[()]
+                    link = body - environment * self.rigid.n_links[()]
                     parent = self.parent_body[body]
                     twist = qd.Vector.zero(qd.f64, 6)
                     if parent >= 0:
@@ -645,8 +645,8 @@ class RigidJointForestSystem(SimSystem):
                     reverse_level < self.n_levels[()]
                     and self.depth[body] == level
                 ):
-                    environment = body // self.n_links_host
-                    link = body - environment * self.n_links_host
+                    environment = body // self.rigid.n_links[()]
+                    link = body - environment * self.rigid.n_links[()]
                     wrench = qd.Vector.zero(qd.f64, 6)
                     for component in qd.static(range(6)):
                         wrench[component] = self.body_wrench[body, component]
@@ -863,8 +863,8 @@ class RigidJointForestSystem(SimSystem):
         node = body
         while node >= 0 and self.parent_body[node] >= 0:
             parent = self.parent_body[node]
-            environment = node // self.n_links_host
-            link = node - environment * self.n_links_host
+            environment = node // self.rigid.n_links[()]
+            link = node - environment * self.rigid.n_links[()]
             link_index = (
                 [link, environment]
                 if qd.static(self.rigid.rigid_config.batch_links_info)
@@ -959,8 +959,8 @@ class RigidJointForestSystem(SimSystem):
     @qd.func
     def _root_basis(self, body):
         basis_matrix = qd.Matrix.zero(qd.f64, 6, 6)
-        environment = body // self.n_links_host
-        link = body - environment * self.n_links_host
+        environment = body // self.rigid.n_links[()]
+        link = body - environment * self.rigid.n_links[()]
         first_dof = (
             self.root_dof_index[body]
             - environment * self.rigid.n_dofs_per_instance[()]
@@ -999,8 +999,8 @@ class RigidJointForestSystem(SimSystem):
     @qd.func(requires_top_level=True)
     def build_preconditioner(self, linear_system: qd.template()):
         for body in range(self.n_mechanism_bodies[()]):
-            environment = body // self.n_links_host
-            link = body - environment * self.n_links_host
+            environment = body // self.rigid.n_links[()]
+            link = body - environment * self.rigid.n_links[()]
             link_index = (
                 [link, environment]
                 if qd.static(self.rigid.rigid_config.batch_links_info)
@@ -1031,8 +1031,8 @@ class RigidJointForestSystem(SimSystem):
         for edge in range(self.n_edges[()]):
             child = self.edge_child[edge]
             parent = self.edge_parent[edge]
-            environment = child // self.n_links_host
-            link = child - environment * self.n_links_host
+            environment = child // self.rigid.n_links[()]
+            link = child - environment * self.rigid.n_links[()]
             dof = (
                 self.edge_dof_index[edge]
                 - environment * self.rigid.n_dofs_per_instance[()]
@@ -1224,7 +1224,7 @@ class RigidJointForestSystem(SimSystem):
                         u = (
                             motion.transpose() @ articulated + edge_hessian
                         ) @ basis
-                        environment = body // self.n_links_host
+                        environment = body // self.rigid.n_links[()]
                         dof = (
                             self.edge_dof_index[edge]
                             - environment
@@ -1276,7 +1276,7 @@ class RigidJointForestSystem(SimSystem):
                         ]
                 basis = self._root_basis(body)
                 root_hessian = basis.transpose() @ articulated @ basis
-                environment = body // self.n_links_host
+                environment = body // self.rigid.n_links[()]
                 first_dof = (
                     self.root_dof_index[body]
                     - environment * self.rigid.n_dofs_per_instance[()]

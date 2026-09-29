@@ -735,6 +735,10 @@ Observed:
 - A graph first compiled for a singleton/free-body forest (`n_levels=1`) was
   reused for Franka (`n_levels=10`), so every mapped-forest factor/apply level
   was absent. Rigid preconditioned residuals and directions were exactly zero.
+- Host `n_links` embedded in mechanism `%`/`//` indexing was likewise reused
+  from an 11-link Franka graph in a 13-link Franka+table+cube scene. Table and
+  cube proxies were decoded as Franka links 0/1. Runtime indexing now reads
+  the zero-dimensional `RigidSystem.n_links[()]` scalar.
 - The runtime fix does not retain a host live size. `max_depth` and `n_levels`
   are zero-dimensional device scalars. The graph emits one stage per link
   capacity and each stage reads `max_depth[()]` to select its live level.
