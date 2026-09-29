@@ -1060,19 +1060,59 @@ expand/restrict. CGQ caches those values once per Newton. The compact
 `genesis_legacy` path retains the recomputation oracle. Fixed child links
 (`parent_edge == -1`) retain rigid transport without indexing an edge.
 
-Matched early-window profiling gives:
+The matched late-window before/after profiles contain 656 and 658 PCG
+iterations respectively:
 
-- `forest_expand_tree_p`: `16.102 -> 14.159 microseconds/call` (`1.137x`);
-- `forest_project_tree_Ap`: `18.174 -> 15.612 microseconds/call` (`1.164x`);
-- combined expand/project: `34.276 -> 29.771 microseconds/PCG` (`1.151x`,
-  13.1% lower).
+- `forest_expand_tree_p`: `14.981 -> 12.661 microseconds/call` (`1.183x`);
+- `forest_project_tree_Ap`: `18.110 -> 14.861 microseconds/call` (`1.219x`);
+- combined expand/project: `33.091 -> 27.522 microseconds/PCG` (`1.202x`,
+  16.8% lower).
 
-The complete capture changes from `219.272` to `213.620 ms` GPU time and from
-`29.088` to `28.839 ms` wall median, but its PCG work also changes from 669 to
-641 iterations. The normalized `4.505 microseconds/PCG` reduction is therefore
-the acceptance metric. Cached level/tree `P`, `P^T`, virtual work, and the
-shared-memory preconditioner match the retained legacy oracle; the full
-Franka-Cloth reduced-KKT step also passes.
+The complete equal-work capture changes from `220.306` to `216.494 ms` GPU
+time (`1.018x`) and from `29.304` to `28.868 ms` wall median (`1.015x`).
+Cached level/tree `P`, `P^T`, virtual work, and the shared-memory
+preconditioner match the retained legacy oracle; the full Franka-Cloth
+reduced-KKT step also passes.
+
+### Final equal-work profile and stop condition
+
+The final late window contains 18 Newton evaluations in both implementations
+and nearly equal PCG work (Genesis 658, CGQ 676). Results:
+
+- GPU kernel time: `216.494` versus `145.500 ms` (`1.488x`);
+- synchronized wall median: `28.868` versus `14.067 ms` (`2.052x`);
+- kernel instances: `46,657` versus `42,300`;
+- unique kernels: `1,296` versus `350`.
+
+The remaining GPU excess is `70.994 ms`. Its dominant sources are now
+Quadrants-owned lowering/algorithm gaps:
+
+- contact/body sort-reduce: `30.421` versus `5.526 ms`, a `24.895 ms`
+  gap; Genesis emits 438 variants versus CGQ's 35;
+- PCG: `159.070` versus `106.683 microseconds/iteration`; the iteration body
+  has 36 Genesis variants (14 helpers plus 22 real kernels) versus 26 native
+  CGQ variants;
+- dynamic-range bound helpers: sort `4.086 ms`, PCG `8.249 ms`, other
+  pipeline `6.645 ms`;
+- after subtracting PCG helpers, the equal-work generated-kernel gap is
+  `39.85 microseconds/iteration`. Forest algebra, BCOO semantics, vector
+  updates, and reductions already follow the corresponding CGQ schedule, so
+  the remaining gap is code generation/kernel lowering rather than another
+  scene-specific algorithm.
+
+Sort/reduce, non-sort helpers, and equal-work PCG lowering account for about
+93% of the remaining GPU excess without overlap. This satisfies the requested
+stop condition: further Genesis-side native replacements would be workarounds
+for Quadrants rather than framework optimizations.
+
+The final 100-frame synchronized run reports Genesis median `29.165 ms`,
+Newton mean 2.0, and total-PCG mean 72.29. The matching CGQ run reports
+`14.491 ms`, 2.0, and 72.54, for a `2.013x` wall ratio with aligned numerical
+work. Relative to the earlier `43.009 ms` Genesis run, the completed
+conformance/optimization sequence is `1.475x` faster (32.2% lower median).
+Single-run wall medians were not monotonic across every micro-optimization;
+the per-layer acceptance figures above therefore use equal-work named-kernel
+profiles.
 
 ## Compile-time and memory-layout debt
 
