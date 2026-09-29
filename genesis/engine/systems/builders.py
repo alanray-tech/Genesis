@@ -79,7 +79,11 @@ def build_scene_engine(
     engine.add_system(GlobalLinearSystem())
     engine.add_system(StandardPCGSolver())
     if scene.rigid_solver.is_active:
-        engine.add_system(RigidSystem(scene.rigid_solver))
+        rigid = RigidSystem(scene.rigid_solver)
+        rigid.configure_genesis_collision(
+            not enable_contact or bool(int(resolved_contact_config["extras/rigid_contact/genesis_collision"]))
+        )
+        engine.add_system(rigid)
 
     fem = None
     bdf1 = None

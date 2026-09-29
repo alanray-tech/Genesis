@@ -86,6 +86,11 @@ def main() -> None:
     parser.add_argument("--mjcf", type=Path, default=CGQ_FRANKA_MJCF)
     parser.add_argument("--disable-contact-model", action="store_true")
     parser.add_argument(
+        "--genesis-collision",
+        action="store_true",
+        help="retain Genesis native rigid collision as an A/B fallback",
+    )
+    parser.add_argument(
         "--forest-path",
         choices=("genesis_legacy", "cgq_level", "cgq_tree"),
         default="cgq_tree",
@@ -179,6 +184,7 @@ def main() -> None:
             "linear_system/tol_rate": 1e-5,
             "rigid_forest/fused": int(args.forest_path == "cgq_tree"),
             "extras/rigid_forest/genesis_legacy": int(args.forest_path == "genesis_legacy"),
+            "extras/rigid_contact/genesis_collision": int(args.genesis_collision),
         },
         contact_tabular=contact_tabular,
         halfplanes=(
@@ -257,6 +263,7 @@ def main() -> None:
         "franka_n_dofs": franka.n_dofs,
         "franka_n_geoms": franka.n_geoms,
         "contact_model_enabled": not args.disable_contact_model,
+        "genesis_collision_enabled": args.genesis_collision,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")

@@ -79,6 +79,7 @@ def test_global_newton_native_contact(n_envs, show_viewer):
     sphere.set_dofs_velocity([0.0, 0.0, -1.0, 0.0, 0.0, 0.0])
 
     engine = build_rigid_engine(scene.rigid_solver)
+    assert engine.rigid.has_collision
     for _ in range(5):
         engine.step()
 

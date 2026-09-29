@@ -90,6 +90,9 @@ class RigidSystem(SimSystem):
         self.is_forward_pos_updated = rigid_solver._is_forward_pos_updated
         self.is_forward_vel_updated = rigid_solver._is_forward_vel_updated
 
+    def configure_genesis_collision(self, enabled: bool) -> None:
+        self.has_collision = self.has_collision and enabled
+
     def do_build(self) -> None:
         pass
 
@@ -241,6 +244,11 @@ class RigidSystem(SimSystem):
                     self.errno,
                 )
 
+        if qd.static(not self.has_collision):
+            for i_b in range(self.n_instances[()]):
+                self.collider_state.n_contacts[i_b] = 0
+                self.collider_state.n_contacts_hibernated[i_b] = 0
+
         if qd.static(self.has_constraints):
             solver.func_add_inequality_constraints(
                 self.dyn_state,
@@ -250,6 +258,7 @@ class RigidSystem(SimSystem):
                 self.rigid_info,
                 self.rigid_config,
                 self.collider_config,
+                include_collision=self.has_collision,
             )
 
     @qd.func(requires_top_level=True)

@@ -1033,6 +1033,7 @@ def test_franka_cloth_reduced_kkt_step():
         contact_tabular=contact_tabular,
     )
     assert engine.rigid_forest.selected_path == "cgq_tree"
+    assert not engine.rigid.has_collision
 
     franka.control_dofs_position(franka.get_qpos()[:7], list(range(7)))
     engine.step()

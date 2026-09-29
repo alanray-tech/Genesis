@@ -1016,6 +1016,42 @@ contact assembly, fixed-proxy pullback, Newton acceptance, and PCG iteration
 counts are numerically aligned before profiling the remaining implementation
 cost.
 
+With that gate closed, the QIPC scene engine no longer runs Genesis native
+rigid broadphase/narrowphase in parallel with QIPC contact. The retained
+`build_rigid_engine()` comparison path still uses native collision. Unified
+scenes default to QIPC-only collision and expose the explicit A/B fallback
+`extras/rigid_contact/genesis_collision=1`; this key has no CGQ counterpart
+and exists only to preserve the requested legacy comparison path.
+
+The optimization followed the fixed profile/fix/profile sequence:
+
+- Baseline `_step_kernel...kernel_22_serial`, between native
+  `traverse_valid` and `clamp_prune_contacts`, cost `9.755 ms / 9 frames`
+  (`1.084 ms/frame`).
+- QIPC-only fixed-rigid frozen outputs are bitwise equal to the fallback for
+  candidates, active pairs, contact gradient/Hessian, energy, CCD, final
+  cloth state, and Newton/PCG counters.
+- After the fix, the same task ID is only the zero-contact scalar path:
+  `0.0073 ms / 9 frames`. The targeted native preprocessing cost is reduced
+  by more than `99.9%`.
+- The synchronized ten-frame wall median changes from `29.139 ms` to
+  `29.088 ms`; total captured GPU kernel time changes from `220.518 ms` to
+  `219.272 ms`. This small end-to-end delta is not used to deny the isolated
+  removal: deleting duplicate native constraints changes the trajectory and
+  raises the captured PCG work from 645 to 669 iterations.
+- Normalized repeated-PCG cost improves from `158.44` to
+  `155.61 microseconds/iteration`; non-PCG captured work falls from
+  `118.325` to `115.168 ms`.
+
+The post-removal nine-frame profile has a `1.705x` GPU-kernel-time ratio to
+CGQ (`219.272` versus `128.599 ms`). The remaining compiler-owned costs are
+already dominant named categories: contact/body sort-reduce costs
+`27.102 ms` in Genesis versus `3.531 ms` in CGQ, and 586 dynamic-range helper
+variants cost `20.962 ms` (sort `4.953`, PCG `8.918`, other pipeline `7.090`
+ms). Remaining PCG work also differs (669 versus 540 iterations), so the
+final optimization pass must keep numerical work count separate from
+equal-work implementation cost.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size

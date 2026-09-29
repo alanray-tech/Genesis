@@ -1409,6 +1409,7 @@ def _sort_contacts_and_build_islands(
     rigid_info: array_class.RigidInfo,
     rigid_config: qd.template(),
     collider_static_config: qd.template(),
+    include_collision: qd.template() = True,
 ):
     """Build the island partition of every env and order its live contacts (see add_inequality_constraints) in one
     launch.
@@ -1450,7 +1451,7 @@ def _sort_contacts_and_build_islands(
                 func_build_islands_coop(
                     i_b, tid, dyn_state, collider_state, constraint_state, dyn_info, rigid_info, rigid_config
                 )
-            if qd.static(collider_static_config.spatial_sort_supported):
+            if qd.static(include_collision and collider_static_config.spatial_sort_supported):
                 qd.simt.block.sync()
                 func_sort_contacts_coop(i_b, tid, dyn_state, collider_state, constraint_state)
                 qd.simt.block.sync()
@@ -1477,7 +1478,7 @@ def _sort_contacts_and_build_islands(
                         )
             else:
                 func_build_islands(i_b, dyn_state, collider_state, constraint_state, dyn_info, rigid_info, rigid_config)
-            if qd.static(collider_static_config.spatial_sort_supported):
+            if qd.static(include_collision and collider_static_config.spatial_sort_supported):
                 func_sort_contacts(
                     i_b,
                     collider_state.contact_sort_idx,
@@ -1534,6 +1535,7 @@ def func_add_inequality_constraints(
     rigid_info: array_class.RigidInfo,
     rigid_config: qd.template(),
     collider_static_config: qd.template(),
+    include_collision: qd.template() = True,
 ):
     # Order the contacts deterministically BEFORE assembling the contact constraints below: the contact-constraint
     # index i_c follows the logical contact order (contact_sort_idx), so fixing that order here makes both the solve
@@ -1543,11 +1545,18 @@ def func_add_inequality_constraints(
     # launch (see _sort_contacts_and_build_islands); the constraint grouping it feeds waits for the assembled
     # constraints, in func_solve_init.
     _sort_contacts_and_build_islands(
-        dyn_state, collider_state, constraint_state, dyn_info, rigid_info, rigid_config, collider_static_config
+        dyn_state,
+        collider_state,
+        constraint_state,
+        dyn_info,
+        rigid_info,
+        rigid_config,
+        collider_static_config,
+        include_collision,
     )
 
     add_frictionloss_constraints(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
-    if qd.static(rigid_config.enable_collision):
+    if qd.static(rigid_config.enable_collision and include_collision):
         add_collision_constraints(dyn_state, collider_state, constraint_state, dyn_info, rigid_info, rigid_config)
     if qd.static(rigid_config.enable_joint_limit):
         add_joint_limit_constraints(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
