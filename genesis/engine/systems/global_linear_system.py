@@ -208,6 +208,7 @@ class GlobalLinearSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def compose_sort_keys_padded(self):
+        qd.loop_config(name="body_compose_sort_keys")
         for i in range(self.padded_triplets[()]):
             if i < self.n_triplets[()]:
                 self.triplet_keys[i] = (qd.u64(self.triplet_row[i]) << 32) | qd.u64(self.triplet_col[i])
@@ -233,6 +234,7 @@ class GlobalLinearSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def segment_flags_body(self):
+        qd.loop_config(name="body_segment_flags")
         for i in range(self.padded_triplets[()]):
             flag = qd.u32(0)
             if i < self.n_triplets[()] and (
@@ -256,11 +258,13 @@ class GlobalLinearSystem(SimSystem):
     def zero_bcoo(self):
         for _ in range(1):
             self.bcoo_nnz[()] = 0
+        qd.loop_config(name="body_zero_bcoo")
         for i in range(self.n_triplets[()] * 9):
             self.bcoo_val[i] = qd.f64(0.0)
 
     @qd.func(requires_top_level=True)
     def fast_segmented_reduce_body(self):
+        qd.loop_config(name="body_fsr_merge")
         for i in range(self.n_triplets[()]):
             source = qd.i32(self.sort_perm_out[i])
             segment = qd.i32(self.seg_ids[i])
@@ -272,6 +276,7 @@ class GlobalLinearSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def extract_unique_body(self):
+        qd.loop_config(name="body_extract_unique")
         for i in range(self.n_triplets[()]):
             if self.seg_flags[i] != 0:
                 segment = qd.i32(self.seg_ids[i])
@@ -285,6 +290,7 @@ class GlobalLinearSystem(SimSystem):
     def validate_bcoo(self):
         for _ in range(1):
             self.bcoo_valid[()] = qd.i32(self.triplet_overflow[()] == 0)
+        qd.loop_config(name="body_validate_bcoo")
         for i in range(self.bcoo_nnz[()]):
             row = self.bcoo_row[i]
             col = self.bcoo_col[i]

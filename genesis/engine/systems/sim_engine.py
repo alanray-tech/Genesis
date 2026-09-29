@@ -57,10 +57,9 @@ class SimEngine:
             raise RuntimeError("SimEngine does not support the CPU backend")
         if not gs.use_ndarray:
             raise RuntimeError("SimEngine requires the ndarray backend")
-        # The mixed Rigid + FEM graph compiles about 22% faster on Windows
-        # (28.44 s -> 22.14 s after the Quadrants pass fixes), with a measured
-        # ~3.5% steady-step cost. Prefer development iteration speed.
-        qd.cfg.advanced_optimization = False
+        # This is the production performance path. Quadrants' advanced passes
+        # cost more on a cold compile but measured faster steady-state graphs.
+        qd.cfg.advanced_optimization = True
 
         self.systems: dict[type, SimSystem] = {}
         self.is_built_host = False
@@ -72,11 +71,15 @@ class SimEngine:
         self.converged = qd.ndarray(qd.i32, shape=())
         self.frame_failed = qd.ndarray(qd.i32, shape=())
         self.newton_iter = qd.ndarray(qd.i32, shape=())
+        self.max_pcg_iters = qd.ndarray(qd.i32, shape=())
+        self.total_pcg_iters = qd.ndarray(qd.i32, shape=())
         self.ls_iter = qd.ndarray(qd.i32, shape=())
         self.alpha = qd.ndarray(qd.f64, shape=())
         self.max_disp = qd.ndarray(qd.f64, shape=())
         self.energy_delta = qd.ndarray(qd.f64, shape=())
         self.checkpoint_never_yield = qd.ndarray(qd.i32, shape=())
+        self.max_pcg_iters.from_numpy(np.array(0, dtype=np.int32))
+        self.total_pcg_iters.from_numpy(np.array(0, dtype=np.int32))
         self.checkpoint_never_yield.from_numpy(np.array(0, dtype=np.int32))
 
         self.sim_config = SimConfig()
@@ -136,14 +139,11 @@ class SimEngine:
         self.has_rigid_contact_proxy = self.rigid_contact_proxy is not None
         self.has_rigid_contact_assemble = self.rigid_contact_assemble is not None
         self.has_rigid_forest = self.rigid_forest is not None
+        self.has_et_check = self.contact is not None and self.contact.intersection_check_host
         if self.has_rigid_contact_proxy != self.has_rigid_forest:
-            raise RuntimeError(
-                "RigidContactProxySystem and RigidJointForestSystem must be registered together"
-            )
+            raise RuntimeError("RigidContactProxySystem and RigidJointForestSystem must be registered together")
         if self.has_rigid_contact_proxy != self.has_rigid_contact_assemble:
-            raise RuntimeError(
-                "RigidContactProxySystem and RigidContactAssemble must be registered together"
-            )
+            raise RuntimeError("RigidContactProxySystem and RigidContactAssemble must be registered together")
         if self.has_contact and not self.has_fem:
             raise RuntimeError("The current ContactSystem milestone requires FiniteElementMethod")
         if not self.has_rigid and not self.has_fem:
@@ -197,8 +197,7 @@ class SimEngine:
         max_contact_body_triplets = self.contact.unique_triplet_rows.shape[0] if self.contact is not None else 0
         if self.rigid_contact_assemble is not None:
             max_contact_body_triplets = (
-                self.contact.unique_triplet_rows.shape[0] * 4
-                + self.contact.unique_doublet_vertices.shape[0]
+                self.contact.unique_triplet_rows.shape[0] * 4 + self.contact.unique_doublet_vertices.shape[0]
             )
         self.global_linear_system.init(
             n_block_rows,
@@ -245,13 +244,14 @@ class SimEngine:
                 self.global_vertex_manager.reset_trajectory()
                 self.contact.bvh_triangle_build()
                 self.contact.bvh_edge_build()
-        with qd.checkpoint(
-            ContactCheckpoint.INITIAL_INTERSECTION,
-            yield_on=et_overflow,
-        ):
-            if qd.static(True):
-                self.contact.reset_initial_intersections()
-                self.contact.detect_initial_intersections()
+        if qd.static(self.has_et_check):
+            with qd.checkpoint(
+                ContactCheckpoint.INITIAL_INTERSECTION,
+                yield_on=et_overflow,
+            ):
+                if qd.static(True):
+                    self.contact.reset_initial_intersections()
+                    self.contact.detect_initial_intersections()
         with qd.checkpoint(ContactCheckpoint.QUERY, yield_on=pair_overflow):
             if qd.static(True):
                 self.contact.reset_collision_counts()
@@ -302,15 +302,9 @@ class SimEngine:
         positions = qd_to_numpy(self.global_vertex_manager.positions)
         body_ids = qd_to_numpy(self.global_vertex_manager.body_id)
         geometry_ids = qd_to_numpy(self.global_vertex_manager.geometry_id)
-        geometry_sources = qd_to_numpy(
-            self.global_vertex_manager.geometry_source
-        )
-        source_geometry_ids = qd_to_numpy(
-            self.global_vertex_manager.source_geometry_id
-        )
-        geometry_environments = qd_to_numpy(
-            self.global_vertex_manager.geometry_environment
-        )
+        geometry_sources = qd_to_numpy(self.global_vertex_manager.geometry_source)
+        source_geometry_ids = qd_to_numpy(self.global_vertex_manager.source_geometry_id)
+        geometry_environments = qd_to_numpy(self.global_vertex_manager.geometry_environment)
         reports = []
         for edge, face in pairs[:8]:
             edge_vertex = int(edges[edge, 0])
@@ -365,10 +359,7 @@ class SimEngine:
             f"{float(qd_to_numpy(self.contact.frame_ccd_alpha)):.9g}"
         )
         if self.rigid_contact_assemble is not None:
-            contact_state += (
-                ", proxy_doublets="
-                f"{int(qd_to_numpy(self.rigid_contact_assemble.rigid_doublet_total))}"
-            )
+            contact_state += ", proxy_doublets=" f"{int(qd_to_numpy(self.rigid_contact_assemble.rigid_doublet_total))}"
         broad_phase = self.contact.broad_phase
         if broad_phase.use_dual_ee:
             dual = broad_phase.ee_dual_state
@@ -423,6 +414,8 @@ class SimEngine:
                 self.fem.forward_global_vertices(self.global_vertex_manager)
             for _ in range(1):
                 self.newton_iter[()] = 0
+                self.max_pcg_iters[()] = 0
+                self.total_pcg_iters[()] = 0
                 self.ls_iter[()] = 0
                 self.frame_failed[()] = 0
                 self.newton_cond[()] = 1
@@ -482,16 +475,12 @@ class SimEngine:
                     self.global_linear_system.body_sort_reduce()
                     self.global_linear_system.traverse(self.fem_preconditioner, self.has_fem)
                 if qd.static(self.has_rigid_contact_proxy):
-                    self.rigid_contact_proxy.capture_physical_gradient(
-                        self.global_linear_system
-                    )
+                    self.rigid_contact_proxy.capture_physical_gradient(self.global_linear_system)
                 if qd.static(self.has_rigid_forest):
                     self.rigid_forest.prepare_particular()
                     self.rigid_forest.particular_spmv(self.global_linear_system)
                     self.rigid_forest.project_physical_rhs(self.global_linear_system)
-                    self.rigid_forest.build_preconditioner(
-                        self.global_linear_system
-                    )
+                    self.rigid_forest.build_preconditioner(self.global_linear_system)
 
                 if qd.static(True):
                     self.pcg_solver.solve(
@@ -504,6 +493,11 @@ class SimEngine:
                         self.has_fem,
                         self.sim_config.max_pcg_iter[()],
                     )
+                    self.max_pcg_iters[()] = qd.max(
+                        self.max_pcg_iters[()],
+                        self.pcg_solver.linear_pcg.n_iterations[()],
+                    )
+                    self.total_pcg_iters[()] = self.total_pcg_iters[()] + self.pcg_solver.linear_pcg.n_iterations[()]
 
                 if qd.static(self.has_rigid):
                     self.rigid.negate_dq(self.global_linear_system)
@@ -513,7 +507,6 @@ class SimEngine:
                     self.rigid_forest.expand_solution(self.global_linear_system.x_sol)
                 if qd.static(self.has_rigid_contact_proxy):
                     self.rigid_contact_proxy.prepare_path_limit(self.contact)
-
 
                 for _ in range(1):
                     self.max_disp[()] = qd.f64(0.0)
@@ -529,17 +522,10 @@ class SimEngine:
                     rigid_converged = True
                     fem_converged = True
                     if qd.static(self.has_rigid_contact_proxy):
-                        rigid_converged = (
-                            self.max_disp[()]
-                            <= self.sim_config.tol[()]
-                            * self.sim_config.dt[()]
-                        )
+                        rigid_converged = self.max_disp[()] <= self.sim_config.tol[()] * self.sim_config.dt[()]
                     elif qd.static(self.has_rigid):
                         rigid_converged = self.rigid.gradient_squared[()] <= self.sim_config.tol[()] ** 2
-                    if qd.static(
-                        self.has_fem
-                        and not self.has_rigid_contact_proxy
-                    ):
+                    if qd.static(self.has_fem and not self.has_rigid_contact_proxy):
                         fem_converged = self.max_disp[()] <= self.sim_config.tol[()] * self.sim_config.dt[()]
                     self.converged[()] = qd.i32(rigid_converged and fem_converged)
                 if qd.static(self.has_rigid_contact_proxy):
@@ -556,9 +542,7 @@ class SimEngine:
                 if qd.static(self.has_rigid_contact_proxy):
                     self.rigid_contact_proxy.record_start_point()
                     self.rigid_contact_proxy.forward_global_vertices(self.global_vertex_manager)
-                    self.rigid_contact_proxy.publish_trajectory_end_positions(
-                        self.global_vertex_manager
-                    )
+                    self.rigid_contact_proxy.publish_trajectory_end_positions(self.global_vertex_manager)
                 if qd.static(self.has_contact):
                     self.contact.contact_energy()
                 if qd.static(self.has_rigid_contact_proxy):
@@ -573,15 +557,10 @@ class SimEngine:
                     if qd.static(self.has_contact):
                         baseline = baseline + self.contact.contact_energy_value[()]
                     if qd.static(self.has_rigid_contact_proxy):
-                        baseline = (
-                            baseline
-                            + self.rigid_contact_proxy.restoration_energy[()]
-                        )
+                        baseline = baseline + self.rigid_contact_proxy.restoration_energy[()]
                     self.energy_buf[0] = baseline
                 if qd.static(self.has_rigid_forest):
-                    self.rigid_forest.compute_merit_directional_derivative(
-                        self.global_linear_system
-                    )
+                    self.rigid_forest.compute_merit_directional_derivative(self.global_linear_system)
                     self.rigid_contact_proxy.initialize_merit()
 
                 if qd.static(self.has_contact):
@@ -628,9 +607,7 @@ class SimEngine:
                         self.fem.energy(self.sim_config)
                     if qd.static(self.has_rigid_contact_proxy):
                         self.rigid_contact_proxy.step_forward(trial_alpha)
-                        self.rigid_contact_proxy.forward_global_vertices(
-                            self.global_vertex_manager
-                        )
+                        self.rigid_contact_proxy.forward_global_vertices(self.global_vertex_manager)
                         self.rigid_contact_proxy.evaluate_trial_guard()
                     if qd.static(self.has_contact):
                         self.contact.contact_energy()
@@ -646,34 +623,14 @@ class SimEngine:
                         if qd.static(self.has_contact):
                             trial_energy = trial_energy + self.contact.contact_energy_value[()]
                         if qd.static(self.has_rigid_contact_proxy):
-                            trial_energy = (
-                                trial_energy
-                                + self.rigid_contact_proxy.restoration_energy[()]
-                            )
+                            trial_energy = trial_energy + self.rigid_contact_proxy.restoration_energy[()]
                             if (
-                                self.rigid_contact_proxy.restoration_active[()]
-                                == 0
-                                and self.rigid_contact_proxy.merit_evaluated[()]
-                                == 0
+                                self.rigid_contact_proxy.restoration_active[()] == 0
+                                and self.rigid_contact_proxy.merit_evaluated[()] == 0
                             ):
-                                trial_energy = (
-                                    trial_energy
-                                    + self.rigid_contact_proxy.test_merit_energy_bias[
-                                        ()
-                                    ]
-                                )
-                            if (
-                                self.rigid_contact_proxy.restoration_triggered[
-                                    ()
-                                ]
-                                == 0
-                            ):
-                                trial_energy = (
-                                    trial_energy
-                                    + self.rigid_contact_proxy.ls_forensics_test_energy_bias[
-                                        ()
-                                    ]
-                                )
+                                trial_energy = trial_energy + self.rigid_contact_proxy.test_merit_energy_bias[()]
+                            if self.rigid_contact_proxy.restoration_triggered[()] == 0:
+                                trial_energy = trial_energy + self.rigid_contact_proxy.ls_forensics_test_energy_bias[()]
                         self.energy_delta[()] = trial_energy - self.energy_buf[0]
 
                     for _ in range(1):
@@ -682,10 +639,7 @@ class SimEngine:
                             guard_failed = self.rigid_contact_proxy.frame_failed[()] != 0
                         accepted = self.energy_delta[()] <= 0.0
                         if qd.static(self.has_rigid_contact_proxy):
-                            exhausted = (
-                                self.ls_iter[()] + 1
-                                >= self.sim_config.max_ls_iter[()]
-                            )
+                            exhausted = self.ls_iter[()] + 1 >= self.sim_config.max_ls_iter[()]
                             accepted = self.rigid_contact_proxy.check_line_search(
                                 self.energy_buf[0],
                                 self.energy_buf[0] + self.energy_delta[()],
@@ -696,11 +650,7 @@ class SimEngine:
                                 self.converged,
                             )
                         else:
-                            if (
-                                not accepted
-                                and self.ls_iter[()] + 1
-                                >= self.sim_config.max_ls_iter[()]
-                            ):
+                            if not accepted and self.ls_iter[()] + 1 >= self.sim_config.max_ls_iter[()]:
                                 accepted = True
                         accepted = accepted and not guard_failed
                         if guard_failed:
@@ -726,12 +676,8 @@ class SimEngine:
                     self.rigid_forest.compute_endpoint_fk()
                 if qd.static(self.has_rigid_contact_proxy):
                     self.rigid_contact_proxy.step_forward(self.alpha[()])
-                    self.rigid_contact_proxy.forward_global_vertices(
-                        self.global_vertex_manager
-                    )
-                    self.rigid_contact_proxy.finalize_restoration_step(
-                        self.alpha[()]
-                    )
+                    self.rigid_contact_proxy.forward_global_vertices(self.global_vertex_manager)
+                    self.rigid_contact_proxy.finalize_restoration_step(self.alpha[()])
 
                 for _ in range(1):
                     rejected = self.converged[()] == 0 and self.alpha[()] == 0.0
@@ -755,7 +701,7 @@ class SimEngine:
                     self.rigid.set_newton_active(self.newton_cond[()])
                     self.rigid.build_preconditioner(compute_envelope=False)
 
-        if qd.static(self.has_contact):
+        if qd.static(self.has_et_check):
             with qd.checkpoint(
                 ContactCheckpoint.ET_OVERFLOW,
                 yield_on=et_overflow,
@@ -769,9 +715,7 @@ class SimEngine:
                 yield_on=self.contact.et_yield_flag,
             ):
                 for _ in range(1):
-                    self.contact.et_yield_flag[()] = (
-                        self.contact.et_yield_flag[()]
-                    )
+                    self.contact.et_yield_flag[()] = self.contact.et_yield_flag[()]
 
         if qd.static(self.has_rigid_contact_proxy):
             with qd.checkpoint(
@@ -802,11 +746,7 @@ class SimEngine:
             pair_overflow = self.contact.overflow_flag
             assembly_overflow = self.contact.count_overflow_flag
             friction_overflow = self.contact.friction_overflow_flag
-        et_overflow = (
-            self.checkpoint_never_yield
-            if self.contact is None
-            else self.contact.et_overflow_flag
-        )
+        et_overflow = self.checkpoint_never_yield if self.contact is None else self.contact.et_overflow_flag
         triplet_overflow = self.global_linear_system.triplet_overflow
 
         status = self._step_kernel(
@@ -862,33 +802,17 @@ class SimEngine:
             elif checkpoint == ContactCheckpoint.KKT_FAILURE:
                 proxy = self.rigid_contact_proxy
                 rigid_dofs = self.rigid.dof_count_host
-                rigid_rhs = qd_to_numpy(
-                    self.global_linear_system.b_rhs
-                )[:rigid_dofs]
-                rigid_solution = qd_to_numpy(
-                    self.global_linear_system.x_sol
-                )[:rigid_dofs]
-                rigid_preconditioned = qd_to_numpy(
-                    self.pcg_solver.linear_pcg.preconditioned_residual
-                )[:rigid_dofs]
-                rigid_search = qd_to_numpy(
-                    self.rigid.constraint_state.search
-                ).reshape(-1)[:rigid_dofs]
-                edge_dofs = qd_to_numpy(
-                    self.rigid_forest.edge_dof_index
-                )[: int(qd_to_numpy(self.rigid_forest.n_edges))]
-                parent_edges = qd_to_numpy(
-                    self.rigid_forest.parent_edge
-                )[: int(qd_to_numpy(self.rigid_forest.n_mechanism_bodies))]
-                edge_pivots = qd_to_numpy(
-                    self.rigid_forest.edge_d
-                )[: len(edge_dofs)]
-                edge_rhs = qd_to_numpy(
-                    self.rigid_forest.precond_a
-                )[: len(edge_dofs)]
-                edge_children = qd_to_numpy(
-                    self.rigid_forest.edge_child
-                )[: len(edge_dofs)]
+                rigid_rhs = qd_to_numpy(self.global_linear_system.b_rhs)[:rigid_dofs]
+                rigid_solution = qd_to_numpy(self.global_linear_system.x_sol)[:rigid_dofs]
+                rigid_preconditioned = qd_to_numpy(self.pcg_solver.linear_pcg.preconditioned_residual)[:rigid_dofs]
+                rigid_search = qd_to_numpy(self.rigid.constraint_state.search).reshape(-1)[:rigid_dofs]
+                edge_dofs = qd_to_numpy(self.rigid_forest.edge_dof_index)[: int(qd_to_numpy(self.rigid_forest.n_edges))]
+                parent_edges = qd_to_numpy(self.rigid_forest.parent_edge)[
+                    : int(qd_to_numpy(self.rigid_forest.n_mechanism_bodies))
+                ]
+                edge_pivots = qd_to_numpy(self.rigid_forest.edge_d)[: len(edge_dofs)]
+                edge_rhs = qd_to_numpy(self.rigid_forest.precond_a)[: len(edge_dofs)]
+                edge_children = qd_to_numpy(self.rigid_forest.edge_child)[: len(edge_dofs)]
                 forest_depth = qd_to_numpy(self.rigid_forest.depth)
                 details = (
                     f"newton={int(qd_to_numpy(self.newton_iter))}, "
@@ -919,8 +843,7 @@ class SimEngine:
                     f"proxy_failed={int(qd_to_numpy(proxy.frame_failed))}"
                 )
                 raise RuntimeError(
-                    "KKT rigid proxy solve exhausted the Newton budget before "
-                    f"stationarity/feasibility ({details})"
+                    "KKT rigid proxy solve exhausted the Newton budget before " f"stationarity/feasibility ({details})"
                 )
             else:
                 raise RuntimeError(f"Unexpected timestep checkpoint {checkpoint}")
@@ -981,7 +904,10 @@ class SimEngine:
         return int(qd_to_numpy(self.newton_iter))
 
     def get_max_pcg_iters(self) -> int:
-        return int(qd_to_numpy(self.pcg_solver.linear_pcg.n_iterations))
+        return int(qd_to_numpy(self.max_pcg_iters))
+
+    def get_total_pcg_iters(self) -> int:
+        return int(qd_to_numpy(self.total_pcg_iters))
 
     def get_max_ls_iters(self) -> int:
         return int(qd_to_numpy(self.ls_iter))

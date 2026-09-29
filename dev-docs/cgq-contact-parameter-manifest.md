@@ -53,8 +53,11 @@ Primary sources:
   non-production diagnostic control.
 - `rigid_proxy/test_merit_energy_bias`: float64, default `0.0`, finite and
   non-negative; nonzero is test-only fault injection.
-- `rigid_forest/fused`: integer boolean, default `1`; zero retains only the
-  non-production generic correction path for controlled comparison.
+- `rigid_forest/fused`: integer boolean, default `1`; zero selects CGQ's
+  compact level-order debug fallback.
+- `extras/rigid_forest/genesis_legacy`: Genesis-only integer boolean, default
+  `0`; one forces the original scan-all level implementation as a
+  non-production performance baseline and overrides `rigid_forest/fused`.
 
 ## Contact table
 

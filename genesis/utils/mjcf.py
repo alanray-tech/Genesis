@@ -21,7 +21,6 @@ from . import urdf as uu
 from .collision import solve_contype_conaffinity
 from .misc import get_assets_dir, redirect_libc_stderr
 
-
 MIN_TIMECONST = np.finfo(np.double).eps
 
 
@@ -153,6 +152,9 @@ def build_model(
                 # default value...
                 group.attrib.setdefault(param_name, str(MIN_TIMECONST))
 
+        if not is_urdf_file and merge_fixed_links:
+            compiler.attrib["fusestatic"] = "true"
+
         # Must pre-process URDF to overwrite default Mujoco compile flags
         if is_urdf_file:
             robot = urdfpy.URDF._from_xml(root, root, asset_path)
@@ -224,9 +226,10 @@ def build_model(
 
 
 def parse_xml(morph, surface, rigid_options=None):
-    # Always merge fixed links unless explicitly asked not to do so
     merge_fixed_links, links_to_keep = False, ()
-    if isinstance(morph, (gs.morphs.URDF, gs.morphs.Drone)):
+    if isinstance(morph, gs.morphs.MJCF):
+        merge_fixed_links = morph.merge_fixed_links
+    elif isinstance(morph, (gs.morphs.URDF, gs.morphs.Drone)):
         merge_fixed_links = morph.merge_fixed_links
         links_to_keep = morph.links_to_keep
 

@@ -36,7 +36,7 @@ def _padded64(value: int) -> int:
 class ContactSystem(SimSystem):
     """Own CGQ collision pairs, contact assembly, friction, energy, and CCD state."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, intersection_check: bool = False) -> None:
         super().__init__()
         self._contact_constitution = None
         self.is_wired_host = False
@@ -46,6 +46,7 @@ class ContactSystem(SimSystem):
         self.has_codim = False
         self.sort_log256_max_n = _CONTACT_SORT_LOG256_MAX_N
         self.ccd_max_iters = _CCD_MAX_ITERS
+        self.intersection_check_host = bool(intersection_check)
 
     def do_build(self) -> None:
         from .global_body_manager import GlobalBodyManager
@@ -85,9 +86,9 @@ class ContactSystem(SimSystem):
         if init_pair_capacity < 1:
             raise ValueError("contact/init_collision_pair_capacity must be at least one")
         if intersection_check_capacity < 1:
-            raise ValueError(
-                "contact/intersection_check_capacity must be at least one"
-            )
+            raise ValueError("contact/intersection_check_capacity must be at least one")
+        if bool(intersection_check) != self.intersection_check_host:
+            raise ValueError("ContactSystem intersection_check must be fixed before build")
 
         self.d_hat = qd.ndarray(qd.f64, shape=())
         self.kappa = qd.ndarray(qd.f64, shape=())
@@ -123,18 +124,12 @@ class ContactSystem(SimSystem):
             np.array(CONTACT_CONFIG_DEFAULTS["extras/capacity_shrink_threshold"], dtype=np.float64)
         )
         self.friction_eps_v.from_numpy(np.array(CONTACT_CONFIG_DEFAULTS["friction/eps_v"], dtype=np.float64))
-        self.intersection_check.from_numpy(
-            np.array(int(intersection_check), dtype=np.int32)
-        )
-        self.max_et_pairs.from_numpy(
-            np.array(intersection_check_capacity, dtype=np.int32)
-        )
+        self.intersection_check.from_numpy(np.array(int(intersection_check), dtype=np.int32))
+        self.max_et_pairs.from_numpy(np.array(intersection_check_capacity, dtype=np.int32))
         self.n_et_pairs.from_numpy(np.array(0, dtype=np.int32))
         self.et_overflow_flag.from_numpy(np.array(0, dtype=np.int32))
         self.et_yield_flag.from_numpy(np.array(0, dtype=np.int32))
-        self.et_pairs.from_numpy(
-            np.zeros((intersection_check_capacity, 2), dtype=np.int32)
-        )
+        self.et_pairs.from_numpy(np.zeros((intersection_check_capacity, 2), dtype=np.int32))
         for channel in ("pt", "ee", "pe", "pp", "ph"):
             setattr(self, f"pairs_{channel}", qd.ndarray(qd.i32, shape=(init_pair_capacity, 2)))
             setattr(self, f"ccd_alpha_{channel}", qd.ndarray(qd.f64, shape=(init_pair_capacity,)))
@@ -814,6 +809,7 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def doublet_sort_seed(self):
+        qd.loop_config(name="contact_doublet_sort_seed")
         for index in range(self.padded_contact_doublets[()]):
             if index < self.n_contact_doublets[()]:
                 self.doublet_sort_keys[index] = qd.u32(self.contact_doublet_vertices[index])
@@ -841,6 +837,7 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def doublet_segment_flags(self):
+        qd.loop_config(name="contact_doublet_segment_flags")
         for index in range(self.padded_contact_doublets[()]):
             flag = qd.u32(0)
             if index < self.n_contact_doublets[()] and (
@@ -863,12 +860,14 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def doublet_zero_unique(self):
+        qd.loop_config(name="contact_doublet_zero_unique")
         for index in range(self.max_contact_doublets[()]):
             for axis in qd.static(range(3)):
                 self.unique_doublet_gradients[index, axis] = 0.0
 
     @qd.func(requires_top_level=True)
     def doublet_fsr_merge(self):
+        qd.loop_config(name="contact_doublet_fsr_merge")
         for index in range(self.n_contact_doublets[()]):
             source = qd.i32(self.doublet_sort_perm_out[index])
             segment = qd.i32(self.doublet_seg_ids[index])
@@ -880,6 +879,7 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def doublet_extract_unique(self):
+        qd.loop_config(name="contact_doublet_extract_unique")
         for index in range(self.n_contact_doublets[()]):
             if self.doublet_seg_flags[index] != 0:
                 segment = qd.i32(self.doublet_seg_ids[index])
@@ -889,6 +889,7 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def triplet_sort_seed(self):
+        qd.loop_config(name="contact_triplet_sort_seed")
         for index in range(self.padded_contact_triplets[()]):
             if index < self.n_contact_triplets[()]:
                 row = qd.u64(self.contact_triplet_rows[index])
@@ -918,6 +919,7 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def triplet_segment_flags(self):
+        qd.loop_config(name="contact_triplet_segment_flags")
         for index in range(self.padded_contact_triplets[()]):
             flag = qd.u32(0)
             if index < self.n_contact_triplets[()] and (
@@ -940,6 +942,7 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def triplet_zero_unique(self):
+        qd.loop_config(name="contact_triplet_zero_unique")
         for index in range(self.max_contact_triplets[()]):
             for row in qd.static(range(3)):
                 for column in qd.static(range(3)):
@@ -947,6 +950,7 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def triplet_fsr_merge(self):
+        qd.loop_config(name="contact_triplet_fsr_merge")
         for index in range(self.n_contact_triplets[()]):
             source = qd.i32(self.triplet_sort_perm_out[index])
             segment = qd.i32(self.triplet_seg_ids[index])
@@ -959,6 +963,7 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def triplet_extract_unique(self):
+        qd.loop_config(name="contact_triplet_extract_unique")
         for index in range(self.n_contact_triplets[()]):
             if self.triplet_seg_flags[index] != 0:
                 segment = qd.i32(self.triplet_seg_ids[index])

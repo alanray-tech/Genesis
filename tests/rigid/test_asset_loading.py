@@ -653,6 +653,51 @@ def test_mjcf_parsing_merge_fixed_links(xml_path, show_viewer):
     assert_allclose(robot.get_quat(), QUAT, tol=gs.EPS)
 
 
+@pytest.mark.required
+def test_mjcf_fusestatic_option_merges_fixed_child(tmp_path, show_viewer):
+    mjcf_path = tmp_path / "fixed_child.xml"
+    mjcf_path.write_text(
+        """
+<mujoco model="fixed_child">
+  <worldbody>
+    <body name="root">
+      <joint name="hinge" type="hinge"/>
+      <inertial mass="1" pos="0 0 0" diaginertia="1 1 1"/>
+      <geom type="sphere" size="0.1"/>
+      <body name="fixed_child" pos="0 0 0.2">
+        <inertial mass="0.1" pos="0 0 0" diaginertia="0.1 0.1 0.1"/>
+        <geom type="sphere" size="0.05"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    scene = gs.Scene(show_viewer=show_viewer)
+    unmerged = scene.add_entity(
+        gs.morphs.MJCF(
+            file=str(mjcf_path),
+            pos=(-0.5, 0.0, 0.0),
+            merge_fixed_links=False,
+        )
+    )
+    merged = scene.add_entity(
+        gs.morphs.MJCF(
+            file=str(mjcf_path),
+            pos=(0.5, 0.0, 0.0),
+            merge_fixed_links=True,
+        )
+    )
+    scene.build(compile_kernels=False)
+
+    assert unmerged.n_links == 2
+    assert merged.n_links == 1
+    assert unmerged.n_dofs == merged.n_dofs == 1
+    assert unmerged.n_geoms == merged.n_geoms == 2
+
+
 @pytest.mark.slow  # ~200s
 @pytest.mark.required
 def test_urdf_capsule(tmp_path, show_viewer, tol):

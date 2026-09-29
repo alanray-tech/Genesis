@@ -675,13 +675,17 @@ Target:
 - Match CGQ's specialized RC/CR block emission, geometric-term fusion, and
   coordinate pullback traffic.
 
-### PERF-R03: Unfused mapped forest preconditioner
+### PERF-R03: Mapped forest preconditioner
 
 Current:
 
 - The source-agnostic mapped articulated preconditioner gathers proxy BCOO,
   factors the Genesis forest by reverse depth, and applies reverse/root/forward
   substitution entirely on device.
+- Eligible trees apply reverse/root/forward substitution in one
+  one-block-per-tree shared-memory kernel matching CGQ. The factor stage
+  remains level scheduled because it runs once per Newton rather than once per
+  PCG iteration.
 - Each body owns its 6x6 factor work in the level schedule. Fixed authored
   MJCF links use exact rigid transport without a scalar Schur pivot.
 - Standard global PCG consumes this preconditioner during the explicitly
@@ -705,6 +709,178 @@ Acceptance:
 - Preconditioner action parity against the unfused factorization.
 - Equal or lower PCG iterations on Franka-Cloth and rigid-proxy stress gates.
 - Nsight evidence for occupancy, synchronization, and shared/global traffic.
+
+#### Matched Franka-Cloth evidence (2026-09-29)
+
+The matched benchmark uses an RTX 5090, explicit GPU synchronization, 20
+discarded warmup frames, and three repeats of 100 measured frames. CGQ was
+forced from its production defaults to `linear_system/solver=linear_pcg` and
+`linear_system/preconditioner=diag`, so this comparison does not credit
+MaskedPCG or MAS:
+
+- CGQ median: 14.314 ms.
+- Genesis median: 64.832 ms.
+- Genesis/CGQ median ratio: 4.529x.
+
+The steady-state Nsight window contains nine frames. CGQ accumulated 128.149
+ms across 39,768 kernel instances; Genesis accumulated 375.756 ms across
+116,914 instances. The corresponding ratios are 2.932x GPU time and 2.940x
+kernel instances. CGQ executed 525 PCG iterations in the window. The Genesis
+`pcg_zero_operator_direction` node executed 1,058 times, proving 2.015x as many
+actual PCG iterations; the public Genesis frame counter currently reports only
+one solve's count and must not be interpreted as the frame total.
+
+Named-node attribution identifies the primary implementation gap:
+
+- Genesis reduced rigid-forest matvec: 178.669 ms, 34,914 launches, or 168.9
+  microseconds and 33 launches per PCG iteration.
+- CGQ reduced rigid-forest matvec: 24.864 ms, 5,250 launches, or 47.4
+  microseconds and 10 launches per iteration.
+- The Genesis forest matvec is therefore 3.57x slower per iteration before the
+  additional 2.015x iteration-count difference.
+- Quadrants dynamic-range bound helpers inside the Genesis PCG loop add 47.500
+  ms and 50,784 scalar launches, equal to 44.9 microseconds and 48 launches per
+  iteration.
+- Genesis rigid constraint-Hessian application adds 30.107 ms, or 28.5
+  microseconds per iteration.
+- Generic PCG vector/reduction work is not the leading gap: Genesis uses 24.6
+  microseconds per iteration versus 21.6 microseconds in CGQ.
+- BCOO SpMV is not the bottleneck: Genesis uses 4.93 microseconds per iteration
+  versus 6.04 microseconds in CGQ for this scene.
+
+The first mapped-forest rewrite is now complete. `RigidJointForestSystem`
+publishes CGQ's `tree_roots`, `tree_body_start`, `tree_body_list`,
+`tree_local_index`, `depth_start`, and `depth_order` layouts. Live tree counts
+and extents remain device scalars. Three build-time paths are retained:
+
+- `extras/rigid_forest/genesis_legacy=1`: original scan-all Genesis baseline;
+- `genesis_legacy=0, rigid_forest/fused=0`: CGQ compact level path;
+- `genesis_legacy=0, rigid_forest/fused=1`: CGQ bounded fused tree path when
+  eligible, otherwise the compact level path.
+
+Franka algebraic tests compare all three implementations for `P`, `P^T`, and
+the virtual-work identity. The fused path is bounded by CGQ's eight-tree and
+64-body-per-tree eligibility rules; it retains the legacy path only as an
+explicit non-production A/B oracle.
+
+The first 100-frame post-warmup ablation on RTX 5090 measured:
+
+- Genesis legacy median 65.399 ms;
+- CGQ compact level median 67.181 ms;
+- CGQ fused tree median 53.783 ms;
+- fused-tree speedup over the retained baseline: 1.216x (17.8% lower median).
+
+The nine-frame named-node capture normalizes away the small iteration-count
+difference. Legacy expand/project cost 134.0 microseconds and 26 launches per
+PCG iteration; fused tree cost 35.0 microseconds and two launches. This is a
+3.83x per-iteration reduction and a 13x launch-count reduction for `P/P^T`.
+
+The original ablation used Genesis's built-in Panda MJCF while CGQ used
+`franka_panda_mjcf_v2`. The strict robot-asset rerun now loads CGQ's exact
+`panda.xml` and collision meshes in both implementations. Genesis enables
+optional MJCF fixed-link merging so both loaders expose 10 rigid links and 9
+DOFs; convexification, decimation, and watertight wrapping are disabled for
+this benchmark. Over 100 measured frames after 20 warmup frames, the Genesis
+fused-tree median is 34.972 ms versus the existing CGQ LinearPCG+diag median of
+14.314 ms, reducing the same-robot-asset ratio to 2.443x. Table/riser system
+representation remains different: fixed rigid proxies in Genesis versus fixed
+ABD in CGQ.
+
+The fused preconditioner apply now costs approximately 27.0 microseconds per
+application versus CGQ's 25.1 microseconds. A missing actuator velocity
+augmentation (`-act_bias[2] * dt`, CGQ's `dt * kv`) was added to edge and
+free-root pivots; this reduced a representative ten-frame total-PCG median
+from 166.5 to 98.
+
+The reduced operator no longer mixes CGQ contact pullback with Genesis native
+`nt_H`. It applies the matching forest `P^T M P`, controller damping, and
+contact operator. A cached `body_inertia` field is an explicit Genesis storage
+exception: CGQ stores the same physical 6x6 blocks in global BCOO, while
+Genesis's compact generalized rows require retaining the unfactored body
+blocks beside the mutated articulated factors. With this correction,
+representative total PCG work reached 57.5 versus CGQ's 60.
+
+The latest strict 100-frame comparison, with CGQ's Panda asset and
+minimal-coordinate fixed table/riser, measured:
+
+- Genesis median 43.009 ms, mean 40.562 ms, p95 50.519 ms;
+- CGQ LinearPCG+diag median 14.658 ms, mean 14.427 ms, p95 15.487 ms;
+- median ratio 2.934x;
+- median total PCG 43 in Genesis versus 76 in CGQ.
+
+The remaining gap is therefore execution cost, not excess Krylov work.
+Remaining priorities are fixed pipeline graph fragmentation, generic
+range-bound helper nodes, contact/BVH kernels, and the still-level-scheduled
+forest factor stage. The production graph now enables Quadrants advanced
+optimization; cold compilation is slower, but normalized steady-state work is
+lower. BCOO SpMV remains explicitly deprioritized.
+
+The final same-asset Nsight window attributes the remaining GPU gap:
+
+- total kernel time: Genesis 258.346 ms, CGQ 128.599 ms (2.009x);
+- kernel instances: 56,990 versus 38,628 (1.475x);
+- unique kernels: 917 versus 350 (2.620x);
+- actual PCG iterations: 578 versus 540;
+- PCG cost: 168.7 versus 108.9 microseconds per iteration;
+- Newton-pipeline cost: 3.679 versus 1.817 ms per iteration;
+- Genesis Newton-pipeline graph: 810 kernel variants executed 40 times;
+- CGQ Newton-pipeline graph: 191 variants executed 18 times.
+
+Thus 70% of the measured excess GPU time is outside the PCG loop. All serial
+tasks together contribute 37.502 ms, but this includes real work. Restricting
+the count to a serial task immediately followed by its same-count range task,
+with at most 5 microseconds average serial time, identifies 420 Quadrants
+dynamic-range bound helpers: 24,726 instances and 24.887 ms. The retained
+native rigid contact preprocessing contains a separate serialized task
+(`_step_kernel...kernel_22_serial`) costing 9.754 ms over nine frames and is
+not counted as a range helper. Within PCG, proxy map/post-processing costs 35.8
+microseconds and bound helpers cost 13.7 microseconds per iteration. Forest
+kernels and BCOO SpMV are no longer priorities: Genesis forest work is 67.3
+microseconds versus CGQ's 75.7, and Genesis BCOO SpMV is 5.7 microseconds per
+iteration.
+
+Named task boundaries give an exact sort/reduce attribution:
+
+- contact doublets: 12.435 ms, 96 kernel variants;
+- contact triplets: 26.444 ms, 168 variants;
+- global body BCOO: 22.565 ms, 171 variants;
+- combined Genesis sort/reduce: 61.489 ms, 436 variants, 17,004 instances;
+- share of Genesis GPU time: 22.02%;
+- share of the Genesis-over-CGQ excess GPU time: 38.48%;
+- Genesis cost per Newton: 1.577 ms;
+- matching CGQ OneSweep/scan/FSR cost: 0.196 ms per Newton.
+
+At Genesis's 39 Newton iterations in the labeled capture, replacing this phase
+with the CGQ schedule projects a 53.84 ms reduction over nine frames, or about
+5.98 ms per frame.
+
+The complete excess-time decomposition is mutually exclusive:
+
+- sort/reduce gap: 57.958 ms, 38.48% of the excess;
+- PCG-loop gap: 52.755 ms, 35.03%;
+- all remaining fixed/frame pipeline gap: 39.901 ms, 26.49%.
+
+Within the PCG gap, Genesis executes 658 iterations versus CGQ's 540. The
+extra work contributes about 20.0 ms; the remaining 32.7 ms is implementation
+cost at equal iteration count. Genesis proxy map/post kernels cost 34.4
+microseconds per PCG, range-bound helpers 14.1 microseconds, and vector
+zero/copy kernels 14.8 microseconds. Forest work is not the cause: Genesis
+costs 68.6 microseconds per PCG versus CGQ's 75.7.
+
+The proxy map/post layer now fuses tangent expansion with optional slack
+expansion, and fuses proxy wrench restriction with proxy result writeback.
+Fixed-work profiling measures:
+
+- proxy map/post: 34.4 to 14.5 microseconds per PCG (2.37x);
+- PCG graph variants: 41 to 37;
+- complete PCG implementation cost: 169.6 to 156.4 microseconds per iteration
+  (1.084x).
+
+Whole-trajectory wall time is not used as the proof for this layer because the
+different floating-point reduction order changed the number of PCG iterations
+in the sampled trajectory. Algebraic, virtual-work, free-root, fixed-root, and
+Franka-Cloth integration gates pass; the normalized profile is the performance
+acceptance metric.
 
 ## Compile-time and memory-layout debt
 

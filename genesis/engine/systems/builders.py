@@ -110,7 +110,9 @@ def build_scene_engine(
         ):
             engine.add_system(system)
         if enable_contact:
-            contact_system = ContactSystem()
+            contact_system = ContactSystem(
+                intersection_check=bool(int(resolved_contact_config["contact/intersection_check"]))
+            )
             bvh_type = str(resolved_contact_config["bvh/type"])
             if bvh_type == "info_lbvh_batched_dop14":
                 broad_phase_system = InfoLBVHBatchedBroadPhaseDop14(
@@ -135,6 +137,10 @@ def build_scene_engine(
             if rigid_proxy_geometry is not None:
                 rigid_contact_proxy = RigidContactProxySystem()
                 rigid_forest = RigidJointForestSystem(scene.rigid_solver)
+                rigid_forest.configure(bool(int(resolved_contact_config["rigid_forest/fused"])))
+                rigid_forest.configure_genesis_legacy(
+                    bool(int(resolved_contact_config["extras/rigid_forest/genesis_legacy"]))
+                )
                 rigid_contact_assemble = RigidContactAssemble()
                 for system in (
                     rigid_contact_proxy,
@@ -165,19 +171,13 @@ def build_scene_engine(
             dtype=np.int32,
         )
         combined_source_geometry_ids = finite_element.source_geometry_ids
-        combined_geometry_environments = (
-            finite_element.geometry_environments
-        )
+        combined_geometry_environments = finite_element.geometry_environments
         if rigid_proxy_geometry is not None:
             rigid_contact_proxy.configure(
                 str(resolved_contact_config["rigid_proxy/globalization"]),
                 bool(int(resolved_contact_config["rigid_proxy/restoration"])),
                 float(resolved_contact_config["rigid_proxy/test_merit_energy_bias"]),
-                float(
-                    resolved_contact_config[
-                        "extras/ls_forensics/test_energy_bias"
-                    ]
-                ),
+                float(resolved_contact_config["extras/ls_forensics/test_energy_bias"]),
             )
             rigid_contact_proxy.wire_data(
                 rigid_proxy_geometry.n_rigid_bodies,
@@ -190,20 +190,13 @@ def build_scene_engine(
                 rigid_proxy_geometry,
                 finite_element.n_bodies,
             )
-            combined_thicknesses = np.concatenate(
-                (finite_element.thicknesses, rigid_proxy_geometry.thicknesses)
-            )
-            combined_d_hats = np.concatenate(
-                (combined_d_hats, rigid_proxy_geometry.d_hats)
-            )
-            combined_is_fixed = np.concatenate(
-                (finite_element.is_fixed, rigid_proxy_geometry.is_fixed)
-            )
+            combined_thicknesses = np.concatenate((finite_element.thicknesses, rigid_proxy_geometry.thicknesses))
+            combined_d_hats = np.concatenate((combined_d_hats, rigid_proxy_geometry.d_hats))
+            combined_is_fixed = np.concatenate((finite_element.is_fixed, rigid_proxy_geometry.is_fixed))
             combined_geometry_ids = np.concatenate(
                 (
                     finite_element.geometry_ids,
-                    rigid_proxy_geometry.geometry_ids
-                    + finite_element.n_bodies,
+                    rigid_proxy_geometry.geometry_ids + finite_element.n_bodies,
                 )
             )
             combined_geometry_sources = np.concatenate(
@@ -227,9 +220,7 @@ def build_scene_engine(
 
         global_vertex_manager.init(total_vert_count)
         global_vertex_manager.wire_thickness_data(combined_thicknesses)
-        global_vertex_manager.wire_d_hat_data(
-            combined_d_hats
-        )
+        global_vertex_manager.wire_d_hat_data(combined_d_hats)
         global_vertex_manager.wire_is_fixed_data(combined_is_fixed)
         global_vertex_manager.wire_geometry_id_data(combined_geometry_ids)
         global_vertex_manager.wire_geometry_source_data(
@@ -245,10 +236,7 @@ def build_scene_engine(
         for body in range(finite_element.n_bodies):
             begin = finite_element.body_contact_ignorance_ranges[body]
             end = finite_element.body_contact_ignorance_ranges[body + 1]
-            ignorance[body].update(
-                int(target)
-                for target in finite_element.body_contact_ignorance_body_ids[begin:end]
-            )
+            ignorance[body].update(int(target) for target in finite_element.body_contact_ignorance_body_ids[begin:end])
 
         if rigid_proxy_geometry is not None:
             total_body_count += rigid_proxy_geometry.n_rigid_bodies
@@ -270,17 +258,10 @@ def build_scene_engine(
                     np.zeros(rigid_proxy_geometry.n_pairs, dtype=np.int32),
                 )
             )
-            ignorance.extend(
-                set() for _ in range(rigid_proxy_geometry.n_rigid_bodies)
-            )
-            proxy_global_bodies = [
-                finite_element.n_bodies + int(body)
-                for body in rigid_proxy_geometry.proxy_body
-            ]
+            ignorance.extend(set() for _ in range(rigid_proxy_geometry.n_rigid_bodies))
+            proxy_global_bodies = [finite_element.n_bodies + int(body) for body in rigid_proxy_geometry.proxy_body]
             for source in proxy_global_bodies:
-                ignorance[source].update(
-                    target for target in proxy_global_bodies if target != source
-                )
+                ignorance[source].update(target for target in proxy_global_bodies if target != source)
 
         ignorance_ranges = np.zeros(total_body_count + 1, dtype=np.int32)
         ignorance_ids = []
@@ -324,18 +305,10 @@ def build_scene_engine(
                     rigid_proxy_geometry.surf_verts + finite_element.n_verts,
                 )
             )
-            vert_dimensions = np.concatenate(
-                (vert_dimensions, rigid_proxy_geometry.vert_dimensions)
-            )
-            vert_area_weights = np.concatenate(
-                (vert_area_weights, rigid_proxy_geometry.vert_area_weights)
-            )
-            edge_area_weights = np.concatenate(
-                (edge_area_weights, rigid_proxy_geometry.edge_area_weights)
-            )
-            face_area_weights = np.concatenate(
-                (face_area_weights, rigid_proxy_geometry.face_area_weights)
-            )
+            vert_dimensions = np.concatenate((vert_dimensions, rigid_proxy_geometry.vert_dimensions))
+            vert_area_weights = np.concatenate((vert_area_weights, rigid_proxy_geometry.vert_area_weights))
+            edge_area_weights = np.concatenate((edge_area_weights, rigid_proxy_geometry.edge_area_weights))
+            face_area_weights = np.concatenate((face_area_weights, rigid_proxy_geometry.face_area_weights))
 
         global_surface_manager.wire_surface_data(
             surf_triangles,
@@ -376,14 +349,8 @@ def build_scene_engine(
                 d_hat=float(resolved_contact_config["contact/d_hat"]),
                 kappa=default_model.resistance,
                 init_pair_capacity=int(resolved_contact_config["contact/init_collision_pair_capacity"]),
-                intersection_check=bool(
-                    int(resolved_contact_config["contact/intersection_check"])
-                ),
-                intersection_check_capacity=int(
-                    resolved_contact_config[
-                        "contact/intersection_check_capacity"
-                    ]
-                ),
+                intersection_check=bool(int(resolved_contact_config["contact/intersection_check"])),
+                intersection_check_capacity=int(resolved_contact_config["contact/intersection_check_capacity"]),
             )
             contact_system.set_dt_sq(scene.sim.substep_dt * scene.sim.substep_dt)
             contact_system.wire_friction_params(
@@ -415,7 +382,11 @@ def build_scene_engine(
         max_newton_iter=1024 if has_fem else scene.rigid_solver._options.iterations,
         max_pcg_iter=1024 if has_fem else scene.rigid_solver._options.iterations,
         max_ls_iter=12 if has_fem else scene.rigid_solver._options.ls_iterations,
-        pcg_tol_rate=1e-4 if has_fem else scene.rigid_solver._options.tolerance,
+        pcg_tol_rate=(
+            float(resolved_contact_config["linear_system/tol_rate"])
+            if has_fem
+            else scene.rigid_solver._options.tolerance
+        ),
     )
     engine.init()
     return engine

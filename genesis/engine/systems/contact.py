@@ -18,6 +18,7 @@ CONTACT_CONFIG_DEFAULTS = MappingProxyType(
         "contact/intersection_check_capacity": 1_024,
         "contact/constitution": "auto",
         "friction/eps_v": 1e-2,
+        "linear_system/tol_rate": 1e-4,
         "extras/capacity_grow_factor": 1.2,
         "extras/capacity_shrink_threshold": 0.8,
         "extras/ls_forensics/test_energy_bias": 0.0,
@@ -31,6 +32,7 @@ CONTACT_CONFIG_DEFAULTS = MappingProxyType(
         "rigid_proxy/restoration": 1,
         "rigid_proxy/test_merit_energy_bias": 0.0,
         "rigid_forest/fused": 1,
+        "extras/rigid_forest/genesis_legacy": 0,
     }
 )
 

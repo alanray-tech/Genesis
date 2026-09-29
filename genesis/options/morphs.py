@@ -985,12 +985,16 @@ class MJCF(FileMorph):
         MuJoCo compatibility is disabled on the rigid solver, None otherwise.
     exclude_ground_plane : bool, optional
         Whether to exclude plane geometries authored directly under the MJCF worldbody if any. Defaults to False.
+    merge_fixed_links : bool, optional
+        Whether to merge MJCF bodies without joints into their parent, matching
+        MuJoCo's ``fusestatic`` import behavior. Defaults to False.
     """
 
     pos: Vec3FType | None = None
     quat: UnitVec4FType | None = None
     default_armature: float | None = Field(default=0.1, ge=0)
     exclude_ground_plane: StrictBool = False
+    merge_fixed_links: StrictBool = False
 
     @model_validator(mode="before")
     @classmethod

@@ -46,14 +46,21 @@ def test_contact_parameter_manifest_defaults():
         "contact/intersection_check_capacity": 1_024,
         "contact/constitution": "auto",
         "friction/eps_v": 1e-2,
+        "linear_system/tol_rate": 1e-4,
         "extras/capacity_grow_factor": 1.2,
         "extras/capacity_shrink_threshold": 0.8,
+        "extras/ls_forensics/test_energy_bias": 0.0,
         "topo/grow_factor": 1.5,
         "bvh/type": "info_lbvh_batched_dop14",
         "bvh/ee_query": "dual",
         "bvh/dual/frontier_levels": 0,
         "bvh/dual/target_waves": 24.0,
         "bvh/dual/max_levels": 18,
+        "rigid_proxy/globalization": "merit",
+        "rigid_proxy/restoration": 1,
+        "rigid_proxy/test_merit_energy_bias": 0.0,
+        "rigid_forest/fused": 1,
+        "extras/rigid_forest/genesis_legacy": 0,
     }
     model = ContactTabular().at(0, 0)
     assert model.friction_rate == 0.05

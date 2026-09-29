@@ -142,14 +142,16 @@ restoration slack block remain the CGQ operations. Unsupported multi-DOF
 non-root joints and non-free moving roots are rejected at build time rather
 than entering an approximate path.
 
-Three Python/Genesis-only names are explicit exceptions to the CGQ field
+Four Python/Genesis-only names are explicit exceptions to the CGQ field
 manifest:
 `root_dof_index` maps each native six-DOF free root into Genesis's compact
 generalized rows, and `body_twist` stores expanded link twists that CGQ stores
-in growable `RigidBodyDynamics::dq`; `lambda_` is the Python spelling of CGQ's
-`lambda` because `lambda` is a Python keyword. The first two exist only
-because Genesis's native generalized/link storage cannot be expanded or
-relaid out.
+in growable `RigidBodyDynamics::dq`; `body_inertia` retains the unfactored
+physical 6x6 blocks that CGQ stores in global BCOO because
+`articulated_inertia` is mutated during factorization; `lambda_` is the Python
+spelling of CGQ's `lambda` because `lambda` is a Python keyword. The first
+three exist only because Genesis's native generalized/link storage cannot be
+expanded or relaid out.
 
 ## RigidContactProxySystem state
 
