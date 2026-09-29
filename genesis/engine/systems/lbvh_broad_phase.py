@@ -36,7 +36,11 @@ class LBVHBroadPhase(BroadPhaseSystem):
         if n_triangles > 0:
             self.triangle_bvh = LBVH(
                 n_triangles,
-                max(self.surface.surf_verts.shape[0], 1),
+                max(
+                    self.surface.surf_verts.shape[0],
+                    self.surface.surf_edges.shape[0],
+                    1,
+                ),
                 self.bound_type,
             )
             self.has_triangle_bvh = True

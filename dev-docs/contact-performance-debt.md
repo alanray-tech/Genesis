@@ -248,6 +248,8 @@ Current:
   stacks.
 - PT still allocates a persistent 64-entry global stack row per surface-vertex
   query.
+- The initialization-only exact ET checker currently reuses one persistent
+  64-entry global stack row per surface-edge query.
 
 CGQ target:
 
@@ -256,6 +258,8 @@ CGQ target:
 Rewrite:
 
 - Move PT traversal state to the CGQ 8-warps/block shared frontier.
+- Lower ET's fixed 64-entry stack to the same per-thread local representation
+  as CGQ, after confirming Quadrants does not introduce worse spills.
 - Remove `stack_pool` after no production query references it.
 
 Status: EE is complete; PT remains open.

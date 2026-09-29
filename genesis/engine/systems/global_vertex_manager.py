@@ -32,6 +32,7 @@ class GlobalVertexManager(SimSystem):
         self.trajectory_end_positions = qd.ndarray(qd.f64, shape=(capacity, 3))
         self.x_bar = qd.ndarray(qd.f64, shape=(capacity, 3))
         self.body_id = qd.ndarray(qd.i32, shape=(capacity,))
+        self.geometry_id = qd.ndarray(qd.i32, shape=(capacity,))
         self.thicknesses = qd.ndarray(qd.f64, shape=(capacity,))
         self.d_hats = qd.ndarray(qd.f64, shape=(capacity,))
         self.is_fixed = qd.ndarray(qd.i32, shape=(capacity,))
@@ -49,6 +50,7 @@ class GlobalVertexManager(SimSystem):
         self.trajectory_end_positions.from_numpy(np.zeros((capacity, 3), dtype=np.float64))
         self.x_bar.from_numpy(np.zeros((capacity, 3), dtype=np.float64))
         self.body_id.from_numpy(np.full(capacity, -1, dtype=np.int32))
+        self.geometry_id.from_numpy(np.full(capacity, -1, dtype=np.int32))
         self.thicknesses.from_numpy(np.zeros(capacity, dtype=np.float64))
         self.d_hats.from_numpy(np.zeros(capacity, dtype=np.float64))
         self.is_fixed.from_numpy(np.zeros(capacity, dtype=np.int32))
@@ -84,6 +86,14 @@ class GlobalVertexManager(SimSystem):
         if np.any((values != 0) & (values != 1)):
             raise ValueError("GlobalVertexManager fixed flags must be zero or one")
         self.is_fixed.from_numpy(values)
+
+    def wire_geometry_id_data(self, geometry_ids: np.ndarray) -> None:
+        values = np.ascontiguousarray(geometry_ids, dtype=np.int32).reshape(-1)
+        if len(values) != self.positions.shape[0]:
+            raise ValueError("GlobalVertexManager geometry ID count must match n_verts")
+        if np.any(values < 0):
+            raise ValueError("GlobalVertexManager geometry IDs must be non-negative")
+        self.geometry_id.from_numpy(values)
 
     @qd.func(requires_top_level=True)
     def record_safe_positions(self):

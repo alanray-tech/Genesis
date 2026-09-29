@@ -642,7 +642,7 @@ class RigidJointForestSystem(SimSystem):
             level = self.max_depth[()] - reverse_level
             for body in range(self.n_mechanism_bodies[()]):
                 if (
-                    reverse_level < self.max_depth[()]
+                    reverse_level < self.n_levels[()]
                     and self.depth[body] == level
                 ):
                     environment = body // self.n_links_host

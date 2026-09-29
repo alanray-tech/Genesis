@@ -33,6 +33,7 @@ class RigidContactProxyGeometry:
         surface_radius: list[float] = []
         local_positions: list[np.ndarray] = []
         vertex_pair: list[np.ndarray] = []
+        geometry_ids: list[np.ndarray] = []
         triangles: list[np.ndarray] = []
         n_mechanism_bodies = rigid_solver.n_links * rigid_solver._B
         vertex_offset = 0
@@ -53,6 +54,7 @@ class RigidContactProxyGeometry:
                 inertial_rotation = gu.quat_to_R(np.asarray(link.desc.inertial_quat, dtype=np.float64))
                 pair_positions = []
                 pair_triangles = []
+                pair_geometry_ids = []
                 pair_vertex_offset = 0
                 for geom in geoms:
                     geom_rotation = gu.quat_to_R(np.asarray(geom.init_quat, dtype=np.float64))
@@ -65,6 +67,13 @@ class RigidContactProxyGeometry:
                     pair_triangles.append(
                         np.asarray(geom.init_faces, dtype=np.int32) + pair_vertex_offset
                     )
+                    pair_geometry_ids.append(
+                        np.full(
+                            geom.n_verts,
+                            environment * rigid_solver.n_geoms + geom.idx,
+                            dtype=np.int32,
+                        )
+                    )
                     pair_vertex_offset += geom.n_verts
 
                 pair = len(mechanism_body)
@@ -75,6 +84,7 @@ class RigidContactProxyGeometry:
                 surface_radius.append(float(np.linalg.norm(positions, axis=1).max(initial=0.0)))
                 local_positions.append(positions)
                 vertex_pair.append(np.full(len(positions), pair, dtype=np.int32))
+                geometry_ids.append(np.concatenate(pair_geometry_ids))
                 triangles.append(faces + vertex_offset)
                 vertex_offset += len(positions)
 
@@ -89,6 +99,10 @@ class RigidContactProxyGeometry:
         self.surface_radius = np.ascontiguousarray(surface_radius, dtype=np.float64)
         self.local_positions = np.ascontiguousarray(np.concatenate(local_positions), dtype=np.float64)
         self.vertex_pair = np.ascontiguousarray(np.concatenate(vertex_pair), dtype=np.int32)
+        self.geometry_ids = np.ascontiguousarray(
+            np.concatenate(geometry_ids),
+            dtype=np.int32,
+        )
         self.surf_triangles = np.ascontiguousarray(np.concatenate(triangles), dtype=np.int32)
         self.surf_edges = np.ascontiguousarray(_surface_edges(self.surf_triangles), dtype=np.int32)
         self.surf_verts = np.arange(len(self.local_positions), dtype=np.int32)

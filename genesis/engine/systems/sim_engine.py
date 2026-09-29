@@ -43,6 +43,7 @@ class ContactCheckpoint(IntEnum):
     LINE_SEARCH = 8
     KKT_FAILURE = 9
     FINALIZE = 10
+    INITIAL_INTERSECTION = 11
 
 
 @qd.data_oriented
@@ -234,6 +235,7 @@ class SimEngine:
     def _init_contact_kernel(
         self,
         pair_overflow: qd.types.ndarray(qd.i32, ndim=0),
+        et_overflow: qd.types.ndarray(qd.i32, ndim=0),
     ):
         with qd.checkpoint(ContactCheckpoint.FRAME, yield_on=self.checkpoint_never_yield):
             if qd.static(True):
@@ -241,6 +243,13 @@ class SimEngine:
                 self.global_vertex_manager.reset_trajectory()
                 self.contact.bvh_triangle_build()
                 self.contact.bvh_edge_build()
+        with qd.checkpoint(
+            ContactCheckpoint.INITIAL_INTERSECTION,
+            yield_on=et_overflow,
+        ):
+            if qd.static(True):
+                self.contact.reset_initial_intersections()
+                self.contact.detect_initial_intersections()
         with qd.checkpoint(ContactCheckpoint.QUERY, yield_on=pair_overflow):
             if qd.static(True):
                 self.contact.reset_collision_counts()
@@ -261,17 +270,52 @@ class SimEngine:
 
     def _initialize_contact(self) -> None:
         pair_overflow = self.contact.overflow_flag
-        status = self._init_contact_kernel(pair_overflow)
+        et_overflow = self.contact.et_overflow_flag
+        status = self._init_contact_kernel(pair_overflow, et_overflow)
         while status.yielded:
-            if status.checkpoint != ContactCheckpoint.QUERY:
+            if status.checkpoint == ContactCheckpoint.INITIAL_INTERSECTION:
+                required = int(qd_to_numpy(self.contact.n_et_pairs))
+                self.contact.realloc_et_pairs(required)
+                resume_from = ContactCheckpoint.INITIAL_INTERSECTION
+            elif status.checkpoint == ContactCheckpoint.QUERY:
+                self._handle_pair_overflow()
+                resume_from = ContactCheckpoint.QUERY
+            else:
                 raise RuntimeError(f"Unexpected contact init checkpoint {status.checkpoint}")
-            self._handle_pair_overflow()
             status = self._init_contact_kernel.resume(
                 pair_overflow,
-                from_checkpoint=ContactCheckpoint.QUERY,
+                et_overflow,
+                from_checkpoint=resume_from,
             )
-        if bool(qd_to_numpy(self.contact.intersection_flag)):
-            raise RuntimeError("ContactSystem initial state contains an intersection")
+        count = int(qd_to_numpy(self.contact.n_et_pairs))
+        if count > 0:
+            pairs = qd_to_numpy(self.contact.et_pairs)[:count]
+            edges = qd_to_numpy(self.global_surface_manager.surf_edges)
+            faces = qd_to_numpy(self.global_surface_manager.surf_triangles)
+            body_ids = qd_to_numpy(self.global_vertex_manager.body_id)
+            geometry_ids = qd_to_numpy(
+                self.global_vertex_manager.geometry_id
+            )
+            reports = []
+            for edge, face in pairs[:8]:
+                edge_vertex = int(edges[edge, 0])
+                face_vertex = int(faces[face, 0])
+                reports.append(
+                    f"(edge {int(edge)}, face {int(face)}, "
+                    f"edge geometry_id {int(geometry_ids[edge_vertex])}, "
+                    f"face geometry_id {int(geometry_ids[face_vertex])}, "
+                    f"edge body_id {int(body_ids[edge_vertex])}, "
+                    f"face body_id {int(body_ids[face_vertex])})"
+                )
+            more = f", ... +{count - 8} more" if count > 8 else ""
+            message = (
+                "ET check: initial state detected "
+                f"{count} edge-triangle intersection pair(s). "
+                "Initialization was rejected. "
+                f"Pairs: {', '.join(reports)}{more}"
+            )
+            gs.logger.error(message)
+            raise RuntimeError(message)
 
     @qd.kernel(graph=True, checkpoints=True, fastcache=True)
     def _step_kernel(

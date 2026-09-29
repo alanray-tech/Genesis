@@ -154,8 +154,19 @@ def test_contact_rejects_initial_cloth_intersection(tmp_path, show_viewer):
     scene.add_entity(morph=gs.morphs.Mesh(file=str(path)), material=material)
     scene.build(compile_kernels=False)
 
-    with pytest.raises(RuntimeError, match="initial state contains an intersection"):
-        build_scene_engine(scene, contact_config={})
+    with pytest.raises(
+        RuntimeError,
+        match="ET check: initial state detected",
+    ) as error:
+        build_scene_engine(
+            scene,
+            contact_config={
+                "contact/intersection_check": 1,
+                "contact/intersection_check_capacity": 1,
+            },
+        )
+    assert "edge geometry_id" in str(error.value)
+    assert "face geometry_id" in str(error.value)
 
 
 @pytest.mark.required

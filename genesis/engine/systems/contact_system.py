@@ -73,6 +73,8 @@ class ContactSystem(SimSystem):
         d_hat: float,
         kappa: float,
         init_pair_capacity: int,
+        intersection_check: bool = False,
+        intersection_check_capacity: int = 1_024,
     ) -> None:
         if self.is_wired_host:
             raise RuntimeError("ContactSystem parameters are already wired")
@@ -82,6 +84,10 @@ class ContactSystem(SimSystem):
             raise ValueError("ContactTabular resistance must be positive")
         if init_pair_capacity < 1:
             raise ValueError("contact/init_collision_pair_capacity must be at least one")
+        if intersection_check_capacity < 1:
+            raise ValueError(
+                "contact/intersection_check_capacity must be at least one"
+            )
 
         self.d_hat = qd.ndarray(qd.f64, shape=())
         self.kappa = qd.ndarray(qd.f64, shape=())
@@ -92,6 +98,14 @@ class ContactSystem(SimSystem):
         self.capacity_grow_factor = qd.ndarray(qd.f64, shape=())
         self.capacity_shrink_threshold = qd.ndarray(qd.f64, shape=())
         self.friction_eps_v = qd.ndarray(qd.f64, shape=())
+        self.intersection_check = qd.ndarray(qd.i32, shape=())
+        self.max_et_pairs = qd.ndarray(qd.i32, shape=())
+        self.n_et_pairs = qd.ndarray(qd.i32, shape=())
+        self.et_overflow_flag = qd.ndarray(qd.i32, shape=())
+        self.et_pairs = qd.ndarray(
+            qd.i32,
+            shape=(intersection_check_capacity, 2),
+        )
 
         self.d_hat.from_numpy(np.array(d_hat, dtype=np.float64))
         self.kappa.from_numpy(np.array(kappa, dtype=np.float64))
@@ -108,6 +122,17 @@ class ContactSystem(SimSystem):
             np.array(CONTACT_CONFIG_DEFAULTS["extras/capacity_shrink_threshold"], dtype=np.float64)
         )
         self.friction_eps_v.from_numpy(np.array(CONTACT_CONFIG_DEFAULTS["friction/eps_v"], dtype=np.float64))
+        self.intersection_check.from_numpy(
+            np.array(int(intersection_check), dtype=np.int32)
+        )
+        self.max_et_pairs.from_numpy(
+            np.array(intersection_check_capacity, dtype=np.int32)
+        )
+        self.n_et_pairs.from_numpy(np.array(0, dtype=np.int32))
+        self.et_overflow_flag.from_numpy(np.array(0, dtype=np.int32))
+        self.et_pairs.from_numpy(
+            np.zeros((intersection_check_capacity, 2), dtype=np.int32)
+        )
         for channel in ("pt", "ee", "pe", "pp", "ph"):
             setattr(self, f"pairs_{channel}", qd.ndarray(qd.i32, shape=(init_pair_capacity, 2)))
             setattr(self, f"ccd_alpha_{channel}", qd.ndarray(qd.f64, shape=(init_pair_capacity,)))
@@ -409,8 +434,39 @@ class ContactSystem(SimSystem):
             getattr(self, f"max_pairs_{channel}").from_numpy(np.array(capacity, dtype=np.int32))
         self.overflow_flag.from_numpy(np.array(0, dtype=np.int32))
 
+    def realloc_et_pairs(self, required: int) -> None:
+        current = self.et_pairs.shape[0]
+        if required <= current:
+            return
+        capacity = self._grown_capacity(required, current)
+        self.et_pairs = qd.ndarray(qd.i32, shape=(capacity, 2))
+        self.et_pairs.from_numpy(np.zeros((capacity, 2), dtype=np.int32))
+        self.max_et_pairs.from_numpy(np.array(capacity, dtype=np.int32))
+        self.n_et_pairs.from_numpy(np.array(0, dtype=np.int32))
+        self.et_overflow_flag.from_numpy(np.array(0, dtype=np.int32))
+
     def handle_broad_phase_overflow(self) -> bool:
         return self.broad_phase.handle_ee_query_overflow()
+
+    @qd.func(requires_top_level=True)
+    def reset_initial_intersections(self):
+        for _ in range(1):
+            self.n_et_pairs[()] = 0
+            self.et_overflow_flag[()] = 0
+
+    @qd.func(requires_top_level=True)
+    def detect_initial_intersections(self):
+        if qd.static(self.broad_phase.has_triangle_bvh):
+            self.broad_phase.triangle_bvh.query_et(
+                self.surface,
+                self.vertex,
+                self.body,
+                self,
+                self.et_pairs,
+                self.n_et_pairs,
+                self.max_et_pairs[()],
+                self.et_overflow_flag,
+            )
 
     def realloc_assembly_buffers(self, required_doublets: int, required_triplets: int) -> None:
         current_doublets = self.contact_doublet_vertices.shape[0]

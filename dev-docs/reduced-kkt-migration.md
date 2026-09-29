@@ -312,6 +312,11 @@ silently snapped to FK.
 - Rigid-Cloth uses proxy-Cloth IPC.
 - Delegated rigid geometry is removed from the matching native pair route.
 - Every geometry pair has exactly one owner.
+- Optional initial penetration validation uses CGQ's exact edge-triangle
+  predicate over the triangle BVH. It applies same-body self-collision,
+  body-contact-ignorance, and contact-table suppression before reporting.
+- ET reports retain edge/face IDs and add global contact geometry/body IDs so
+  a Genesis source geometry can be identified without a host object map.
 
 Rigid collision meshes are extracted from the built Genesis rigid geometry at
 build time, transformed into their owning link frame, merged per delegated

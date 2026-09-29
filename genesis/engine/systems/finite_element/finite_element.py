@@ -238,6 +238,7 @@ class FiniteElement:
         hinge_stiffness: list[np.ndarray] = []
         vert_bend_k: list[np.ndarray] = []
         body_ids: list[np.ndarray] = []
+        geometry_ids: list[np.ndarray] = []
         body_environment: list[int] = []
         body_vertex_offsets = [0]
 
@@ -332,6 +333,9 @@ class FiniteElement:
                     hinge_stiffness.append(np.full(len(local_hinges), bending_stiffness, dtype=np.float64))
 
                 body_ids.append(np.full(n_entity_verts, body_index, dtype=np.int32))
+                geometry_ids.append(
+                    np.full(n_entity_verts, body_index, dtype=np.int32)
+                )
                 body_environment.append(env)
                 body_vertex_offsets.append(body_vertex_offsets[-1] + n_entity_verts)
                 bridge_vertex.append(np.arange(entity._v_start, entity._v_start + n_entity_verts, dtype=np.int32))
@@ -378,6 +382,10 @@ class FiniteElement:
         )
         self.vert_bend_k = np.ascontiguousarray(np.concatenate(vert_bend_k), dtype=np.float64)
         self.body_ids = np.ascontiguousarray(np.concatenate(body_ids), dtype=np.int32)
+        self.geometry_ids = np.ascontiguousarray(
+            np.concatenate(geometry_ids),
+            dtype=np.int32,
+        )
         self.body_vertex_offsets = np.asarray(body_vertex_offsets, dtype=np.int32)
         self.body_environment = np.asarray(body_environment, dtype=np.int32)
         self.self_collision = np.ones(body_index, dtype=np.int32)

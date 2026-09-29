@@ -29,11 +29,156 @@ from .bvh_math import (
     morton_code_30bit,
 )
 from .bvh_predicate import _ee_emit_pair, _ee_pair_enabled, _node_pair_enabled
+from .contact_function.contact_table_query import ct_enabled_pt
+from .contact_function.edge_triangle_intersection import (
+    triangle_edge_intersect,
+)
 from .gpu_occupancy import cuda_resident_blocks
 
 # structural, host-only: traversal stack depth. Read once to shape `stack_pool`
 # and never from device code, so it may stay a module constant.
 _BVH_STACK_CAPACITY = 64
+
+
+@qd.func
+def _edge_node_overlap(
+    aabbs: qd.template(),
+    node,
+    edge_a: qd.template(),
+    edge_b: qd.template(),
+    half: qd.template(),
+):
+    projection_a = qd.Vector(
+        [
+            edge_a[0],
+            edge_a[1],
+            edge_a[2],
+            edge_a[0] + edge_a[1] + edge_a[2],
+            edge_a[0] + edge_a[1] - edge_a[2],
+            edge_a[0] - edge_a[1] + edge_a[2],
+            edge_a[0] - edge_a[1] - edge_a[2],
+        ]
+    )
+    projection_b = qd.Vector(
+        [
+            edge_b[0],
+            edge_b[1],
+            edge_b[2],
+            edge_b[0] + edge_b[1] + edge_b[2],
+            edge_b[0] + edge_b[1] - edge_b[2],
+            edge_b[0] - edge_b[1] + edge_b[2],
+            edge_b[0] - edge_b[1] - edge_b[2],
+        ]
+    )
+    overlaps = True
+    for axis in qd.static(range(half)):
+        lower = qd.min(projection_a[axis], projection_b[axis])
+        upper = qd.max(projection_a[axis], projection_b[axis])
+        if aabbs[node, axis] > upper or lower > aabbs[node, half + axis]:
+            overlaps = False
+    return overlaps
+
+
+@qd.func
+def _edge_triangle_intersects(
+    surface: qd.template(),
+    vertex: qd.template(),
+    body: qd.template(),
+    contact: qd.template(),
+    edge,
+    face,
+):
+    edge_a = surface.surf_edges[edge, 0]
+    edge_b = surface.surf_edges[edge, 1]
+    triangle_a = surface.surf_triangles[face, 0]
+    triangle_b = surface.surf_triangles[face, 1]
+    triangle_c = surface.surf_triangles[face, 2]
+    enabled = not (
+        edge_a == triangle_a
+        or edge_a == triangle_b
+        or edge_a == triangle_c
+        or edge_b == triangle_a
+        or edge_b == triangle_b
+        or edge_b == triangle_c
+    )
+
+    edge_body = vertex.body_id[edge_a]
+    face_body = vertex.body_id[triangle_a]
+    if edge_body == face_body and edge_body >= 0 and body.self_collision[edge_body] == 0:
+        enabled = False
+    if (
+        edge_body >= 0
+        and face_body >= 0
+        and edge_body != face_body
+        and body.is_body_contact_ignored(edge_body, face_body)
+    ):
+        enabled = False
+
+    n_elements = contact.n_contact_elements[()]
+    if n_elements > 0:
+        edge_a_enabled = ct_enabled_pt(
+            contact.enable_table,
+            n_elements,
+            contact.vert_contact_element_ids[edge_a],
+            contact.vert_contact_element_ids[triangle_a],
+            contact.vert_contact_element_ids[triangle_b],
+            contact.vert_contact_element_ids[triangle_c],
+        )
+        edge_b_enabled = ct_enabled_pt(
+            contact.enable_table,
+            n_elements,
+            contact.vert_contact_element_ids[edge_b],
+            contact.vert_contact_element_ids[triangle_a],
+            contact.vert_contact_element_ids[triangle_b],
+            contact.vert_contact_element_ids[triangle_c],
+        )
+        enabled = enabled and edge_a_enabled and edge_b_enabled
+
+    intersects = False
+    if enabled:
+        edge_position_a = qd.Vector(
+            [
+                vertex.positions[edge_a, 0],
+                vertex.positions[edge_a, 1],
+                vertex.positions[edge_a, 2],
+            ]
+        )
+        edge_position_b = qd.Vector(
+            [
+                vertex.positions[edge_b, 0],
+                vertex.positions[edge_b, 1],
+                vertex.positions[edge_b, 2],
+            ]
+        )
+        triangle_position_a = qd.Vector(
+            [
+                vertex.positions[triangle_a, 0],
+                vertex.positions[triangle_a, 1],
+                vertex.positions[triangle_a, 2],
+            ]
+        )
+        triangle_position_b = qd.Vector(
+            [
+                vertex.positions[triangle_b, 0],
+                vertex.positions[triangle_b, 1],
+                vertex.positions[triangle_b, 2],
+            ]
+        )
+        triangle_position_c = qd.Vector(
+            [
+                vertex.positions[triangle_c, 0],
+                vertex.positions[triangle_c, 1],
+                vertex.positions[triangle_c, 2],
+            ]
+        )
+        intersects = triangle_edge_intersect(
+            triangle_position_a,
+            triangle_position_b,
+            triangle_position_c,
+            edge_position_a,
+            edge_position_b,
+        )
+    return intersects
 
 
 @qd.func
@@ -201,6 +346,7 @@ class LBVH:
         self.sort_end_bit = 64
         self.sort_log256_max_n = 4
         self.sentinel = 0xFFFFFFFF
+        self.stack_capacity = _BVH_STACK_CAPACITY
         self.bvh_block = 256
         self.ee_warp_block = 256
         self.ee_warp_stack_capacity = 1024
@@ -1056,6 +1202,119 @@ class LBVH:
                                 pairs[cp_idx2, 1] = face_idx2
                             else:
                                 overflow_flag[()] = 1
+
+    @qd.func
+    def _query_et_child(
+        self,
+        child,
+        edge,
+        edge_position_a: qd.template(),
+        edge_position_b: qd.template(),
+        stack_top,
+        surf_mgr: qd.template(),
+        vtx_mgr: qd.template(),
+        body_mgr: qd.template(),
+        contact: qd.template(),
+        pairs: qd.template(),
+        n_pairs: qd.template(),
+        max_pairs,
+        overflow_flag: qd.template(),
+    ):
+        if _edge_node_overlap(
+            self.aabbs,
+            child,
+            edge_position_a,
+            edge_position_b,
+            self.bounds_width // 2,
+        ):
+            element = self.nodes_element[child]
+            if element == qd.u32(self.sentinel):
+                if stack_top < self.stack_capacity:
+                    self.stack_pool[edge, stack_top] = qd.u32(child)
+                    stack_top = stack_top + 1
+            else:
+                face = qd.i32(element)
+                if _edge_triangle_intersects(
+                    surf_mgr,
+                    vtx_mgr,
+                    body_mgr,
+                    contact,
+                    edge,
+                    face,
+                ):
+                    output = qd.atomic_add(n_pairs[()], 1)
+                    if output < max_pairs:
+                        pairs[output, 0] = edge
+                        pairs[output, 1] = face
+                    else:
+                        overflow_flag[()] = 1
+        return stack_top
+
+    @qd.func(requires_top_level=True)
+    def query_et(
+        self,
+        surf_mgr: qd.template(),
+        vtx_mgr: qd.template(),
+        body_mgr: qd.template(),
+        contact: qd.template(),
+        pairs: qd.template(),
+        n_pairs: qd.template(),
+        max_pairs,
+        overflow_flag: qd.template(),
+    ):
+        for edge in range(surf_mgr.n_surf_edges[()]):
+            if contact.intersection_check[()] != 0 and self.n_prims[()] > 1:
+                edge_a = surf_mgr.surf_edges[edge, 0]
+                edge_b = surf_mgr.surf_edges[edge, 1]
+                edge_position_a = qd.Vector(
+                    [
+                        vtx_mgr.positions[edge_a, 0],
+                        vtx_mgr.positions[edge_a, 1],
+                        vtx_mgr.positions[edge_a, 2],
+                    ]
+                )
+                edge_position_b = qd.Vector(
+                    [
+                        vtx_mgr.positions[edge_b, 0],
+                        vtx_mgr.positions[edge_b, 1],
+                        vtx_mgr.positions[edge_b, 2],
+                    ]
+                )
+                stack_top = qd.i32(1)
+                self.stack_pool[edge, 0] = qd.u32(0)
+                while stack_top > 0:
+                    stack_top = stack_top - 1
+                    node = qd.i32(self.stack_pool[edge, stack_top])
+                    stack_top = self._query_et_child(
+                        qd.i32(self.nodes_left[node]),
+                        edge,
+                        edge_position_a,
+                        edge_position_b,
+                        stack_top,
+                        surf_mgr,
+                        vtx_mgr,
+                        body_mgr,
+                        contact,
+                        pairs,
+                        n_pairs,
+                        max_pairs,
+                        overflow_flag,
+                    )
+                    stack_top = self._query_et_child(
+                        qd.i32(self.nodes_right[node]),
+                        edge,
+                        edge_position_a,
+                        edge_position_b,
+                        stack_top,
+                        surf_mgr,
+                        vtx_mgr,
+                        body_mgr,
+                        contact,
+                        pairs,
+                        n_pairs,
+                        max_pairs,
+                        overflow_flag,
+                    )
 
     # ======================================================================
     # QUERY: warp-cooperative EE self-query (edge vs edge BVH)
