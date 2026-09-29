@@ -45,6 +45,14 @@ HOME_QPOS = np.array(
     [0.0, 0.0, 0.0, -1.5708, 0.0, 1.5708, -0.7854, 0.04, 0.04],
     dtype=np.float64,
 )
+CGQ_KP = np.array(
+    [4500.0, 4500.0, 3500.0, 3500.0, 2000.0, 2000.0, 2000.0, 100.0, 100.0],
+    dtype=np.float64,
+)
+CGQ_KV = np.array(
+    [450.0, 450.0, 350.0, 350.0, 200.0, 200.0, 200.0, 10.0, 10.0],
+    dtype=np.float64,
+)
 CGQ_FRANKA_MJCF = (
     Path(__file__).resolve().parents[3]
     / "cuda-graph-qipc"
@@ -77,6 +85,7 @@ def main() -> None:
     parser.add_argument("--frames", type=int, default=100)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--mjcf", type=Path, default=CGQ_FRANKA_MJCF)
+    parser.add_argument("--disable-contact-model", action="store_true")
     parser.add_argument(
         "--forest-path",
         choices=("genesis_legacy", "cgq_level", "cgq_tree"),
@@ -142,6 +151,8 @@ def main() -> None:
     )
     scene.build(compile_kernels=False)
     franka.set_qpos(HOME_QPOS)
+    franka.set_dofs_kp(CGQ_KP)
+    franka.set_dofs_kv(CGQ_KV)
     franka.set_dofs_force_range(
         -400.0,
         400.0,
@@ -150,7 +161,12 @@ def main() -> None:
     franka.control_dofs_position(HOME_QPOS)
 
     contact_tabular = ContactTabular()
-    contact_tabular.default_model(friction_rate=1.0, resistance=1e4)
+    contact_tabular.default_model(
+        friction_rate=1.0,
+        resistance=1e4,
+        enable=not args.disable_contact_model,
+        enable_ee=not args.disable_contact_model,
+    )
     build_start = time.perf_counter()
     engine = build_scene_engine(
         scene,
@@ -201,13 +217,7 @@ def main() -> None:
         ccd_alpha.append(float(qd_to_numpy(engine.contact.ccd_alpha)))
         accepted_alpha.append(float(qd_to_numpy(engine.alpha)))
         max_disp.append(float(qd_to_numpy(engine.max_disp)))
-        proxy_residual.append(
-            float(
-                qd_to_numpy(
-                    engine.rigid_contact_proxy.max_surface_residual
-                )
-            )
-        )
+        proxy_residual.append(float(qd_to_numpy(engine.rigid_contact_proxy.max_surface_residual)))
         contact_info.append(
             [
                 int(qd_to_numpy(engine.contact.n_pairs_pt)),
@@ -244,6 +254,7 @@ def main() -> None:
         "franka_n_links": franka.n_links,
         "franka_n_dofs": franka.n_dofs,
         "franka_n_geoms": franka.n_geoms,
+        "contact_model_enabled": not args.disable_contact_model,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")

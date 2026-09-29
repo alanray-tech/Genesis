@@ -908,6 +908,23 @@ parity of contact candidates, energy, gradient, Hessian, and accepted Newton
 direction. Native rigid contact preprocessing may only be removed after QIPC
 owns the exact CGQ rigid-rigid contact filters.
 
+The pure-rigid conformance gate found the source of the extra Newton
+iterations before contact algebra was changed. CGQ's MJCF loader interprets
+the authored finger `biasprm="0 -100 -10"` as `kp=100, kv=10` even though
+MuJoCo reports `biastype=NONE`; Genesis therefore retained zero finger bias
+while both loaders agreed on `act_gain=100`. With the same explicit kp/kv
+vector applied in the benchmark:
+
+- first-frame pure-rigid joint-position maximum error is 1.85e-6;
+- 100-frame maximum error is 6.76e-6;
+- the coupled Genesis Newton counter drops from three/four to a stable one
+  (two actual loop evaluations), matching CGQ's two evaluations;
+- the ten-frame median drops from approximately 48.1 ms to 30.2 ms.
+
+This is parameter conformance, not a scene-tuned stopping rule. The global
+Genesis MJCF parser retains MuJoCo semantics; the CGQ conformance benchmark
+publishes the exact controller parameters explicitly.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size
