@@ -85,6 +85,7 @@ def main() -> None:
             camera_pos=(1.65, -1.35, 1.15),
             camera_lookat=(0.55, 0.0, 0.48),
             camera_fov=38,
+            enable_gui=True,
         ),
         show_viewer=not args.no_gui,
     )
