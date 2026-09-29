@@ -1052,6 +1052,28 @@ ms). Remaining PCG work also differs (669 versus 540 iterations), so the
 final optimization pass must keep numerical work count separate from
 equal-work implementation cost.
 
+The next PCG profile found one remaining application-side forest mismatch:
+Genesis allocated CGQ's `edge_basis` and `edge_arm` buffers but recomputed
+each scalar joint basis by traversing link joints and DOFs inside every PCG
+expand/restrict. CGQ caches those values once per Newton. The compact
+`cgq_level` and `cgq_tree` paths now consume the cache; the explicit
+`genesis_legacy` path retains the recomputation oracle. Fixed child links
+(`parent_edge == -1`) retain rigid transport without indexing an edge.
+
+Matched early-window profiling gives:
+
+- `forest_expand_tree_p`: `16.102 -> 14.159 microseconds/call` (`1.137x`);
+- `forest_project_tree_Ap`: `18.174 -> 15.612 microseconds/call` (`1.164x`);
+- combined expand/project: `34.276 -> 29.771 microseconds/PCG` (`1.151x`,
+  13.1% lower).
+
+The complete capture changes from `219.272` to `213.620 ms` GPU time and from
+`29.088` to `28.839 ms` wall median, but its PCG work also changes from 669 to
+641 iterations. The normalized `4.505 microseconds/PCG` reduction is therefore
+the acceptance metric. Cached level/tree `P`, `P^T`, virtual work, and the
+shared-memory preconditioner match the retained legacy oracle; the full
+Franka-Cloth reduced-KKT step also passes.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size

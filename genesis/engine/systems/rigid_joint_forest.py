@@ -587,6 +587,90 @@ class RigidJointForestSystem(SimSystem):
             for axis in qd.static(range(4)):
                 self.endpoint_quat[body][axis] = endpoint_quaternion[axis]
 
+        for edge in range(self.n_edges[()]):
+            child = self.edge_child[edge]
+            parent = self.edge_parent[edge]
+            environment = child // self.rigid.n_links[()]
+            link = child - environment * self.rigid.n_links[()]
+            dof = self.edge_dof_index[edge] - environment * self.rigid.n_dofs_per_instance[()]
+            link_index = [link, environment] if qd.static(self.rigid.rigid_config.batch_links_info) else link
+            basis = qd.Vector.zero(qd.f64, 6)
+            for joint in range(
+                self.rigid.dyn_info.links.joint_start[link_index],
+                self.rigid.dyn_info.links.joint_end[link_index],
+            ):
+                joint_index = [joint, environment] if qd.static(self.rigid.rigid_config.batch_joints_info) else joint
+                if (
+                    dof >= self.rigid.dyn_info.joints.dof_start[joint_index]
+                    and dof < self.rigid.dyn_info.joints.dof_end[joint_index]
+                ):
+                    basis = self._body_point_twist(
+                        link,
+                        environment,
+                        joint,
+                        dof,
+                    )
+            arm = self.endpoint_t[child] - self.endpoint_t[parent]
+            for component in qd.static(range(6)):
+                self.edge_basis[edge, component] = basis[component]
+            for axis in qd.static(range(3)):
+                self.edge_arm[edge, axis] = arm[axis]
+
+    @qd.func
+    def forest_expand_body_p_cached(self, reduced: qd.template(), body):
+        environment = body // self.rigid.n_links[()]
+        link = body - environment * self.rigid.n_links[()]
+        parent = self.parent_body[body]
+        twist = qd.Vector.zero(qd.f64, 6)
+        if parent >= 0:
+            edge = self.parent_edge[body]
+            parent_linear = qd.Vector.zero(qd.f64, 3)
+            parent_angular = qd.Vector.zero(qd.f64, 3)
+            for axis in qd.static(range(3)):
+                parent_linear[axis] = self.body_twist[parent, axis]
+                parent_angular[axis] = self.body_twist[parent, axis + 3]
+            offset = self.endpoint_t[body] - self.endpoint_t[parent]
+            if edge >= 0:
+                offset = qd.Vector(
+                    [
+                        self.edge_arm[edge, 0],
+                        self.edge_arm[edge, 1],
+                        self.edge_arm[edge, 2],
+                    ]
+                )
+            shifted_linear = parent_linear + parent_angular.cross(offset)
+            for axis in qd.static(range(3)):
+                twist[axis] = shifted_linear[axis]
+                twist[axis + 3] = parent_angular[axis]
+
+            if edge >= 0:
+                reduced_index = self.rigid.dof_offset[()] + self.edge_dof_index[edge]
+                coefficient = self.configuration_scale * reduced[reduced_index]
+                for component in qd.static(range(6)):
+                    twist[component] = twist[component] + coefficient * self.edge_basis[edge, component]
+        else:
+            link_index = [link, environment] if qd.static(self.rigid.rigid_config.batch_links_info) else link
+            for joint in range(
+                self.rigid.dyn_info.links.joint_start[link_index],
+                self.rigid.dyn_info.links.joint_end[link_index],
+            ):
+                joint_index = [joint, environment] if qd.static(self.rigid.rigid_config.batch_joints_info) else joint
+                for dof in range(
+                    self.rigid.dyn_info.joints.dof_start[joint_index],
+                    self.rigid.dyn_info.joints.dof_end[joint_index],
+                ):
+                    reduced_index = self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
+                    basis = self._body_point_twist(
+                        link,
+                        environment,
+                        joint,
+                        dof,
+                    )
+                    coefficient = self.configuration_scale * reduced[reduced_index]
+                    twist = twist + coefficient * basis
+        for component in qd.static(range(6)):
+            self.body_twist[body, component] = twist[component]
+
     @qd.func
     def forest_expand_body_p(self, reduced: qd.template(), body):
         environment = body // self.rigid.n_links[()]
@@ -643,7 +727,7 @@ class RigidJointForestSystem(SimSystem):
                 self.depth_start[level],
                 self.depth_start[level + 1],
             ):
-                self.forest_expand_body_p(
+                self.forest_expand_body_p_cached(
                     reduced,
                     self.depth_order[order_index],
                 )
@@ -656,7 +740,7 @@ class RigidJointForestSystem(SimSystem):
                 begin = self.tree_body_start[tree]
                 end = self.tree_body_start[tree + 1]
                 for order_index in range(begin, end):
-                    self.forest_expand_body_p(
+                    self.forest_expand_body_p_cached(
                         reduced,
                         self.tree_body_list[order_index],
                     )
@@ -715,6 +799,81 @@ class RigidJointForestSystem(SimSystem):
                 mapped = restrict_proxy_wrench(tangent, proxy_wrench)
                 for component in qd.static(range(6)):
                     qd.atomic_add(self.body_wrench[mechanism, component], mapped[component])
+
+    @qd.func
+    def forest_project_body_Ap_cached(
+        self,
+        reduced: qd.template(),
+        body,
+        use_atomics: qd.template(),
+    ):
+        environment = body // self.rigid.n_links[()]
+        link = body - environment * self.rigid.n_links[()]
+        wrench = qd.Vector.zero(qd.f64, 6)
+        for component in qd.static(range(6)):
+            wrench[component] = self.body_wrench[body, component]
+
+        parent = self.parent_body[body]
+        if parent >= 0:
+            edge = self.parent_edge[body]
+            if edge >= 0:
+                contribution = qd.f64(0.0)
+                for component in qd.static(range(6)):
+                    contribution = contribution + self.edge_basis[edge, component] * wrench[component]
+                reduced_index = self.rigid.dof_offset[()] + self.edge_dof_index[edge]
+                contribution = self.configuration_scale * contribution
+                if qd.static(use_atomics):
+                    qd.atomic_add(reduced[reduced_index], contribution)
+                else:
+                    reduced[reduced_index] = reduced[reduced_index] + contribution
+
+            offset = self.endpoint_t[body] - self.endpoint_t[parent]
+            if edge >= 0:
+                offset = qd.Vector(
+                    [
+                        self.edge_arm[edge, 0],
+                        self.edge_arm[edge, 1],
+                        self.edge_arm[edge, 2],
+                    ]
+                )
+            force = qd.Vector([wrench[0], wrench[1], wrench[2]])
+            torque = qd.Vector([wrench[3], wrench[4], wrench[5]])
+            parent_torque = torque + offset.cross(force)
+            for axis in qd.static(range(3)):
+                if qd.static(use_atomics):
+                    qd.atomic_add(self.body_wrench[parent, axis], force[axis])
+                    qd.atomic_add(
+                        self.body_wrench[parent, axis + 3],
+                        parent_torque[axis],
+                    )
+                else:
+                    self.body_wrench[parent, axis] = self.body_wrench[parent, axis] + force[axis]
+                    self.body_wrench[parent, axis + 3] = self.body_wrench[parent, axis + 3] + parent_torque[axis]
+        else:
+            link_index = [link, environment] if qd.static(self.rigid.rigid_config.batch_links_info) else link
+            for joint in range(
+                self.rigid.dyn_info.links.joint_start[link_index],
+                self.rigid.dyn_info.links.joint_end[link_index],
+            ):
+                joint_index = [joint, environment] if qd.static(self.rigid.rigid_config.batch_joints_info) else joint
+                for dof in range(
+                    self.rigid.dyn_info.joints.dof_start[joint_index],
+                    self.rigid.dyn_info.joints.dof_end[joint_index],
+                ):
+                    basis = self._body_point_twist(
+                        link,
+                        environment,
+                        joint,
+                        dof,
+                    )
+                    reduced_index = (
+                        self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
+                    )
+                    contribution = self.configuration_scale * basis.dot(wrench)
+                    if qd.static(use_atomics):
+                        qd.atomic_add(reduced[reduced_index], contribution)
+                    else:
+                        reduced[reduced_index] = reduced[reduced_index] + contribution
 
     @qd.func
     def forest_project_body_Ap(
@@ -787,7 +946,7 @@ class RigidJointForestSystem(SimSystem):
                 self.depth_start[level],
                 self.depth_start[level + 1],
             ):
-                self.forest_project_body_Ap(
+                self.forest_project_body_Ap_cached(
                     reduced,
                     self.depth_order[order_index],
                     True,
@@ -802,7 +961,7 @@ class RigidJointForestSystem(SimSystem):
                 end = self.tree_body_start[tree + 1]
                 for reverse_index in range(end - begin):
                     order_index = end - reverse_index - 1
-                    self.forest_project_body_Ap(
+                    self.forest_project_body_Ap_cached(
                         reduced,
                         self.tree_body_list[order_index],
                         False,
