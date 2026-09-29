@@ -31,20 +31,22 @@ DT = 0.01
 TARGET_TRANSLATION_STEP = 0.003
 TARGET_ROTATION_STEP = 0.02
 
-TABLE_CENTER_X = 0.72
+TABLE_CENTER_X = 0.55
 TABLE_TOP = 0.40
 TABLE_SIZE = (0.75, 0.70, 0.06)
 
 CUBE_SIZE = 0.08
 CLEARANCE = 0.002
 CUBE_CENTER = (
-    0.85,
+    0.55,
     0.0,
     TABLE_TOP + CLEARANCE + 0.5 * CUBE_SIZE,
 )
 CUBE_TOP = TABLE_TOP + CLEARANCE + CUBE_SIZE
 
-CLOTH_CENTER = (0.85, 0.0, CUBE_TOP + 0.015)
+CLOTH_SIZE = 0.40
+CLOTH_RESOLUTION = 41
+CLOTH_CENTER = (0.55, 0.0, CUBE_TOP + 0.015)
 CLOTH_COLOR = (0.25, 0.45, 0.90, 1.0)
 
 HOME_QPOS = np.array(
@@ -81,7 +83,7 @@ def main() -> None:
         viewer_options=gs.options.ViewerOptions(
             res=(1100, 720),
             camera_pos=(1.65, -1.35, 1.15),
-            camera_lookat=(0.50, 0.0, 0.48),
+            camera_lookat=(0.55, 0.0, 0.48),
             camera_fov=38,
         ),
         show_viewer=not args.no_gui,
@@ -111,7 +113,12 @@ def main() -> None:
     )
     scene.add_entity(
         morph=gs.morphs.Mesh(
-            file=str(cloth_grid_asset()),
+            file=str(
+                cloth_grid_asset(
+                    resolution=CLOTH_RESOLUTION,
+                    size=CLOTH_SIZE,
+                )
+            ),
             pos=CLOTH_CENTER,
         ),
         material=gs.materials.FEM.QCloth(
