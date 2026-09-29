@@ -854,6 +854,13 @@ At Genesis's 39 Newton iterations in the labeled capture, replacing this phase
 with the CGQ schedule projects a 53.84 ms reduction over nine frames, or about
 5.98 ms per frame.
 
+Quadrants' LSB radix sort uses an even pass count for the u32/u64 pipelines, so
+the sorted keys and permutation land back in the first input buffers. Genesis
+now consumes those first buffers for flags, FSR, and extraction; the `_out`
+arrays remain temporary ping-pong storage. The previous code happened to work
+for current row/vertex ranges because the final high-byte pass did not change
+their order, but that was not a valid sort contract.
+
 The complete excess-time decomposition is mutually exclusive:
 
 - sort/reduce gap: 57.958 ms, 38.48% of the excess;

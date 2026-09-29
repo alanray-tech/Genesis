@@ -842,7 +842,7 @@ class ContactSystem(SimSystem):
             flag = qd.u32(0)
             if index < self.n_contact_doublets[()] and (
                 index == self.n_contact_doublets[()] - 1
-                or self.doublet_sort_keys_out[index] != self.doublet_sort_keys_out[index + 1]
+                or self.doublet_sort_keys[index] != self.doublet_sort_keys[index + 1]
             ):
                 flag = qd.u32(1)
             self.doublet_seg_flags[index] = flag
@@ -869,7 +869,7 @@ class ContactSystem(SimSystem):
     def doublet_fsr_merge(self):
         qd.loop_config(name="contact_doublet_fsr_merge")
         for index in range(self.n_contact_doublets[()]):
-            source = qd.i32(self.doublet_sort_perm_out[index])
+            source = qd.i32(self.doublet_sort_perm[index])
             segment = qd.i32(self.doublet_seg_ids[index])
             for axis in qd.static(range(3)):
                 qd.atomic_add(
@@ -883,7 +883,7 @@ class ContactSystem(SimSystem):
         for index in range(self.n_contact_doublets[()]):
             if self.doublet_seg_flags[index] != 0:
                 segment = qd.i32(self.doublet_seg_ids[index])
-                self.unique_doublet_vertices[segment] = qd.i32(self.doublet_sort_keys_out[index])
+                self.unique_doublet_vertices[segment] = qd.i32(self.doublet_sort_keys[index])
                 if index == self.n_contact_doublets[()] - 1:
                     self.n_unique_doublets[()] = segment + 1
 
@@ -924,7 +924,7 @@ class ContactSystem(SimSystem):
             flag = qd.u32(0)
             if index < self.n_contact_triplets[()] and (
                 index == self.n_contact_triplets[()] - 1
-                or self.triplet_sort_keys_out[index] != self.triplet_sort_keys_out[index + 1]
+                or self.triplet_sort_keys[index] != self.triplet_sort_keys[index + 1]
             ):
                 flag = qd.u32(1)
             self.triplet_seg_flags[index] = flag
@@ -952,7 +952,7 @@ class ContactSystem(SimSystem):
     def triplet_fsr_merge(self):
         qd.loop_config(name="contact_triplet_fsr_merge")
         for index in range(self.n_contact_triplets[()]):
-            source = qd.i32(self.triplet_sort_perm_out[index])
+            source = qd.i32(self.triplet_sort_perm[index])
             segment = qd.i32(self.triplet_seg_ids[index])
             for row in qd.static(range(3)):
                 for column in qd.static(range(3)):
@@ -967,7 +967,7 @@ class ContactSystem(SimSystem):
         for index in range(self.n_contact_triplets[()]):
             if self.triplet_seg_flags[index] != 0:
                 segment = qd.i32(self.triplet_seg_ids[index])
-                key = self.triplet_sort_keys_out[index]
+                key = self.triplet_sort_keys[index]
                 self.unique_triplet_rows[segment] = qd.i32(key >> 32)
                 self.unique_triplet_cols[segment] = qd.i32(key & qd.u64(0xFFFFFFFF))
                 if index == self.n_contact_triplets[()] - 1:

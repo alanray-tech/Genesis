@@ -238,7 +238,7 @@ class GlobalLinearSystem(SimSystem):
         for i in range(self.padded_triplets[()]):
             flag = qd.u32(0)
             if i < self.n_triplets[()] and (
-                i == self.n_triplets[()] - 1 or self.sort_keys_out[i] != self.sort_keys_out[i + 1]
+                i == self.n_triplets[()] - 1 or self.triplet_keys[i] != self.triplet_keys[i + 1]
             ):
                 flag = qd.u32(1)
             self.seg_flags[i] = flag
@@ -266,7 +266,7 @@ class GlobalLinearSystem(SimSystem):
     def fast_segmented_reduce_body(self):
         qd.loop_config(name="body_fsr_merge")
         for i in range(self.n_triplets[()]):
-            source = qd.i32(self.sort_perm_out[i])
+            source = qd.i32(self.triplet_perm[i])
             segment = qd.i32(self.seg_ids[i])
             for component in range(9):
                 qd.atomic_add(
@@ -280,7 +280,7 @@ class GlobalLinearSystem(SimSystem):
         for i in range(self.n_triplets[()]):
             if self.seg_flags[i] != 0:
                 segment = qd.i32(self.seg_ids[i])
-                key = self.sort_keys_out[i]
+                key = self.triplet_keys[i]
                 self.bcoo_row[segment] = qd.i32(key >> 32)
                 self.bcoo_col[segment] = qd.i32(key & qd.u64(0xFFFFFFFF))
                 if i == self.n_triplets[()] - 1:
