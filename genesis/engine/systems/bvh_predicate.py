@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import quadrants as qd
 
+from .contact_function.contact_table_query import ct_enabled_ee, ct_enabled_pt
+
 
 @qd.func
 def _node_pair_enabled(body_mgr: qd.template(), left_body, right_body):
@@ -23,6 +25,7 @@ def _ee_pair_enabled(
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     edge_a,
     edge_b,
 ):
@@ -38,6 +41,15 @@ def _ee_pair_enabled(
     if body_a >= 0 and body_b >= 0 and body.is_body_contact_ignored(body_a, body_b):
         accept = 0
     if ea0 == eb0 or ea0 == eb1 or ea1 == eb0 or ea1 == eb1:
+        accept = 0
+    if not ct_enabled_ee(
+        contact.enable_ee_table,
+        contact.n_contact_elements[()],
+        contact.vert_contact_element_ids[ea0],
+        contact.vert_contact_element_ids[ea1],
+        contact.vert_contact_element_ids[eb0],
+        contact.vert_contact_element_ids[eb1],
+    ):
         accept = 0
     return accept
 
@@ -74,6 +86,7 @@ def _pt_pair_enabled(
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     vertex_index,
     face,
 ):
@@ -96,6 +109,15 @@ def _pt_pair_enabled(
     ):
         accept = 0
     if vertex_index == triangle_a or vertex_index == triangle_b or vertex_index == triangle_c:
+        accept = 0
+    if not ct_enabled_pt(
+        contact.enable_table,
+        contact.n_contact_elements[()],
+        contact.vert_contact_element_ids[vertex_index],
+        contact.vert_contact_element_ids[triangle_a],
+        contact.vert_contact_element_ids[triangle_b],
+        contact.vert_contact_element_ids[triangle_c],
+    ):
         accept = 0
     return accept
 

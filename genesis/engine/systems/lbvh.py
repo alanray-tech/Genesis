@@ -1331,6 +1331,7 @@ class LBVH:
         surf_mgr: qd.template(),
         vtx_mgr: qd.template(),
         body_mgr: qd.template(),
+        contact: qd.template(),
         pairs: qd.template(),
         n_pairs: qd.template(),
         max_pairs_val: qd.i32,
@@ -1405,6 +1406,7 @@ class LBVH:
                     surf_mgr,
                     vtx_mgr,
                     body_mgr,
+                    contact,
                     vidx,
                     root_face,
                 ):
@@ -1467,6 +1469,7 @@ class LBVH:
                             surf_mgr,
                             vtx_mgr,
                             body_mgr,
+                            contact,
                             vidx,
                             face_idx,
                         )
@@ -1521,6 +1524,7 @@ class LBVH:
                             surf_mgr,
                             vtx_mgr,
                             body_mgr,
+                            contact,
                             vidx,
                             face_idx2,
                         )
@@ -1538,6 +1542,7 @@ class LBVH:
         surf_mgr: qd.template(),
         vtx_mgr: qd.template(),
         body_mgr: qd.template(),
+        contact: qd.template(),
         pairs: qd.template(),
         n_pairs: qd.template(),
         max_pairs_val: qd.i32,
@@ -1681,6 +1686,7 @@ class LBVH:
                             surf_mgr,
                             vtx_mgr,
                             body_mgr,
+                            contact,
                             vertex_index,
                             face,
                         ):
@@ -1782,6 +1788,7 @@ class LBVH:
                                                 surf_mgr,
                                                 vtx_mgr,
                                                 body_mgr,
+                                                contact,
                                                 vertex_index,
                                                 face,
                                             ):
@@ -1932,6 +1939,7 @@ class LBVH:
         surf_mgr: qd.template(),
         vtx_mgr: qd.template(),
         body_mgr: qd.template(),
+        contact: qd.template(),
         pairs: qd.template(),
         n_pairs: qd.template(),
         max_pairs_val: qd.i32,
@@ -2019,6 +2027,7 @@ class LBVH:
                                                 surf_mgr,
                                                 vtx_mgr,
                                                 body_mgr,
+                                                contact,
                                                 self_eid,
                                                 other_edge,
                                             ):

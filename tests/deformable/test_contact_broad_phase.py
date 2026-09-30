@@ -12,12 +12,32 @@ from genesis.engine.systems.lbvh import LBVH
 from genesis.utils.misc import qd_to_numpy
 
 
+@qd.data_oriented
+class ContactPredicateFixture:
+    def __init__(self, n_vertices: int, enabled: bool = True):
+        flag = int(enabled)
+        self.n_contact_elements = qd.ndarray(qd.i32, shape=())
+        self.enable_table = qd.ndarray(qd.i32, shape=(1,))
+        self.enable_ee_table = qd.ndarray(qd.i32, shape=(1,))
+        self.vert_contact_element_ids = qd.ndarray(
+            qd.i32,
+            shape=(max(n_vertices, 1),),
+        )
+        self.n_contact_elements.from_numpy(np.array(1, dtype=np.int32))
+        self.enable_table.from_numpy(np.array([flag], dtype=np.int32))
+        self.enable_ee_table.from_numpy(np.array([flag], dtype=np.int32))
+        self.vert_contact_element_ids.from_numpy(
+            np.zeros(max(n_vertices, 1), dtype=np.int32)
+        )
+
+
 @qd.kernel
 def build_and_query_pt(
     bvh: qd.template(),
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     pairs: qd.types.ndarray(qd.i32, ndim=2),
     n_pairs: qd.types.ndarray(qd.i32, ndim=0),
     overflow: qd.types.ndarray(qd.i32, ndim=0),
@@ -40,6 +60,7 @@ def build_and_query_pt(
         surface,
         vertex,
         body,
+        contact,
         pairs,
         n_pairs,
         16,
@@ -73,6 +94,7 @@ def query_pt_batched_only(
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     pairs: qd.types.ndarray(qd.i32, ndim=2),
     n_pairs: qd.types.ndarray(qd.i32, ndim=0),
     max_pairs: qd.i32,
@@ -85,6 +107,7 @@ def query_pt_batched_only(
         surface,
         vertex,
         body,
+        contact,
         pairs,
         n_pairs,
         max_pairs,
@@ -99,6 +122,7 @@ def query_pt_warp_only(
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     pairs: qd.types.ndarray(qd.i32, ndim=2),
     n_pairs: qd.types.ndarray(qd.i32, ndim=0),
     max_pairs: qd.i32,
@@ -111,6 +135,7 @@ def query_pt_warp_only(
         surface,
         vertex,
         body,
+        contact,
         pairs,
         n_pairs,
         max_pairs,
@@ -126,6 +151,7 @@ def build_and_query_ee_dual(
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     pairs: qd.types.ndarray(qd.i32, ndim=2),
     n_pairs: qd.types.ndarray(qd.i32, ndim=0),
     overflow: qd.types.ndarray(qd.i32, ndim=0),
@@ -144,7 +170,17 @@ def build_and_query_ee_dual(
     for _ in range(1):
         n_pairs[()] = 0
         overflow[()] = 0
-    dual.query(bvh, surface, vertex, body, pairs, n_pairs, 16, overflow)
+    dual.query(
+        bvh,
+        surface,
+        vertex,
+        body,
+        contact,
+        pairs,
+        n_pairs,
+        16,
+        overflow,
+    )
 
 
 @qd.kernel
@@ -153,6 +189,7 @@ def query_ee_warp(
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     pairs: qd.types.ndarray(qd.i32, ndim=2),
     n_pairs: qd.types.ndarray(qd.i32, ndim=0),
     overflow: qd.types.ndarray(qd.i32, ndim=0),
@@ -160,7 +197,17 @@ def query_ee_warp(
     for _ in range(1):
         n_pairs[()] = 0
         overflow[()] = 0
-    bvh.query_ee_warp(surface, vertex, body, pairs, n_pairs, 64, 0.0, overflow)
+    bvh.query_ee_warp(
+        surface,
+        vertex,
+        body,
+        contact,
+        pairs,
+        n_pairs,
+        64,
+        0.0,
+        overflow,
+    )
 
 
 @qd.kernel
@@ -170,13 +217,24 @@ def query_ee_dual_only(
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     pairs: qd.types.ndarray(qd.i32, ndim=2),
     n_pairs: qd.types.ndarray(qd.i32, ndim=0),
     overflow: qd.types.ndarray(qd.i32, ndim=0),
 ):
     for _ in range(1):
         overflow[()] = 0
-    dual.query(bvh, surface, vertex, body, pairs, n_pairs, 64, overflow)
+    dual.query(
+        bvh,
+        surface,
+        vertex,
+        body,
+        contact,
+        pairs,
+        n_pairs,
+        64,
+        overflow,
+    )
 
 
 @qd.kernel
@@ -245,7 +303,7 @@ def make_single_body_pt_scene(
         np.array([0, 0], dtype=np.int32),
         np.empty(0, dtype=np.int32),
     )
-    return surface, vertex, body
+    return surface, vertex, body, ContactPredicateFixture(n_vertices)
 
 
 @pytest.mark.required
@@ -337,7 +395,7 @@ def test_dop14f_leaf_bounds_conservatively_contain_fp64_reference():
     direction = np.where(np.arange(base.size).reshape(base.shape) % 2 == 0, np.inf, -np.inf)
     positions = np.nextafter(base, direction)
     triangles = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
-    surface, vertex, _ = make_single_body_pt_scene(positions, triangles)
+    surface, vertex, _, _ = make_single_body_pt_scene(positions, triangles)
     endpoints = np.nextafter(positions + 3.0e-8, -direction)
     vertex.trajectory_end_positions.from_numpy(endpoints)
 
@@ -492,7 +550,17 @@ def test_lbvh_pt_candidates_match_two_parallel_triangles(
     pairs = qd.ndarray(qd.i32, shape=(16, 2))
     n_pairs = qd.ndarray(qd.i32, shape=())
     overflow = qd.ndarray(qd.i32, shape=())
-    build_and_query_pt(bvh, surface, vertex, body, pairs, n_pairs, overflow)
+    contact = ContactPredicateFixture(len(positions))
+    build_and_query_pt(
+        bvh,
+        surface,
+        vertex,
+        body,
+        contact,
+        pairs,
+        n_pairs,
+        overflow,
+    )
 
     assert int(qd_to_numpy(overflow)) == 0
     assert int(qd_to_numpy(n_pairs)) == 6
@@ -514,7 +582,7 @@ def test_pt_warp_matches_batched_for_single_leaf():
         dtype=np.float64,
     )
     triangles = np.array([[0, 1, 2]], dtype=np.int32)
-    surface, vertex, body = make_single_body_pt_scene(
+    surface, vertex, body, contact = make_single_body_pt_scene(
         positions,
         triangles,
     )
@@ -532,6 +600,7 @@ def test_pt_warp_matches_batched_for_single_leaf():
         surface,
         vertex,
         body,
+        contact,
         batched_pairs,
         batched_count,
         4,
@@ -542,6 +611,7 @@ def test_pt_warp_matches_batched_for_single_leaf():
         surface,
         vertex,
         body,
+        contact,
         warp_pairs,
         warp_count,
         4,
@@ -558,6 +628,32 @@ def test_pt_warp_matches_batched_for_single_leaf():
         qd_to_numpy(warp_pairs)[0],
         np.array([3, 0], dtype=np.int32),
     )
+
+    contact.enable_table.from_numpy(np.zeros(1, dtype=np.int32))
+    query_pt_batched_only(
+        bvh,
+        surface,
+        vertex,
+        body,
+        contact,
+        batched_pairs,
+        batched_count,
+        4,
+        overflow,
+    )
+    query_pt_warp_only(
+        bvh,
+        surface,
+        vertex,
+        body,
+        contact,
+        warp_pairs,
+        warp_count,
+        4,
+        overflow,
+    )
+    assert int(qd_to_numpy(batched_count)) == 0
+    assert int(qd_to_numpy(warp_count)) == 0
 
 
 @pytest.mark.required
@@ -580,7 +676,7 @@ def test_pt_warp_matches_batched_dense_and_exact_overflow_count():
             (triangle_index + 37) % n_vertices,
         )
     ).astype(np.int32)
-    surface, vertex, body = make_single_body_pt_scene(
+    surface, vertex, body, contact = make_single_body_pt_scene(
         positions,
         triangles,
     )
@@ -605,6 +701,7 @@ def test_pt_warp_matches_batched_dense_and_exact_overflow_count():
         surface,
         vertex,
         body,
+        contact,
         batched_pairs,
         batched_count,
         expected_count,
@@ -616,6 +713,7 @@ def test_pt_warp_matches_batched_dense_and_exact_overflow_count():
         surface,
         vertex,
         body,
+        contact,
         warp_pairs,
         warp_count,
         expected_count,
@@ -636,6 +734,7 @@ def test_pt_warp_matches_batched_dense_and_exact_overflow_count():
         surface,
         vertex,
         body,
+        contact,
         batched_pairs,
         batched_count,
         limited_capacity,
@@ -648,6 +747,7 @@ def test_pt_warp_matches_batched_dense_and_exact_overflow_count():
         surface,
         vertex,
         body,
+        contact,
         warp_pairs,
         warp_count,
         limited_capacity,
@@ -708,11 +808,47 @@ def test_dop14_dual_ee_query():
     pairs = qd.ndarray(qd.i32, shape=(16, 2))
     n_pairs = qd.ndarray(qd.i32, shape=())
     overflow = qd.ndarray(qd.i32, shape=())
-    build_and_query_ee_dual(bvh, dual, surface, vertex, body, pairs, n_pairs, overflow)
+    contact = ContactPredicateFixture(len(positions))
+    build_and_query_ee_dual(
+        bvh,
+        dual,
+        surface,
+        vertex,
+        body,
+        contact,
+        pairs,
+        n_pairs,
+        overflow,
+    )
 
     assert int(qd_to_numpy(overflow)) == 0
     assert int(qd_to_numpy(n_pairs)) == 1
     np.testing.assert_array_equal(qd_to_numpy(pairs)[0], np.array([0, 1], dtype=np.int32))
+
+    contact.enable_ee_table.from_numpy(np.zeros(1, dtype=np.int32))
+    query_ee_dual_only(
+        bvh,
+        dual,
+        surface,
+        vertex,
+        body,
+        contact,
+        pairs,
+        n_pairs,
+        overflow,
+    )
+    assert int(qd_to_numpy(n_pairs)) == 0
+    query_ee_warp(
+        bvh,
+        surface,
+        vertex,
+        body,
+        contact,
+        pairs,
+        n_pairs,
+        overflow,
+    )
+    assert int(qd_to_numpy(n_pairs)) == 0
 
 
 @pytest.mark.required
@@ -769,19 +905,59 @@ def test_dop14_dual_ee_matches_per_edge_query():
     warp_pairs = qd.ndarray(qd.i32, shape=(64, 2))
     warp_count = qd.ndarray(qd.i32, shape=())
     overflow = qd.ndarray(qd.i32, shape=())
-    build_and_query_ee_dual(bvh, dual_state, surface, vertex, body, dual_pairs, dual_count, overflow)
-    query_ee_warp(bvh, surface, vertex, body, warp_pairs, warp_count, overflow)
+    contact = ContactPredicateFixture(len(positions))
+    build_and_query_ee_dual(
+        bvh,
+        dual_state,
+        surface,
+        vertex,
+        body,
+        contact,
+        dual_pairs,
+        dual_count,
+        overflow,
+    )
+    query_ee_warp(
+        bvh,
+        surface,
+        vertex,
+        body,
+        contact,
+        warp_pairs,
+        warp_count,
+        overflow,
+    )
 
     dual = {tuple(pair) for pair in qd_to_numpy(dual_pairs)[: int(qd_to_numpy(dual_count))]}
     warp = {tuple(pair) for pair in qd_to_numpy(warp_pairs)[: int(qd_to_numpy(warp_count))]}
     assert dual == warp
 
     dual_state.frontier_capacity.from_numpy(np.array(1, dtype=np.int32))
-    build_and_query_ee_dual(bvh, dual_state, surface, vertex, body, dual_pairs, dual_count, overflow)
+    build_and_query_ee_dual(
+        bvh,
+        dual_state,
+        surface,
+        vertex,
+        body,
+        contact,
+        dual_pairs,
+        dual_count,
+        overflow,
+    )
     assert int(qd_to_numpy(overflow)) == 1
     assert int(qd_to_numpy(dual_state.required_frontier)) > 1
     assert dual_state.handle_overflow()
-    query_ee_dual_only(bvh, dual_state, surface, vertex, body, dual_pairs, dual_count, overflow)
+    query_ee_dual_only(
+        bvh,
+        dual_state,
+        surface,
+        vertex,
+        body,
+        contact,
+        dual_pairs,
+        dual_count,
+        overflow,
+    )
     assert int(qd_to_numpy(overflow)) == 0
     replay = {tuple(pair) for pair in qd_to_numpy(dual_pairs)[: int(qd_to_numpy(dual_count))]}
     assert replay == warp
@@ -847,12 +1023,14 @@ def test_dual_ee_morton_reorders_body_metadata_with_leaves():
     warp_pairs = qd.ndarray(qd.i32, shape=(16, 2))
     warp_count = qd.ndarray(qd.i32, shape=())
     overflow = qd.ndarray(qd.i32, shape=())
+    contact = ContactPredicateFixture(len(positions))
     build_and_query_ee_dual(
         bvh,
         dual_state,
         surface,
         vertex,
         body,
+        contact,
         dual_pairs,
         dual_count,
         overflow,
@@ -862,6 +1040,7 @@ def test_dual_ee_morton_reorders_body_metadata_with_leaves():
         surface,
         vertex,
         body,
+        contact,
         warp_pairs,
         warp_count,
         overflow,

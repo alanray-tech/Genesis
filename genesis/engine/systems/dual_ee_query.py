@@ -35,6 +35,7 @@ def _dual_ee_expand_pair(
     surface: qd.template(),
     vertex: qd.template(),
     body: qd.template(),
+    contact: qd.template(),
     left_node,
     right_node,
     children: qd.template(),
@@ -69,7 +70,7 @@ def _dual_ee_expand_pair(
             if left_element != right_element:
                 edge_a = qd.i32(qd.min(left_element, right_element))
                 edge_b = qd.i32(qd.max(left_element, right_element))
-                if _ee_pair_enabled(surface, vertex, body, edge_a, edge_b) != 0:
+                if _ee_pair_enabled(surface, vertex, body, contact, edge_a, edge_b) != 0:
                     result[1] = 1
                     result[2] = edge_a
                     result[3] = edge_b
@@ -227,6 +228,7 @@ class DualEEQueryState:
         surface: qd.template(),
         vertex: qd.template(),
         body: qd.template(),
+        contact: qd.template(),
         pairs: qd.template(),
         n_pairs: qd.template(),
         max_pairs,
@@ -262,6 +264,7 @@ class DualEEQueryState:
                         surface,
                         vertex,
                         body,
+                        contact,
                         left_node,
                         right_node,
                         children,
@@ -346,6 +349,7 @@ class DualEEQueryState:
         surface: qd.template(),
         vertex: qd.template(),
         body: qd.template(),
+        contact: qd.template(),
         pairs: qd.template(),
         n_pairs: qd.template(),
         max_pairs,
@@ -399,6 +403,7 @@ class DualEEQueryState:
                                 surface,
                                 vertex,
                                 body,
+                                contact,
                                 left_node,
                                 right_node,
                                 children,
@@ -440,6 +445,7 @@ class DualEEQueryState:
         surface: qd.template(),
         vertex: qd.template(),
         body: qd.template(),
+        contact: qd.template(),
         pairs: qd.template(),
         n_pairs: qd.template(),
         max_pairs,
@@ -453,6 +459,7 @@ class DualEEQueryState:
                     surface,
                     vertex,
                     body,
+                    contact,
                     pairs,
                     n_pairs,
                     max_pairs,
@@ -466,6 +473,7 @@ class DualEEQueryState:
                     surface,
                     vertex,
                     body,
+                    contact,
                     pairs,
                     n_pairs,
                     max_pairs,
@@ -478,6 +486,7 @@ class DualEEQueryState:
             surface,
             vertex,
             body,
+            contact,
             pairs,
             n_pairs,
             max_pairs,
@@ -489,6 +498,7 @@ class DualEEQueryState:
             surface,
             vertex,
             body,
+            contact,
             pairs,
             n_pairs,
             max_pairs,

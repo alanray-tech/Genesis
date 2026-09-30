@@ -207,7 +207,12 @@ class ContactSystem(SimSystem):
             raise ValueError("ContactSystem contact element IDs must be non-negative")
         self.vert_contact_element_ids.from_numpy(values)
 
-    def wire_halfplanes(self, positions: np.ndarray, normals: np.ndarray) -> None:
+    def wire_halfplanes(
+        self,
+        positions: np.ndarray,
+        normals: np.ndarray,
+        contact_element_ids: np.ndarray | None = None,
+    ) -> None:
         plane_positions = np.ascontiguousarray(positions, dtype=np.float64).reshape(-1, 3)
         plane_normals = np.ascontiguousarray(normals, dtype=np.float64).reshape(-1, 3)
         if len(plane_positions) != len(plane_normals):
@@ -215,15 +220,44 @@ class ContactSystem(SimSystem):
         norms = np.linalg.norm(plane_normals, axis=1)
         if np.any(np.abs(norms - 1.0) > 1e-12):
             raise ValueError("ContactSystem halfplane normals must be unit length")
+        if contact_element_ids is None:
+            plane_contact_element_ids = np.zeros(
+                len(plane_positions),
+                dtype=np.int32,
+            )
+        else:
+            plane_contact_element_ids = np.ascontiguousarray(
+                contact_element_ids,
+                dtype=np.int32,
+            ).reshape(-1)
+            if len(plane_contact_element_ids) != len(plane_positions):
+                raise ValueError(
+                    "ContactSystem halfplane contact element IDs must match "
+                    "the number of halfplanes"
+                )
+            if np.any(plane_contact_element_ids < 0):
+                raise ValueError(
+                    "ContactSystem halfplane contact element IDs must be "
+                    "non-negative"
+                )
 
         self.n_halfplanes = qd.ndarray(qd.i32, shape=())
         self.halfplane_positions = qd.ndarray(qd.f64, shape=(max(len(plane_positions), 1), 3))
         self.halfplane_normals = qd.ndarray(qd.f64, shape=(max(len(plane_normals), 1), 3))
+        self.halfplane_contact_element_ids = qd.ndarray(
+            qd.i32,
+            shape=(max(len(plane_positions), 1),),
+        )
         self.n_halfplanes.from_numpy(np.array(len(plane_positions), dtype=np.int32))
         self.halfplane_positions.from_numpy(
             plane_positions if len(plane_positions) else np.zeros((1, 3), dtype=np.float64)
         )
         self.halfplane_normals.from_numpy(plane_normals if len(plane_normals) else np.zeros((1, 3), dtype=np.float64))
+        self.halfplane_contact_element_ids.from_numpy(
+            plane_contact_element_ids
+            if len(plane_contact_element_ids)
+            else np.zeros(1, dtype=np.int32)
+        )
         self.has_halfplanes = len(plane_positions) != 0
 
     def set_adaptive_kappa(self, mode: str, tick: str, n_bodies: int) -> None:
@@ -688,6 +722,16 @@ class ContactSystem(SimSystem):
             surface_vertex = pair_index // self.n_halfplanes[()]
             plane = pair_index - surface_vertex * self.n_halfplanes[()]
             vertex_id = self.surface.surf_verts[surface_vertex]
+            vertex_element = self.vert_contact_element_ids[vertex_id]
+            plane_element = self.halfplane_contact_element_ids[plane]
+            if (
+                self.enable_table[
+                    vertex_element * self.n_contact_elements[()]
+                    + plane_element
+                ]
+                == 0
+            ):
+                continue
             current_distance = halfplane_signed_distance(
                 self.vertex.positions[vertex_id, 0],
                 self.vertex.positions[vertex_id, 1],

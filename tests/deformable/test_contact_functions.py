@@ -296,6 +296,12 @@ def evaluate_contact_ccd(contact: qd.template()):
     contact.ccd()
 
 
+@qd.kernel
+def evaluate_halfplane_query(contact: qd.template()):
+    contact.reset_collision_counts()
+    contact.halfplane_query()
+
+
 @qd.kernel(fastcache=True)
 def inspect_pt_pair(
     contact: qd.template(),
@@ -487,6 +493,53 @@ def test_cgq_rank1_triplet_scatter_matches_dense():
         rtol=1e-12,
         atol=1e-12,
     )
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_halfplane_query_respects_contact_tabular():
+    vertex = GlobalVertexManager()
+    vertex.init(1)
+    vertex.positions.from_numpy(
+        np.array([[0.0, 0.0, 0.006]], dtype=np.float64)
+    )
+    vertex.trajectory_end_positions.from_numpy(
+        np.array([[0.0, 0.0, -0.004]], dtype=np.float64)
+    )
+    vertex.wire_thickness_data(np.array([0.001], dtype=np.float64))
+    vertex.wire_d_hat_data(np.array([0.01], dtype=np.float64))
+
+    surface = GlobalSurfaceManager()
+    surface.wire_surface_data(
+        np.empty((0, 3), dtype=np.int32),
+        np.empty((0, 2), dtype=np.int32),
+        np.array([0], dtype=np.int32),
+    )
+
+    tabular = ContactTabular()
+    tabular.default_model(
+        friction_rate=0.0,
+        resistance=1.0e4,
+        enable=False,
+        enable_ee=False,
+    )
+    contact = ContactSystem()
+    contact.vertex = vertex
+    contact.surface = surface
+    contact.wire_params(d_hat=0.01, kappa=1.0e4, init_pair_capacity=1)
+    contact.wire_contact_tabular(tabular)
+    contact.wire_halfplanes(
+        np.array([[0.0, 0.0, 0.0]], dtype=np.float64),
+        np.array([[0.0, 0.0, 1.0]], dtype=np.float64),
+    )
+    contact.set_contact_constitution(ConsistentIPCContactConstitution())
+    contact.init(1)
+
+    evaluate_halfplane_query(contact)
+
+    assert int(qd_to_numpy(contact.n_pairs_ph)) == 0
+    assert int(qd_to_numpy(contact.intersection_flag)) == 0
 
 
 @pytest.mark.required
