@@ -1071,7 +1071,9 @@ class RigidJointForestSystem(SimSystem):
         for dof in range(self.proxy_dof_offset[()]):
             result[dof] = result[dof] + self.physical_Ap[dof]
 
-        self.forest_inertia_wrench()
+        # RigidSystem contributes Genesis native curvature. This projection
+        # adds only the physical BCOO/contact wrench to generalized rows.
+        self.clear_body_wrench()
         if qd.static(self.has_contact_proxy):
             for pair in range(self.contact_proxy.n_pairs[()]):
                 mechanism = self.contact_proxy.mechanism_body[pair]

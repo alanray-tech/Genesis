@@ -335,67 +335,86 @@ class RigidSystem(SimSystem):
                 qd.atomic_add(self.rigid_energy[()], self.h4 * self.constraint_state.cost[i_b])
 
     @qd.func(requires_top_level=True)
-    def apply_hessian(self, x: qd.template(), y: qd.template()):
-        if qd.static(self.has_constraints):
-            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
-                i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
-                self.constraint_state.search[i_d, i_b] = x[i_global]
+    def apply_hessian(
+        self,
+        x: qd.template(),
+        y: qd.template(),
+        displacement_coordinates: qd.template(),
+    ):
+        for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+            i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
+            self.constraint_state.search[i_d, i_b] = x[i_global]
 
-            for i_b in range(self.n_instances[()]):
-                if self.constraint_state.n_constraints[i_b] > 0:
-                    for i_island in range(self.constraint_state.island.n_islands[i_b]):
-                        n_dofs = self.constraint_state.island.dof_slices.n[i_island, i_b]
-                        if qd.static(self.rigid_config.is_single_island):
-                            n_dofs = self.n_dofs_per_instance[()]
-                        i_dof_start = self.constraint_state.island.dof_slices.start[i_island, i_b]
+        for i_b in range(self.n_instances[()]):
+            if qd.static(self.has_constraints) and self.constraint_state.n_constraints[i_b] > 0:
+                for i_island in range(self.constraint_state.island.n_islands[i_b]):
+                    n_dofs = self.constraint_state.island.dof_slices.n[i_island, i_b]
+                    if qd.static(self.rigid_config.is_single_island):
+                        n_dofs = self.n_dofs_per_instance[()]
+                    i_dof_start = self.constraint_state.island.dof_slices.start[i_island, i_b]
 
-                        for j_d_local in range(n_dofs):
-                            j_d = j_d_local
-                            if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
-                                j_d = self.constraint_state.island.dof_id[i_dof_start + j_d_local, i_b]
-                            value = gs.qd_float(0.0)
-                            for i_d_local in range(j_d_local, n_dofs):
-                                i_d = i_d_local
-                                if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
-                                    i_d = self.constraint_state.island.dof_id[i_dof_start + i_d_local, i_b]
-                                scale = gs.qd_float(1.0)
-                                if qd.static(self.rigid_config.enable_jacobi_equilibration):
-                                    scale = self.constraint_state.nt_jacobi[i_d, i_b]
-                                value = value + (
-                                    self.constraint_state.nt_H[i_b, i_d, j_d]
-                                    * self.constraint_state.search[i_d, i_b]
-                                    / scale
-                                )
-                            self.constraint_state.Mgrad[j_d, i_b] = value
-
-                        for i_d_local in range(n_dofs):
+                    for j_d_local in range(n_dofs):
+                        j_d = j_d_local
+                        if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
+                            j_d = self.constraint_state.island.dof_id[i_dof_start + j_d_local, i_b]
+                        value = gs.qd_float(0.0)
+                        for i_d_local in range(j_d_local, n_dofs):
                             i_d = i_d_local
                             if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
                                 i_d = self.constraint_state.island.dof_id[i_dof_start + i_d_local, i_b]
-                            value = gs.qd_float(0.0)
-                            for j_d_local in range(i_d_local + 1):
-                                j_d = j_d_local
-                                if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
-                                    j_d = self.constraint_state.island.dof_id[i_dof_start + j_d_local, i_b]
-                                value = value + (
-                                    self.constraint_state.nt_H[i_b, i_d, j_d] * self.constraint_state.Mgrad[j_d, i_b]
-                                )
                             scale = gs.qd_float(1.0)
                             if qd.static(self.rigid_config.enable_jacobi_equilibration):
                                 scale = self.constraint_state.nt_jacobi[i_d, i_b]
-                            self.constraint_state.grad[i_d, i_b] = value / scale
+                            value = value + (
+                                self.constraint_state.nt_H[i_b, i_d, j_d]
+                                * self.constraint_state.search[i_d, i_b]
+                                / scale
+                            )
+                        self.constraint_state.Mgrad[j_d, i_b] = value
 
-            for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
-                i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
-                if self.constraint_state.n_constraints[i_b] > 0:
-                    y[i_global] = y[i_global] + self.h4 * self.constraint_state.grad[i_d, i_b]
+                    for i_d_local in range(n_dofs):
+                        i_d = i_d_local
+                        if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
+                            i_d = self.constraint_state.island.dof_id[i_dof_start + i_d_local, i_b]
+                        value = gs.qd_float(0.0)
+                        for j_d_local in range(i_d_local + 1):
+                            j_d = j_d_local
+                            if qd.static(not self.rigid_config.is_single_island or self.rigid_config.sparse_solve):
+                                j_d = self.constraint_state.island.dof_id[i_dof_start + j_d_local, i_b]
+                            value = value + (
+                                self.constraint_state.nt_H[i_b, i_d, j_d] * self.constraint_state.Mgrad[j_d, i_b]
+                            )
+                        scale = gs.qd_float(1.0)
+                        if qd.static(self.rigid_config.enable_jacobi_equilibration):
+                            scale = self.constraint_state.nt_jacobi[i_d, i_b]
+                        self.constraint_state.grad[i_d, i_b] = value / scale
+            else:
+                for i_d in range(self.n_dofs_per_instance[()]):
+                    value = gs.qd_float(0.0)
+                    for j_d in range(self.n_dofs_per_instance[()]):
+                        value = value + (
+                            self.rigid_info.mass_mat[i_d, j_d, i_b] * self.constraint_state.search[j_d, i_b]
+                        )
+                    self.constraint_state.grad[i_d, i_b] = value
+
+        hessian_scale = self.h4
+        if qd.static(displacement_coordinates):
+            hessian_scale = 1.0
+        for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
+            i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
+            y[i_global] = y[i_global] + hessian_scale * self.constraint_state.grad[i_d, i_b]
 
         for i_padding in range(self.n_dofs[()], self.n_storage_dofs[()]):
             i_global = self.dof_offset[()] + i_padding
             y[i_global] = y[i_global] + x[i_global]
 
     @qd.func(requires_top_level=True)
-    def apply_preconditioner(self, residual: qd.template(), result: qd.template()):
+    def apply_preconditioner(
+        self,
+        residual: qd.template(),
+        result: qd.template(),
+        displacement_coordinates: qd.template(),
+    ):
         if qd.static(self.has_constraints):
             for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
                 i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
@@ -413,10 +432,13 @@ class RigidSystem(SimSystem):
                             rigid_config=self.rigid_config,
                         )
 
+            preconditioner_scale = 1.0 / self.h4
+            if qd.static(displacement_coordinates):
+                preconditioner_scale = 1.0
             for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
                 i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
                 if self.constraint_state.n_constraints[i_b] > 0:
-                    result[i_global] = self.constraint_state.Mgrad[i_d, i_b] / self.h4
+                    result[i_global] = preconditioner_scale * self.constraint_state.Mgrad[i_d, i_b]
 
         for i_padding in range(self.n_dofs[()], self.n_storage_dofs[()]):
             i_global = self.dof_offset[()] + i_padding

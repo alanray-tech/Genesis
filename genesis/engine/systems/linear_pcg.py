@@ -108,7 +108,11 @@ class LinearPCG:
                 self.preconditioned_residual,
             )
         elif qd.static(has_rigid):
-            rigid.apply_preconditioner(self.residual, self.preconditioned_residual)
+            rigid.apply_preconditioner(
+                self.residual,
+                self.preconditioned_residual,
+                False,
+            )
         if qd.static(has_fem):
             fem_preconditioner.apply(self.residual, self.preconditioned_residual)
 
@@ -158,13 +162,12 @@ class LinearPCG:
             )
         else:
             linear_system.spmv(self.direction, self.operator_direction)
-        if qd.static(has_rigid_forest):
-            rigid_forest.forest_control_matvec(
+        if qd.static(has_rigid):
+            rigid.apply_hessian(
                 self.direction,
                 self.operator_direction,
+                has_rigid_forest,
             )
-        elif qd.static(has_rigid):
-            rigid.apply_hessian(self.direction, self.operator_direction)
 
         self.pcg_dot_pAp()
 
@@ -189,7 +192,11 @@ class LinearPCG:
                 self.preconditioned_residual,
             )
         elif qd.static(has_rigid):
-            rigid.apply_preconditioner(self.residual, self.preconditioned_residual)
+            rigid.apply_preconditioner(
+                self.residual,
+                self.preconditioned_residual,
+                False,
+            )
         if qd.static(has_fem):
             fem_preconditioner.apply(self.residual, self.preconditioned_residual)
 

@@ -1058,12 +1058,27 @@ def test_franka_cloth_reduced_kkt_step():
     assert engine.rigid_forest.selected_path == "cgq_tree"
     assert not engine.rigid.has_collision
 
-    franka.control_dofs_position(franka.get_qpos()[:7], list(range(7)))
-    engine.step()
+    home_qpos = np.array(
+        [0.0, 0.0, 0.0, -1.5708, 0.0, 1.5708, -0.7854, 0.04, 0.04],
+        dtype=np.float64,
+    )
+    franka.set_qpos(home_qpos)
+    franka.set_dofs_kp(
+        np.array([4500.0, 4500.0, 3500.0, 3500.0, 2000.0, 2000.0, 2000.0, 100.0, 100.0]),
+    )
+    franka.set_dofs_kv(
+        np.array([450.0, 450.0, 350.0, 350.0, 200.0, 200.0, 200.0, 10.0, 10.0]),
+    )
+    franka.control_dofs_position(home_qpos)
+    newton_iterations = []
+    for _ in range(3):
+        engine.step()
+        newton_iterations.append(engine.get_newton_iters())
 
     edge_count = int(qd_to_numpy(engine.rigid_forest.n_edges))
     assert edge_count == 9
-    assert engine.get_newton_iters() < 1024
+    assert int(qd_to_numpy(engine.rigid.constraint_state.n_constraints)[0]) > 0
+    assert max(newton_iterations) <= 4
     assert engine.get_total_pcg_iters() >= engine.get_max_pcg_iters()
     assert int(qd_to_numpy(engine.frame_failed)) == 0
     assert float(qd_to_numpy(engine.rigid_contact_proxy.max_surface_residual)) <= float(

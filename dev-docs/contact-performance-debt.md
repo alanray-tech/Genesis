@@ -973,13 +973,31 @@ augmentation (`-act_bias[2] * dt`, CGQ's `dt * kv`) was added to edge and
 free-root pivots; this reduced a representative ten-frame total-PCG median
 from 166.5 to 98.
 
-The reduced operator no longer mixes CGQ contact pullback with Genesis native
-`nt_H`. It applies the matching forest `P^T M P`, controller damping, and
-contact operator. A cached `body_inertia` field is an explicit Genesis storage
-exception: CGQ stores the same physical 6x6 blocks in global BCOO, while
-Genesis's compact generalized rows require retaining the unfactored body
-blocks beside the mutated articulated factors. With this correction,
-representative total PCG work reached 57.5 versus CGQ's 60.
+The earlier reduced operator used forest `P^T M P`, controller damping, and
+the contact operator in place of Genesis native `nt_H`. A later frozen-state
+Franka regression proved that this was not a valid substitution while the
+gradient still came from Genesis's native constraint objective. The state had
+one active native constraint row and no active QIPC contact. The forest/native
+operator relative Frobenius error was 17.16%; each finger diagonal was
+`0.225000` instead of native `1.317152`, omitting `1.092152` of active
+constraint curvature.
+
+Production now applies Genesis native `nt_H` for the complete reduced rigid
+block and uses the forest only to pull the physical contact BCOO action back
+to generalized coordinates. The mapped articulated factorization remains the
+PCG preconditioner. The reduced variable is configuration displacement
+`delta_q = h^2 delta_qacc`: native gradient is scaled by `h^2`, native Hessian
+is unscaled, and the accepted solution is divided by `h^2` when written back
+to `qacc`. This is the required coordinate congruence, not a missing timestep
+factor.
+
+On the 30-frame tabletop teleop regression, the mismatched operator reached
+60 Newton iterations. It also needed 24 and 20 iterations on frames with zero
+active QIPC contacts. After restoring native curvature, all four initial
+zero-contact frames take exactly two Newton iterations; the complete run has
+worst Newton 7 and 10 across two runs, line search 0, and worst per-solve PCG
+52. The remaining 3--10-iteration frames coincide with active cloth/contact
+work rather than contact-free rigid convergence.
 
 The latest strict 100-frame comparison, with CGQ's Panda asset and
 minimal-coordinate fixed table/riser, measured:
