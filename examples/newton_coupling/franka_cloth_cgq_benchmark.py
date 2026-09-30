@@ -100,6 +100,12 @@ def main() -> None:
         action="store_true",
         help="use the retained generic radix/scan/atomic-reduce A/B path",
     )
+    parser.add_argument(
+        "--pt-query",
+        choices=("warp", "batched"),
+        default="warp",
+        help="select production warp PT or the retained batched A/B path",
+    )
     args = parser.parse_args()
     mjcf_path = args.mjcf.resolve()
     if not mjcf_path.is_file():
@@ -187,6 +193,7 @@ def main() -> None:
             "contact/init_collision_pair_capacity": 20_000,
             "contact/intersection_check": 0,
             "linear_system/tol_rate": 1e-5,
+            "bvh/pt_query": args.pt_query,
             "rigid_forest/fused": int(args.forest_path == "cgq_tree"),
             "extras/rigid_forest/genesis_legacy": int(args.forest_path == "genesis_legacy"),
             "extras/rigid_contact/genesis_collision": int(args.genesis_collision),
@@ -262,6 +269,7 @@ def main() -> None:
         "cloth_size": CLOTH_SIZE,
         "contact_d_hat": 1e-3,
         "linear_tolerance_rate": 1e-5,
+        "pt_query": args.pt_query,
         "requested_forest_path": args.forest_path,
         "selected_forest_path": engine.rigid_forest.selected_path,
         "franka_mjcf": str(mjcf_path),

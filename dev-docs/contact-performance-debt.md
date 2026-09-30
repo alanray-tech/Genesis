@@ -289,28 +289,54 @@ Rewrite:
 
 ### PERF-B05: Warp-cooperative PT traversal
 
-Current:
+Implementation:
 
-- `LBVH.query_pt` assigns one swept point query to one thread and traverses a
-  private global-memory stack.
-- On cloth-sized scenes this exposes only approximately
-  `ceil(n_surface_vertices / 32)` divergent warps.
+- `query_pt_warp` assigns one warp to each swept point query, uses eight warps
+  per 256-thread block and one 1,024-entry shared frontier per warp, and
+  grid-strides over `n_surf_verts[()]`.
+- Internal-node pushes and emitted PT pairs use subgroup ballot/prefix
+  compaction. Each emitted batch performs one global count reservation while
+  retaining exact required-count semantics on pair-buffer overflow.
+- Exact one-leaf handling matches CGQ. Frontier saturation uses a device
+  invariant, rather than truncating candidates or abusing pair-buffer growth.
+- Query projection bounds, including rigid-proxy path inflation, are computed
+  once per warp and reused for every DOP overlap.
+- `bvh/pt_query=batched` retains the former one-thread/global-stack traversal as
+  an explicit scene-config A/B path; production defaults to `warp`.
 
-CGQ target:
+Correctness:
 
-- `pt_query_warp`: one warp per swept point query, 8 warps per 256-thread
-  block, a 1,024-entry shared stack per warp, subgroup-batched pushes, and
-  subgroup-batched pair reservations.
-- Occupancy-sized static launch with manual grid-striding over the
-  device-scalar query count.
+- Sorted candidate-set parity against the retained batched traversal is
+  covered for AABB/DOP14, a one-leaf tree, and a dense non-power-of-two tree.
+- The dense regression also forces pair-buffer overflow and proves both paths
+  report the same complete required count.
+- In the matched Franka-cloth runs, PT/EE/active-contact counts, Newton/PCG/line
+  search/CCD sequences, and accepted steps are identical. State and proxy
+  residual differences remain at floating-point roundoff.
 
-Acceptance:
+Matched profile proof:
 
-- Sorted PT candidate-set parity with the current query on sparse, anisotropic,
-  and dense scenes.
-- Exact required-count behavior through pair-buffer checkpoint growth.
-- Compiled register/shared-memory occupancy and Nsight timing match or beat the
-  pinned CGQ path.
+- Nsight Systems capture window: frames 20--28, 18 Newton evaluations, RTX
+  5090, with the same updated predicate/path-inflation semantics on both paths.
+- The retained batched PT kernel costs `2.731 ms`, or `151.721 us/Newton`.
+- Warp PT costs `1.748 ms`, or `97.109 us/Newton`: `1.562x` faster, `36.00%`
+  lower, and `0.983 ms` removed from the captured query stage.
+- Nsight reports 128 registers/thread, zero local memory, 32,768 shared bytes
+  per block, and a 340-block launch: exactly two resident blocks per SM on the
+  170-SM RTX 5090. The earlier guessed 72-register launch metadata produced
+  510 blocks and was rejected after profiling.
+- Pinned CGQ warp PT is `65.649 us/Newton`, with 255 registers/thread, 32,768
+  shared bytes, and 170 blocks. Genesis remains `1.479x` slower; the next
+  packed-DOP14f layer addresses the 112-byte fp64 node loads that remain in
+  this otherwise aligned traversal.
+- Whole-window timings from the two separate captures are not used as the
+  layer speedup: unchanged kernels varied by far more than the `0.983 ms`
+  removed PT work, indicating run-wide clock/thermal variance. The equal-work
+  named-kernel result above is the acceptance measurement.
+
+Status: **closed at the traversal-schedule layer**. The one-thread production
+path is gone. Remaining native-CGQ parity is tracked by PERF-B01/B02 and the
+Quadrants grid/lowering layer.
 
 ### PERF-B06: LBVH Morton dynamic OneSweep
 

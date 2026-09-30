@@ -6,10 +6,12 @@ import quadrants as qd
 @qd.func
 def _node_pair_enabled(body_mgr: qd.template(), left_body, right_body):
     enabled = True
-    if left_body >= 0 and right_body >= 0 and (
-        (left_body == right_body and body_mgr.self_collision[left_body] == 0)
-        or body_mgr.is_body_contact_ignored(
-            left_body, right_body
+    if (
+        left_body >= 0
+        and right_body >= 0
+        and (
+            (left_body == right_body and body_mgr.self_collision[left_body] == 0)
+            or body_mgr.is_body_contact_ignored(left_body, right_body)
         )
     ):
         enabled = False
@@ -63,5 +65,63 @@ def _ee_emit_pair(
         if output < max_pairs:
             pairs[output, 0] = edge_a
             pairs[output, 1] = edge_b
+        else:
+            qd.atomic_or(overflow_flag[()], 1)
+
+
+@qd.func
+def _pt_pair_enabled(
+    surface: qd.template(),
+    vertex: qd.template(),
+    body: qd.template(),
+    vertex_index,
+    face,
+):
+    triangle_a = surface.surf_triangles[face, 0]
+    triangle_b = surface.surf_triangles[face, 1]
+    triangle_c = surface.surf_triangles[face, 2]
+    vertex_body = vertex.body_id[vertex_index]
+    triangle_body = vertex.body_id[triangle_a]
+    if vertex.body_id[triangle_b] != triangle_body or vertex.body_id[triangle_c] != triangle_body:
+        triangle_body = -1
+
+    accept = qd.i32(1)
+    if vertex_body == triangle_body and vertex_body >= 0 and body.self_collision[vertex_body] == 0:
+        accept = 0
+    if (
+        vertex_body >= 0
+        and triangle_body >= 0
+        and vertex_body != triangle_body
+        and body.is_body_contact_ignored(vertex_body, triangle_body)
+    ):
+        accept = 0
+    if vertex_index == triangle_a or vertex_index == triangle_b or vertex_index == triangle_c:
+        accept = 0
+    return accept
+
+
+@qd.func
+def _pt_emit_pair(
+    emit,
+    query,
+    face,
+    pairs: qd.template(),
+    n_pairs: qd.template(),
+    max_pairs,
+    overflow_flag: qd.template(),
+):
+    lane = qd.simt.subgroup.invocation_id()
+    mask = qd.simt.subgroup.ballot(qd.i32(emit))
+    count = qd.i32(qd.math.popcnt(mask))
+    base = qd.i32(0)
+    if lane == 0 and count > 0:
+        base = qd.atomic_add(n_pairs[()], count)
+    base = qd.simt.subgroup.broadcast_first(base)
+    if emit:
+        lane_lt = (qd.u64(1) << qd.u64(lane)) - qd.u64(1)
+        output = base + qd.i32(qd.math.popcnt(mask & lane_lt))
+        if output < max_pairs:
+            pairs[output, 0] = query
+            pairs[output, 1] = face
         else:
             qd.atomic_or(overflow_flag[()], 1)

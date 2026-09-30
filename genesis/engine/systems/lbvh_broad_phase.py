@@ -14,6 +14,7 @@ class LBVHBroadPhase(BroadPhaseSystem):
     def __init__(
         self,
         bound_type: str = "aabb",
+        pt_query: str = "warp",
         ee_query: str = "dual",
         dual_frontier_levels: int = 0,
         dual_target_waves: float = 24.0,
@@ -21,9 +22,13 @@ class LBVHBroadPhase(BroadPhaseSystem):
         genesis_legacy_sort_reduce: bool = False,
     ) -> None:
         super().__init__()
+        if pt_query not in ("warp", "batched"):
+            raise ValueError(f"Unsupported bvh/pt_query {pt_query!r}")
         if ee_query not in ("dual", "warp"):
             raise ValueError(f"Unsupported bvh/ee_query {ee_query!r}")
         self.bound_type = bound_type
+        self.pt_query = pt_query
+        self.use_warp_pt = pt_query == "warp"
         self.ee_query = ee_query
         self.use_dual_ee = ee_query == "dual"
         self.dual_frontier_levels = dual_frontier_levels
@@ -99,16 +104,28 @@ class LBVHBroadPhase(BroadPhaseSystem):
     @qd.func(requires_top_level=True)
     def trajectory_query(self):
         if qd.static(self.has_triangle_bvh):
-            self.triangle_bvh.query_pt(
-                self.surface,
-                self.vertex,
-                self.body,
-                self.contact.pairs_pt,
-                self.contact.n_pairs_pt,
-                self.contact.max_pairs_pt[()],
-                self.contact.d_hat[()],
-                self.contact.overflow_flag,
-            )
+            if qd.static(self.use_warp_pt):
+                self.triangle_bvh.query_pt_warp(
+                    self.surface,
+                    self.vertex,
+                    self.body,
+                    self.contact.pairs_pt,
+                    self.contact.n_pairs_pt,
+                    self.contact.max_pairs_pt[()],
+                    self.contact.d_hat[()],
+                    self.contact.overflow_flag,
+                )
+            else:
+                self.triangle_bvh.query_pt_batched(
+                    self.surface,
+                    self.vertex,
+                    self.body,
+                    self.contact.pairs_pt,
+                    self.contact.n_pairs_pt,
+                    self.contact.max_pairs_pt[()],
+                    self.contact.d_hat[()],
+                    self.contact.overflow_flag,
+                )
         if qd.static(self.has_edge_bvh):
             if qd.static(self.use_dual_ee):
                 self.ee_dual_state.query(
@@ -150,6 +167,7 @@ class InfoLBVHBatchedBroadPhaseDop14(LBVHBroadPhase):
     def __init__(
         self,
         *,
+        pt_query: str = "warp",
         ee_query: str = "dual",
         dual_frontier_levels: int = 0,
         dual_target_waves: float = 24.0,
@@ -158,6 +176,7 @@ class InfoLBVHBatchedBroadPhaseDop14(LBVHBroadPhase):
     ) -> None:
         super().__init__(
             bound_type="dop14",
+            pt_query=pt_query,
             ee_query=ee_query,
             dual_frontier_levels=dual_frontier_levels,
             dual_target_waves=dual_target_waves,

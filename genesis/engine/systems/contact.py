@@ -24,6 +24,7 @@ CONTACT_CONFIG_DEFAULTS = MappingProxyType(
         "extras/ls_forensics/test_energy_bias": 0.0,
         "topo/grow_factor": 1.5,
         "bvh/type": "info_lbvh_batched_dop14",
+        "bvh/pt_query": "warp",
         "bvh/ee_query": "dual",
         "bvh/dual/frontier_levels": 0,
         "bvh/dual/target_waves": 24.0,

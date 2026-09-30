@@ -126,6 +126,7 @@ def build_scene_engine(
             bvh_type = str(resolved_contact_config["bvh/type"])
             if bvh_type == "info_lbvh_batched_dop14":
                 broad_phase_system = InfoLBVHBatchedBroadPhaseDop14(
+                    pt_query=str(resolved_contact_config["bvh/pt_query"]),
                     ee_query=str(resolved_contact_config["bvh/ee_query"]),
                     dual_frontier_levels=int(resolved_contact_config["bvh/dual/frontier_levels"]),
                     dual_target_waves=float(resolved_contact_config["bvh/dual/target_waves"]),
@@ -135,6 +136,7 @@ def build_scene_engine(
             elif bvh_type in ("lbvh", "info_lbvh", "info_lbvh_batched"):
                 broad_phase_system = LBVHBroadPhase(
                     bound_type="aabb",
+                    pt_query=str(resolved_contact_config["bvh/pt_query"]),
                     ee_query=str(resolved_contact_config["bvh/ee_query"]),
                     dual_frontier_levels=int(resolved_contact_config["bvh/dual/frontier_levels"]),
                     dual_target_waves=float(resolved_contact_config["bvh/dual/target_waves"]),

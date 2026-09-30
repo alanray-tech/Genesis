@@ -28,7 +28,13 @@ from .bvh_math import (
     find_split,
     morton_code_30bit,
 )
-from .bvh_predicate import _ee_emit_pair, _ee_pair_enabled, _node_pair_enabled
+from .bvh_predicate import (
+    _ee_emit_pair,
+    _ee_pair_enabled,
+    _node_pair_enabled,
+    _pt_emit_pair,
+    _pt_pair_enabled,
+)
 from .contact_function.contact_table_query import ct_enabled_pt
 from .contact_function.edge_triangle_intersection import (
     triangle_edge_intersect,
@@ -356,16 +362,30 @@ class LBVH:
         self.sentinel = 0xFFFFFFFF
         self.stack_capacity = _BVH_STACK_CAPACITY
         self.bvh_block = 256
+        self.pt_warp_block = 256
+        self.pt_warp_stack_capacity = 1024
         self.ee_warp_block = 256
         self.ee_warp_stack_capacity = 1024
         subgroup_size = qd_subgroup.group_size()
+        self.pt_warp_subgroups_per_block = self.pt_warp_block // subgroup_size
+        # Pinned Quadrants 459a3eb57 Nsight profile for
+        # query_pt_warp_range_for.
+        self.pt_warp_registers_per_thread = 128
+        pt_warp_shared_bytes = (
+            self.pt_warp_subgroups_per_block * self.pt_warp_stack_capacity * np.dtype(np.uint32).itemsize
+        )
+        self.pt_warp_blocks = cuda_resident_blocks(
+            self.pt_warp_block,
+            pt_warp_shared_bytes,
+            self.pt_warp_registers_per_thread,
+        )
+        self.pt_warp_workers = self.pt_warp_blocks * self.pt_warp_subgroups_per_block
+        self.pt_warp_threads = self.pt_warp_workers * subgroup_size
         self.ee_warp_subgroups_per_block = self.ee_warp_block // subgroup_size
         # Pinned Quadrants 459a3eb57 CUDA profile for query_ee_warp_range_for.
         self.ee_warp_registers_per_thread = 72
         ee_warp_shared_bytes = (
-            self.ee_warp_subgroups_per_block
-            * self.ee_warp_stack_capacity
-            * np.dtype(np.uint32).itemsize
+            self.ee_warp_subgroups_per_block * self.ee_warp_stack_capacity * np.dtype(np.uint32).itemsize
         )
         self.ee_warp_blocks = cuda_resident_blocks(
             self.ee_warp_block,
@@ -452,11 +472,7 @@ class LBVH:
                 vi = surf_mgr.surf_triangles[idx, k]
                 max_thickness = qd.max(max_thickness, vtx_mgr.thicknesses[vi])
                 max_path_inflation = qd.max(max_path_inflation, vtx_mgr.path_inflation[vi])
-            primitive_gap = (
-                vtx_mgr.d_hats[surf_mgr.surf_triangles[idx, 0]]
-                + max_thickness
-                + max_path_inflation
-            )
+            primitive_gap = vtx_mgr.d_hats[surf_mgr.surf_triangles[idx, 0]] + max_thickness + max_path_inflation
             aabb_expand(self.aabbs, leaf, primitive_gap, self.bounds_width // 2)
             body_id = vtx_mgr.body_id[surf_mgr.surf_triangles[idx, 0]]
             for k in qd.static(range(1, 3)):
@@ -490,11 +506,7 @@ class LBVH:
                 vi = surf_mgr.surf_edges[idx, k]
                 max_thickness = qd.max(max_thickness, vtx_mgr.thicknesses[vi])
                 max_path_inflation = qd.max(max_path_inflation, vtx_mgr.path_inflation[vi])
-            primitive_gap = (
-                vtx_mgr.d_hats[surf_mgr.surf_edges[idx, 0]]
-                + max_thickness
-                + max_path_inflation
-            )
+            primitive_gap = vtx_mgr.d_hats[surf_mgr.surf_edges[idx, 0]] + max_thickness + max_path_inflation
             aabb_expand(self.aabbs, leaf, primitive_gap, self.bounds_width // 2)
             body_id = vtx_mgr.body_id[surf_mgr.surf_edges[idx, 0]]
             if vtx_mgr.body_id[surf_mgr.surf_edges[idx, 1]] != body_id:
@@ -1053,7 +1065,7 @@ class LBVH:
     # ======================================================================
 
     @qd.func(requires_top_level=True)
-    def query_pt(
+    def query_pt_batched(
         self,
         surf_mgr: qd.template(),
         vtx_mgr: qd.template(),
@@ -1064,10 +1076,11 @@ class LBVH:
         d_hat: qd.f64,
         overflow_flag: qd.template(),
     ):
-        """PT swept broadphase: each surface vertex queries the triangle BVH.
+        """Retained per-thread PT swept broadphase.
 
-        Matches cgq ``query_pt_swept``.  Sets ``overflow_flag`` to 1 when the
-        candidate count exceeds ``max_pairs_val``.
+        Matches CGQ ``pt_query_batched`` and remains available as the explicit
+        comparison path. Sets ``overflow_flag`` to 1 when the candidate count
+        exceeds ``max_pairs_val``.
         Output pairs: ``(surf_vert_idx, face_idx)``.
         """
         n_queries = surf_mgr.n_surf_verts[()]
@@ -1087,13 +1100,61 @@ class LBVH:
             q_ux = qd.max(vx, endpoint_x)
             q_uy = qd.max(vy, endpoint_y)
             q_uz = qd.max(vz, endpoint_z)
-            query_gap = vtx_mgr.d_hats[vidx] + vtx_mgr.thicknesses[vidx]
+            query_gap = vtx_mgr.d_hats[vidx] + vtx_mgr.thicknesses[vidx] + vtx_mgr.path_inflation[vidx]
             query_start = qd.Vector([vx, vy, vz])
             query_endpoint = qd.Vector([endpoint_x, endpoint_y, endpoint_z])
 
             stack_top = qd.i32(0)
-            self.stack_pool[idx, 0] = qd.u32(0)
-            stack_top = 1
+            if self.n_prims[()] == 1:
+                root_overlap = qd.i32(1)
+                if qd.static(self.bounds_width == 14):
+                    root_overlap = _swept_point_overlap(
+                        self.aabbs,
+                        0,
+                        query_start,
+                        query_endpoint,
+                        query_gap,
+                        self.bounds_width // 2,
+                    )
+                else:
+                    for axis in qd.static(range(3)):
+                        if (
+                            self.aabbs[0, axis]
+                            - qd.max(
+                                query_start[axis],
+                                query_endpoint[axis],
+                            )
+                        ) >= query_gap or (
+                            qd.min(
+                                query_start[axis],
+                                query_endpoint[axis],
+                            )
+                            - self.aabbs[0, axis + 3]
+                        ) >= query_gap:
+                            root_overlap = 0
+                if not _node_pair_enabled(
+                    body_mgr,
+                    vtx_mgr.body_id[vidx],
+                    self.node_body_id[0],
+                ):
+                    root_overlap = 0
+                root_face = qd.i32(self.nodes_element[0])
+                if root_overlap != 0 and _pt_pair_enabled(
+                    surf_mgr,
+                    vtx_mgr,
+                    body_mgr,
+                    vidx,
+                    root_face,
+                ):
+                    root_output = qd.atomic_add(n_pairs[()], 1)
+                    if root_output < max_pairs_val:
+                        pairs[root_output, 0] = idx
+                        pairs[root_output, 1] = root_face
+                    else:
+                        overflow_flag[()] = 1
+            else:
+                self.stack_pool[idx, 0] = qd.u32(0)
+                stack_top = 1
 
             while stack_top > 0:
                 stack_top = stack_top - 1
@@ -1139,23 +1200,13 @@ class LBVH:
                         stack_top = stack_top + 1
                     else:
                         face_idx = qd.i32(L_elem)
-                        bi = vtx_mgr.body_id[vidx]
-                        fv0 = surf_mgr.surf_triangles[face_idx, 0]
-                        fv1 = surf_mgr.surf_triangles[face_idx, 1]
-                        fv2 = surf_mgr.surf_triangles[face_idx, 2]
-                        bj = vtx_mgr.body_id[fv0]
-                        accept = qd.i32(1)
-                        if bi == bj:
-                            if bi >= 0 and body_mgr.self_collision[bi] == 0:
-                                accept = 0
-                        if bi >= 0 and bj >= 0 and body_mgr.is_body_contact_ignored(bi, bj):
-                            accept = 0
-                        if vidx == fv0:
-                            accept = 0
-                        if vidx == fv1:
-                            accept = 0
-                        if vidx == fv2:
-                            accept = 0
+                        accept = _pt_pair_enabled(
+                            surf_mgr,
+                            vtx_mgr,
+                            body_mgr,
+                            vidx,
+                            face_idx,
+                        )
                         if accept != 0:
                             cp_idx = qd.atomic_add(n_pairs[()], 1)
                             if cp_idx < max_pairs_val:
@@ -1202,23 +1253,13 @@ class LBVH:
                         stack_top = stack_top + 1
                     else:
                         face_idx2 = qd.i32(R_elem)
-                        bi2 = vtx_mgr.body_id[vidx]
-                        fv02 = surf_mgr.surf_triangles[face_idx2, 0]
-                        fv12 = surf_mgr.surf_triangles[face_idx2, 1]
-                        fv22 = surf_mgr.surf_triangles[face_idx2, 2]
-                        bj2 = vtx_mgr.body_id[fv02]
-                        accept2 = qd.i32(1)
-                        if bi2 == bj2:
-                            if bi2 >= 0 and body_mgr.self_collision[bi2] == 0:
-                                accept2 = 0
-                        if bi2 >= 0 and bj2 >= 0 and body_mgr.is_body_contact_ignored(bi2, bj2):
-                            accept2 = 0
-                        if vidx == fv02:
-                            accept2 = 0
-                        if vidx == fv12:
-                            accept2 = 0
-                        if vidx == fv22:
-                            accept2 = 0
+                        accept2 = _pt_pair_enabled(
+                            surf_mgr,
+                            vtx_mgr,
+                            body_mgr,
+                            vidx,
+                            face_idx2,
+                        )
                         if accept2 != 0:
                             cp_idx2 = qd.atomic_add(n_pairs[()], 1)
                             if cp_idx2 < max_pairs_val:
@@ -1226,6 +1267,248 @@ class LBVH:
                                 pairs[cp_idx2, 1] = face_idx2
                             else:
                                 overflow_flag[()] = 1
+
+    @qd.func(requires_top_level=True)
+    def query_pt_warp(
+        self,
+        surf_mgr: qd.template(),
+        vtx_mgr: qd.template(),
+        body_mgr: qd.template(),
+        pairs: qd.template(),
+        n_pairs: qd.template(),
+        max_pairs_val: qd.i32,
+        d_hat: qd.f64,
+        overflow_flag: qd.template(),
+    ):
+        """CGQ warp-per-query swept PT traversal."""
+        n_queries = surf_mgr.n_surf_verts[()]
+        n = self.n_prims[()]
+        group_size = qd_subgroup.group_size()
+        qd.loop_config(name="query_pt_warp", block_dim=self.pt_warp_block)
+        for thread in range(self.pt_warp_threads):
+            query = thread // group_size
+            lane = qd_subgroup.invocation_id()
+            subgroup_in_block = (thread % self.pt_warp_block) // group_size
+            stack = qd_block.SharedArray(
+                (
+                    self.pt_warp_subgroups_per_block,
+                    self.pt_warp_stack_capacity,
+                ),
+                qd.u32,
+            )
+
+            while query < n_queries:
+                vertex_index = surf_mgr.surf_verts[query]
+                start = qd.Vector(
+                    [
+                        vtx_mgr.positions[vertex_index, 0],
+                        vtx_mgr.positions[vertex_index, 1],
+                        vtx_mgr.positions[vertex_index, 2],
+                    ]
+                )
+                endpoint = qd.Vector(
+                    [
+                        vtx_mgr.trajectory_end_positions[vertex_index, 0],
+                        vtx_mgr.trajectory_end_positions[vertex_index, 1],
+                        vtx_mgr.trajectory_end_positions[vertex_index, 2],
+                    ]
+                )
+                query_lower = qd.Vector(
+                    [
+                        qd.min(start[0], endpoint[0]),
+                        qd.min(start[1], endpoint[1]),
+                        qd.min(start[2], endpoint[2]),
+                    ]
+                )
+                query_upper = qd.Vector(
+                    [
+                        qd.max(start[0], endpoint[0]),
+                        qd.max(start[1], endpoint[1]),
+                        qd.max(start[2], endpoint[2]),
+                    ]
+                )
+                query_projection_lower = qd.Vector.zero(qd.f64, 7)
+                query_projection_upper = qd.Vector.zero(qd.f64, 7)
+                if qd.static(self.bounds_width == 14):
+                    start_projection = qd.Vector(
+                        [
+                            start[0],
+                            start[1],
+                            start[2],
+                            start[0] + start[1] + start[2],
+                            start[0] + start[1] - start[2],
+                            start[0] - start[1] + start[2],
+                            start[0] - start[1] - start[2],
+                        ]
+                    )
+                    endpoint_projection = qd.Vector(
+                        [
+                            endpoint[0],
+                            endpoint[1],
+                            endpoint[2],
+                            endpoint[0] + endpoint[1] + endpoint[2],
+                            endpoint[0] + endpoint[1] - endpoint[2],
+                            endpoint[0] - endpoint[1] + endpoint[2],
+                            endpoint[0] - endpoint[1] - endpoint[2],
+                        ]
+                    )
+                    for axis in qd.static(range(7)):
+                        query_projection_lower[axis] = qd.min(
+                            start_projection[axis],
+                            endpoint_projection[axis],
+                        )
+                        query_projection_upper[axis] = qd.max(
+                            start_projection[axis],
+                            endpoint_projection[axis],
+                        )
+                query_gap = (
+                    vtx_mgr.d_hats[vertex_index]
+                    + vtx_mgr.thicknesses[vertex_index]
+                    + vtx_mgr.path_inflation[vertex_index]
+                )
+                query_body = vtx_mgr.body_id[vertex_index]
+
+                if n == 1:
+                    emit = False
+                    face = qd.i32(0)
+                    if lane == 0:
+                        overlap = qd.i32(1)
+                        if qd.static(self.bounds_width == 14):
+                            for axis in qd.static(range(7)):
+                                axis_gap = query_gap
+                                if qd.static(axis >= 3):
+                                    axis_gap = query_gap * 1.7320508075688772
+                                if (self.aabbs[0, axis] - query_projection_upper[axis]) >= axis_gap or (
+                                    query_projection_lower[axis] - self.aabbs[0, axis + 7]
+                                ) >= axis_gap:
+                                    overlap = 0
+                        else:
+                            for axis in qd.static(range(3)):
+                                if (self.aabbs[0, axis] - query_upper[axis]) >= query_gap or (
+                                    query_lower[axis] - self.aabbs[0, axis + 3]
+                                ) >= query_gap:
+                                    overlap = 0
+                        if not _node_pair_enabled(
+                            body_mgr,
+                            query_body,
+                            self.node_body_id[0],
+                        ):
+                            overlap = 0
+                        face = qd.i32(self.nodes_element[0])
+                        if overlap != 0 and _pt_pair_enabled(
+                            surf_mgr,
+                            vtx_mgr,
+                            body_mgr,
+                            vertex_index,
+                            face,
+                        ):
+                            emit = True
+                    _pt_emit_pair(
+                        emit,
+                        query,
+                        face,
+                        pairs,
+                        n_pairs,
+                        max_pairs_val,
+                        overflow_flag,
+                    )
+                elif n > 1:
+                    if lane == 0:
+                        stack[subgroup_in_block, 0] = qd.u32(0)
+                    qd_subgroup.mem_fence()
+                    qd_subgroup.sync()
+                    top = qd.i32(1)
+
+                    while top > 0:
+                        n_pop = qd.min(top, group_size)
+                        room = self.pt_warp_stack_capacity - top
+                        n_pop = qd.min(n_pop, room)
+                        assert n_pop >= 1, "query_pt_warp: frontier stack full"
+                        if n_pop > 0:
+                            active = lane < n_pop
+                            node = qd.i32(0)
+                            if active:
+                                node = qd.i32(
+                                    stack[
+                                        subgroup_in_block,
+                                        top - 1 - lane,
+                                    ]
+                                )
+                            qd_subgroup.sync()
+                            top = top - n_pop
+
+                            children = qd.Vector.zero(qd.i32, 2)
+                            if active:
+                                children[0] = qd.i32(self.nodes_left[node])
+                                children[1] = qd.i32(self.nodes_right[node])
+
+                            for child_slot in qd.static(range(2)):
+                                push = False
+                                emit = False
+                                push_node = qd.i32(0)
+                                emit_face = qd.i32(0)
+                                if active:
+                                    child = children[child_slot]
+                                    overlap = qd.i32(1)
+                                    if qd.static(self.bounds_width == 14):
+                                        for axis in qd.static(range(7)):
+                                            axis_gap = query_gap
+                                            if qd.static(axis >= 3):
+                                                axis_gap = query_gap * 1.7320508075688772
+                                            if (self.aabbs[child, axis] - query_projection_upper[axis]) >= axis_gap or (
+                                                query_projection_lower[axis] - self.aabbs[child, axis + 7]
+                                            ) >= axis_gap:
+                                                overlap = 0
+                                    else:
+                                        for axis in qd.static(range(3)):
+                                            if (self.aabbs[child, axis] - query_upper[axis]) >= query_gap or (
+                                                query_lower[axis] - self.aabbs[child, axis + 3]
+                                            ) >= query_gap:
+                                                overlap = 0
+                                    if not _node_pair_enabled(
+                                        body_mgr,
+                                        query_body,
+                                        self.node_body_id[child],
+                                    ):
+                                        overlap = 0
+
+                                    if overlap != 0:
+                                        element = self.nodes_element[child]
+                                        if element == qd.u32(self.sentinel):
+                                            push = True
+                                            push_node = child
+                                        else:
+                                            face = qd.i32(element)
+                                            if _pt_pair_enabled(
+                                                surf_mgr,
+                                                vtx_mgr,
+                                                body_mgr,
+                                                vertex_index,
+                                                face,
+                                            ):
+                                                emit = True
+                                                emit_face = face
+
+                                push_mask = qd_subgroup.ballot(qd.i32(push))
+                                push_count = qd.i32(qd.math.popcnt(push_mask))
+                                if push:
+                                    lane_lt = (qd.u64(1) << qd.u64(lane)) - qd.u64(1)
+                                    output = top + qd.i32(qd.math.popcnt(push_mask & lane_lt))
+                                    stack[subgroup_in_block, output] = qd.u32(push_node)
+                                top = top + push_count
+
+                                _pt_emit_pair(
+                                    emit,
+                                    query,
+                                    emit_face,
+                                    pairs,
+                                    n_pairs,
+                                    max_pairs_val,
+                                    overflow_flag,
+                                )
+                                qd_subgroup.mem_fence()
+                                qd_subgroup.sync()
+                query = query + self.pt_warp_workers
 
     @qd.func
     def _query_et_child(
@@ -1463,4 +1746,3 @@ class LBVH:
                                 qd_subgroup.mem_fence()
                                 qd_subgroup.sync()
                 query = query + self.ee_warp_workers
-

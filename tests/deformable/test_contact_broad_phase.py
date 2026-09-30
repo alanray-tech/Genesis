@@ -35,7 +35,87 @@ def build_and_query_pt(
     for _ in range(1):
         n_pairs[()] = 0
         overflow[()] = 0
-    bvh.query_pt(surface, vertex, body, pairs, n_pairs, 16, 0.01, overflow)
+    bvh.query_pt_warp(
+        surface,
+        vertex,
+        body,
+        pairs,
+        n_pairs,
+        16,
+        0.01,
+        overflow,
+    )
+
+
+@qd.kernel
+def build_triangle_bvh(
+    bvh: qd.template(),
+    surface: qd.template(),
+    vertex: qd.template(),
+):
+    bvh.calc_leaf_aabb_tri(surface, vertex)
+    bvh.reduce_scene_aabb()
+    bvh.calc_morton()
+    bvh.sort_morton()
+    bvh.extract_indices()
+    bvh.copy_leaf_aabb_to_temp()
+    bvh.reorder_leaf_aabb()
+    bvh.calc_leaf_nodes()
+    bvh.calc_internal_nodes()
+    bvh.memset_flags()
+    bvh.calc_internal_aabb()
+
+
+@qd.kernel
+def query_pt_batched_only(
+    bvh: qd.template(),
+    surface: qd.template(),
+    vertex: qd.template(),
+    body: qd.template(),
+    pairs: qd.types.ndarray(qd.i32, ndim=2),
+    n_pairs: qd.types.ndarray(qd.i32, ndim=0),
+    max_pairs: qd.i32,
+    overflow: qd.types.ndarray(qd.i32, ndim=0),
+):
+    for _ in range(1):
+        n_pairs[()] = 0
+        overflow[()] = 0
+    bvh.query_pt_batched(
+        surface,
+        vertex,
+        body,
+        pairs,
+        n_pairs,
+        max_pairs,
+        0.01,
+        overflow,
+    )
+
+
+@qd.kernel
+def query_pt_warp_only(
+    bvh: qd.template(),
+    surface: qd.template(),
+    vertex: qd.template(),
+    body: qd.template(),
+    pairs: qd.types.ndarray(qd.i32, ndim=2),
+    n_pairs: qd.types.ndarray(qd.i32, ndim=0),
+    max_pairs: qd.i32,
+    overflow: qd.types.ndarray(qd.i32, ndim=0),
+):
+    for _ in range(1):
+        n_pairs[()] = 0
+        overflow[()] = 0
+    bvh.query_pt_warp(
+        surface,
+        vertex,
+        body,
+        pairs,
+        n_pairs,
+        max_pairs,
+        0.01,
+        overflow,
+    )
 
 
 @qd.kernel
@@ -101,6 +181,50 @@ def query_ee_dual_only(
 @qd.kernel
 def sort_morton_only(bvh: qd.template()):
     bvh.sort_morton()
+
+
+def make_single_body_pt_scene(
+    positions: np.ndarray,
+    triangles: np.ndarray,
+):
+    n_vertices = positions.shape[0]
+    vertex = GlobalVertexManager()
+    vertex.init(n_vertices)
+    vertex.positions.from_numpy(positions)
+    vertex.safe_positions.from_numpy(positions)
+    vertex.trajectory_end_positions.from_numpy(positions)
+    vertex.x_bar.from_numpy(positions)
+    vertex.body_id.from_numpy(np.zeros(n_vertices, dtype=np.int32))
+    vertex.wire_thickness_data(np.full(n_vertices, 0.001, dtype=np.float64))
+    vertex.wire_d_hat_data(np.full(n_vertices, 0.01, dtype=np.float64))
+    vertex.wire_is_fixed_data(np.zeros(n_vertices, dtype=np.int32))
+
+    surface = GlobalSurfaceManager()
+    surface.wire_surface_data(
+        triangles,
+        np.empty((0, 2), dtype=np.int32),
+        np.arange(n_vertices, dtype=np.int32),
+    )
+    surface.wire_vert_dimensions(np.full(n_vertices, 2, dtype=np.int32))
+    surface.wire_area_weights(
+        np.full(n_vertices, 1.0 / n_vertices, dtype=np.float64),
+        np.empty(0, dtype=np.float64),
+        np.full(
+            triangles.shape[0],
+            1.0 / triangles.shape[0],
+            dtype=np.float64,
+        ),
+    )
+
+    body = GlobalBodyManager()
+    body.init(1)
+    body.vertex_offsets.from_numpy(np.array([0, n_vertices], dtype=np.int32))
+    body.self_collision.from_numpy(np.ones(1, dtype=np.int32))
+    body.wire_body_contact_ignorance(
+        np.array([0, 0], dtype=np.int32),
+        np.empty(0, dtype=np.int32),
+    )
+    return surface, vertex, body
 
 
 @pytest.mark.required
@@ -213,6 +337,163 @@ def test_lbvh_pt_candidates_match_two_parallel_triangles(bound_type):
     assert int(qd_to_numpy(n_pairs)) == 6
     actual = {tuple(pair) for pair in qd_to_numpy(pairs)[:6]}
     assert actual == {(0, 1), (1, 1), (2, 1), (3, 0), (4, 0), (5, 0)}
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_pt_warp_matches_batched_for_single_leaf():
+    positions = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.2, 0.2, 0.006],
+        ],
+        dtype=np.float64,
+    )
+    triangles = np.array([[0, 1, 2]], dtype=np.int32)
+    surface, vertex, body = make_single_body_pt_scene(
+        positions,
+        triangles,
+    )
+    bvh = LBVH(1, 4, "dop14")
+    build_triangle_bvh(bvh, surface, vertex)
+
+    batched_pairs = qd.ndarray(qd.i32, shape=(4, 2))
+    batched_count = qd.ndarray(qd.i32, shape=())
+    warp_pairs = qd.ndarray(qd.i32, shape=(4, 2))
+    warp_count = qd.ndarray(qd.i32, shape=())
+    overflow = qd.ndarray(qd.i32, shape=())
+
+    query_pt_batched_only(
+        bvh,
+        surface,
+        vertex,
+        body,
+        batched_pairs,
+        batched_count,
+        4,
+        overflow,
+    )
+    query_pt_warp_only(
+        bvh,
+        surface,
+        vertex,
+        body,
+        warp_pairs,
+        warp_count,
+        4,
+        overflow,
+    )
+
+    assert int(qd_to_numpy(batched_count)) == 1
+    assert int(qd_to_numpy(warp_count)) == 1
+    np.testing.assert_array_equal(
+        qd_to_numpy(batched_pairs)[0],
+        np.array([3, 0], dtype=np.int32),
+    )
+    np.testing.assert_array_equal(
+        qd_to_numpy(warp_pairs)[0],
+        np.array([3, 0], dtype=np.int32),
+    )
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_pt_warp_matches_batched_dense_and_exact_overflow_count():
+    n_vertices = 64
+    n_triangles = 33
+    rng = np.random.default_rng(47)
+    positions = rng.uniform(
+        -1e-4,
+        1e-4,
+        size=(n_vertices, 3),
+    ).astype(np.float64)
+    triangle_index = np.arange(n_triangles, dtype=np.int32)
+    triangles = np.column_stack(
+        (
+            triangle_index,
+            (triangle_index + 17) % n_vertices,
+            (triangle_index + 37) % n_vertices,
+        )
+    ).astype(np.int32)
+    surface, vertex, body = make_single_body_pt_scene(
+        positions,
+        triangles,
+    )
+    bvh = LBVH(n_triangles, n_vertices, "dop14")
+    build_triangle_bvh(bvh, surface, vertex)
+
+    expected_count = n_vertices * n_triangles - 3 * n_triangles
+    batched_pairs = qd.ndarray(
+        qd.i32,
+        shape=(expected_count, 2),
+    )
+    batched_count = qd.ndarray(qd.i32, shape=())
+    warp_pairs = qd.ndarray(
+        qd.i32,
+        shape=(expected_count, 2),
+    )
+    warp_count = qd.ndarray(qd.i32, shape=())
+    overflow = qd.ndarray(qd.i32, shape=())
+
+    query_pt_batched_only(
+        bvh,
+        surface,
+        vertex,
+        body,
+        batched_pairs,
+        batched_count,
+        expected_count,
+        overflow,
+    )
+    assert int(qd_to_numpy(overflow)) == 0
+    query_pt_warp_only(
+        bvh,
+        surface,
+        vertex,
+        body,
+        warp_pairs,
+        warp_count,
+        expected_count,
+        overflow,
+    )
+    assert int(qd_to_numpy(overflow)) == 0
+    assert int(qd_to_numpy(batched_count)) == expected_count
+    assert int(qd_to_numpy(warp_count)) == expected_count
+
+    batched = {tuple(pair) for pair in qd_to_numpy(batched_pairs)[:expected_count]}
+    warp = {tuple(pair) for pair in qd_to_numpy(warp_pairs)[:expected_count]}
+    assert batched == warp
+    assert len(warp) == expected_count
+
+    limited_capacity = 17
+    query_pt_batched_only(
+        bvh,
+        surface,
+        vertex,
+        body,
+        batched_pairs,
+        batched_count,
+        limited_capacity,
+        overflow,
+    )
+    assert int(qd_to_numpy(overflow)) == 1
+    assert int(qd_to_numpy(batched_count)) == expected_count
+    query_pt_warp_only(
+        bvh,
+        surface,
+        vertex,
+        body,
+        warp_pairs,
+        warp_count,
+        limited_capacity,
+        overflow,
+    )
+    assert int(qd_to_numpy(overflow)) == 1
+    assert int(qd_to_numpy(warp_count)) == expected_count
 
 
 @pytest.mark.required
@@ -372,9 +653,7 @@ def test_dual_ee_morton_reorders_body_metadata_with_leaves():
     vertex.safe_positions.from_numpy(positions)
     vertex.trajectory_end_positions.from_numpy(positions)
     vertex.x_bar.from_numpy(positions)
-    vertex.body_id.from_numpy(
-        np.array([0, 0, 0, 0, 1, 1, 1, 1], dtype=np.int32)
-    )
+    vertex.body_id.from_numpy(np.array([0, 0, 0, 0, 1, 1, 1, 1], dtype=np.int32))
     vertex.wire_thickness_data(np.full(8, 0.001, dtype=np.float64))
     vertex.wire_d_hat_data(np.full(8, 0.01, dtype=np.float64))
     vertex.wire_is_fixed_data(np.zeros(8, dtype=np.int32))
@@ -436,17 +715,7 @@ def test_dual_ee_morton_reorders_body_metadata_with_leaves():
     )
     np.testing.assert_array_equal(actual_bodies, expected_bodies)
 
-    dual_pairs_set = {
-        tuple(pair)
-        for pair in qd_to_numpy(dual_pairs)[
-            : int(qd_to_numpy(dual_count))
-        ]
-    }
-    warp_pairs_set = {
-        tuple(pair)
-        for pair in qd_to_numpy(warp_pairs)[
-            : int(qd_to_numpy(warp_count))
-        ]
-    }
+    dual_pairs_set = {tuple(pair) for pair in qd_to_numpy(dual_pairs)[: int(qd_to_numpy(dual_count))]}
+    warp_pairs_set = {tuple(pair) for pair in qd_to_numpy(warp_pairs)[: int(qd_to_numpy(warp_count))]}
     assert dual_pairs_set == warp_pairs_set
     assert dual_pairs_set == {(0, 2), (1, 3)}
