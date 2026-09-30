@@ -57,9 +57,6 @@ class SimEngine:
             raise RuntimeError("SimEngine does not support the CPU backend")
         if not gs.use_ndarray:
             raise RuntimeError("SimEngine requires the ndarray backend")
-        # This is the production performance path. Quadrants' advanced passes
-        # cost more on a cold compile but measured faster steady-state graphs.
-        qd.cfg.advanced_optimization = True
 
         self.systems: dict[type, SimSystem] = {}
         self.is_built_host = False

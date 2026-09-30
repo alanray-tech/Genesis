@@ -771,8 +771,11 @@ Current:
 
 - One very large graph kernel inlines every contact variant and compiles slowly
   on a cold cache.
-- `advanced_optimization=False` intentionally trades steady-state runtime for
-  development compile speed.
+- `SimEngine` preserves the caller's Quadrants compile policy instead of
+  overriding it globally.
+- The interactive Franka teleop defaults to `advanced_optimization=False` for
+  development and exposes `--advanced-optimization` for production profiling.
+  Headless performance benchmarks retain the Quadrants production default.
 
 Target:
 

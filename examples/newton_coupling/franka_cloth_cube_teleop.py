@@ -76,9 +76,15 @@ def main() -> None:
         choices=("dual", "warp"),
         default="dual",
     )
+    parser.add_argument(
+        "--advanced-optimization",
+        action="store_true",
+        help="Enable slower production compilation for maximum steady-state performance",
+    )
     args = parser.parse_args()
 
     gs.init(backend=gs.gpu, precision="64", logging_level="info")
+    qd.cfg.advanced_optimization = args.advanced_optimization
     scene = gs.Scene(
         sim_options=gs.options.SimOptions(dt=DT),
         coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
@@ -346,11 +352,7 @@ def main() -> None:
     }
     if not args.no_gui:
         overlay = next(
-            (
-                plugin
-                for plugin in scene.viewer.plugins
-                if isinstance(plugin, ImGuiOverlayPlugin)
-            ),
+            (plugin for plugin in scene.viewer.plugins if isinstance(plugin, ImGuiOverlayPlugin)),
             None,
         )
         if overlay is not None:
@@ -358,34 +360,17 @@ def main() -> None:
             def draw_newton_performance(imgui) -> None:
                 imgui.separator()
                 imgui.text("Newton Coupling")
-                imgui.text(
-                    f"Step: {performance['step_ms']:.2f} ms  "
-                    f"EMA: {performance['step_ms_ema']:.2f} ms"
-                )
-                simulation_fps = (
-                    1000.0 / performance["step_ms_ema"]
-                    if performance["step_ms_ema"] > 0.0
-                    else 0.0
-                )
+                imgui.text(f"Step: {performance['step_ms']:.2f} ms  EMA: {performance['step_ms_ema']:.2f} ms")
+                simulation_fps = 1000.0 / performance["step_ms_ema"] if performance["step_ms_ema"] > 0.0 else 0.0
                 imgui.text(f"Simulation FPS: {simulation_fps:.1f}")
                 imgui.text(
-                    f"Newton: {performance['newton']}  "
-                    f"PCG: {performance['pcg']}  "
-                    f"LS: {performance['line_search']}"
+                    f"Newton: {performance['newton']}  PCG: {performance['pcg']}  LS: {performance['line_search']}"
                 )
-                imgui.text(
-                    f"CCD alpha: {performance['ccd_alpha']:.6f}"
-                )
+                imgui.text(f"CCD alpha: {performance['ccd_alpha']:.6f}")
 
             overlay.register_panel(draw_newton_performance, section="side")
     try:
-        while (
-            is_running
-            and (
-                (not args.no_gui and scene.viewer.is_alive())
-                or (args.no_gui and frame < args.steps)
-            )
-        ):
+        while is_running and ((not args.no_gui and scene.viewer.is_alive()) or (args.no_gui and frame < args.steps)):
             if args.no_gui and args.press_depth > 0.0:
                 target_pos[:] += np.clip(
                     press_target - target_pos,
@@ -425,16 +410,12 @@ def main() -> None:
             step_ms = (time.perf_counter() - step_begin) * 1000.0
             performance["step_ms"] = step_ms
             performance["step_ms_ema"] = (
-                step_ms
-                if performance["step_ms_ema"] == 0.0
-                else 0.9 * performance["step_ms_ema"] + 0.1 * step_ms
+                step_ms if performance["step_ms_ema"] == 0.0 else 0.9 * performance["step_ms_ema"] + 0.1 * step_ms
             )
             performance["newton"] = engine.get_newton_iters()
             performance["pcg"] = engine.get_max_pcg_iters()
             performance["line_search"] = engine.get_max_ls_iters()
-            performance["ccd_alpha"] = float(
-                qd_to_numpy(engine.contact.frame_ccd_alpha)
-            )
+            performance["ccd_alpha"] = float(qd_to_numpy(engine.contact.frame_ccd_alpha))
             max_newton = max(max_newton, engine.get_newton_iters())
             max_pcg = max(max_pcg, engine.get_max_pcg_iters())
             max_line_search = max(
