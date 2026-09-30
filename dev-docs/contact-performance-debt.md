@@ -419,8 +419,9 @@ Matched profile proof:
   36,538.
 - Pinned CGQ Morton OneSweep costs `2.119 ms`, with 7 native variants and 756
   instances. The remaining `3.251x` sort-stage gap is generated-code,
-  dynamic-range-helper, and grid/lowering debt assigned to the Quadrants
-  optimization layer; it is not admissible as a scene-specific Genesis
+  scalar bound-helper, and small-kernel lowering debt assigned to the
+  Quadrants optimization layer; the occupancy-grid portion is closed by the
+  later resident-grid rewrite. None is admissible as a scene-specific Genesis
   workaround.
 
 Status: **closed at the Genesis application layer**. The generic production
@@ -550,10 +551,12 @@ Performance:
 - Device-only u64 sort coverage follows the CGQ-defined `<100 ms` domain
   through 100M entries. At the simulation-scale 1M point, Genesis is
   approximately 0.353 ms versus CGQ's 0.254 ms. The remaining standalone and
-  in-scene gap is generated-code/grid policy, not an application fallback.
+  in-scene gap is generated-code, scalar-helper, and small-kernel lowering
+  policy, not an application fallback.
 
 Status: **closed at the Genesis application layer**. The remaining native-CGQ
-gap is tracked as Quadrants dynamic-range/grid and lowering work; no
+gap is tracked as Quadrants scalar dynamic-range helpers and lowering work;
+the occupancy-grid portion is closed by the resident-grid rewrite. No
 scene-specific launch or frozen-capacity specialization is admissible.
 
 ### PERF-A07: Adaptive-kappa no-op traversal
@@ -1289,43 +1292,63 @@ Single-run wall medians were not monotonic across every micro-optimization;
 the per-layer acceptance figures above therefore use equal-work named-kernel
 profiles.
 
-### Post-OneSweep residual and stop condition
+### Post-OneSweep profile correction
 
-The standalone primitive gate and production integration described in
-PERF-A06/PERF-L01 were applied after the preceding profile. The matched
-nine-frame window now reports:
+The earlier `646 versus 676` statement compared Genesis frames 20--28 with a
+reused late CGQ window. It was not a same-window PCG comparison and is
+withdrawn. The current early-window CGQ capture contains 530 PCG iterations;
+Genesis contains 646. Historical 75-frame means remain close (71.6 versus
+72.4 iterations/frame), but the complete dynamic trajectories are not
+framewise synchronized. The 116-iteration early-window difference is therefore
+tracked as numerical-work debt, not charged to implementation speed.
 
-- 18 Newton evaluations in both Genesis and CGQ;
-- 646 Genesis PCG iterations versus 676 in the pinned CGQ window;
-- Genesis GPU time 190.349 ms versus CGQ 145.500 ms (`1.308x`);
-- Genesis kernel instances 40,462, down from 46,657 before this layer;
-- complete Genesis sort-reduce 12.534 ms versus 30.421 ms before the layer
-  and 5.526 ms in CGQ.
+The isolated frozen-state, contact-free, and fixed-proxy gates above still
+prove PCG algebra and iteration parity. Per-iteration timing remains useful
+for implementation profiling, but it is not evidence of framewise trajectory
+parity.
 
-The remaining Genesis GPU excess is 44.849 ms. The profile attributes:
+### Quadrants resident occupancy grid
 
-- 422 confirmed Quadrants dynamic-range bound-helper variants, 16,127
-  instances, and 16.056 ms;
-- a 7.008-ms residual sort-reduce gap, dominated by per-pass dynamic range
-  helpers, generated OneSweep code, and small-kernel launch floors;
-- 149.46 microseconds per standard-PCG iteration across 36 Genesis variants,
-  versus the pinned CGQ 106.68 microseconds across 26 variants.
+Quadrants commit `12119f03e` serializes a `grid_stride` task property, marks
+CUDA `range_for` tasks at code generation, queries the compiled kernel with
+`cuOccupancyMaxActiveBlocksPerMultiprocessor`, and clamps graph and streaming
+launches to one resident block wave. An explicitly smaller grid remains
+unchanged. Live extents remain device scalars; this changes no graph topology,
+allocation capacity, or valid range.
 
-The forest is not an application-owned regression: current expand, project,
-control/inertia, and shared tree-preconditioner work remains comparable to the
-pinned CGQ decomposition. BCOO SpMV is likewise not a leading cost. After
-subtracting bound-helper time, Genesis GPU work is 174.293 ms (`1.198x` CGQ);
-the rest is explained by the additional generated range kernels and their grid
-policy/launch floor. This is the requested stop condition for Genesis-side
-optimization: further native or scene-specialized replacements would hide
-Quadrants compiler/runtime work instead of improving the simulation
-architecture.
+The validation probe preserves all output values while changing a representative
+dynamic launch from `8160x128` to `2040x128`. No `grid=8160` range launch
+remains in the production profile. CUDA range/graph tests report 55 passes,
+offline-cache tests report 27 passes, and the Genesis broad-phase/contact gate
+reports 12 passes.
 
-The final synchronized 100-frame Genesis median is 26.323 ms with Newton mean
-2.0 and total-PCG mean 72.38. Relative to the pre-layer 29.165 ms it is
-`1.108x` faster; relative to CGQ's 14.491 ms it is `1.816x`. The wall ratio is
-larger than the GPU-kernel ratio because Python/graph submission and
-synchronization are outside the captured kernel sum.
+The matched Genesis before/after window is frames 20--28, with exactly 18
+Newton evaluations and 646 PCG iterations in both captures. Contact-count and
+accepted-step sequences are unchanged; state differences remain at
+floating-point roundoff:
+
+- total GPU kernel time: `170.420 -> 131.012 ms` (`1.301x`, 23.1% lower);
+- synchronized wall median: `24.888 -> 20.230 ms` (`1.230x`, 18.7% lower);
+- standard PCG: `149.006 -> 108.603 us/iteration` (`1.372x`);
+- all paired dynamic-range work: `65.347 -> 36.108 ms` (`1.810x`);
+- sort ranges: `12.196 -> 8.808 ms`;
+- PCG ranges: `71.053 -> 43.061 ms`;
+- BVH/contact ranges: `20.616 -> 17.442 ms`;
+- other ranges: `14.350 -> 11.038 ms`.
+
+The largest individual improvements include `drs_memset_lookback`
+(`4.065 -> 0.963 ms`) and `forest_control_matvec`
+(`3.247 -> 1.281 ms`). The serial bound helpers are deliberately separated:
+they remain `8.064 -> 8.062 ms`, proving that occupancy removes excess worker
+blocks but does not hide the scalar helper debt.
+
+CGQ's current standard-PCG reference is approximately
+`102.7 us/iteration`. The remaining equal-work PCG difference is now about
+5.7%, and the unchanged Quadrants helper kernels are its dominant named
+source. Eliminating or fusing those helpers belongs in Quadrants; a
+Genesis-only fixed range, mask, host extent, or scene specialization is
+forbidden. Independently, framewise PCG trajectory parity remains open and
+must be resolved without tolerance changes.
 
 ## Compile-time and memory-layout debt
 
