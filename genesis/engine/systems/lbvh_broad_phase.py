@@ -20,6 +20,8 @@ class LBVHBroadPhase(BroadPhaseSystem):
         dual_target_waves: float = 24.0,
         dual_max_levels: int = 18,
         genesis_legacy_sort_reduce: bool = False,
+        genesis_legacy_fp64_bounds: bool = False,
+        genesis_legacy_refit: bool = False,
     ) -> None:
         super().__init__()
         if pt_query not in ("warp", "batched"):
@@ -35,6 +37,8 @@ class LBVHBroadPhase(BroadPhaseSystem):
         self.dual_target_waves = dual_target_waves
         self.dual_max_levels = dual_max_levels
         self.genesis_legacy_sort_reduce = bool(genesis_legacy_sort_reduce)
+        self.genesis_legacy_fp64_bounds = bool(genesis_legacy_fp64_bounds)
+        self.genesis_legacy_refit = bool(genesis_legacy_refit)
         self.has_triangle_bvh = False
         self.has_edge_bvh = False
         self.has_codim_point_bvh = False
@@ -50,6 +54,8 @@ class LBVHBroadPhase(BroadPhaseSystem):
                 ),
                 self.bound_type,
                 self.genesis_legacy_sort_reduce,
+                self.genesis_legacy_fp64_bounds,
+                self.genesis_legacy_refit,
             )
             self.has_triangle_bvh = True
         if n_edges > 0:
@@ -58,6 +64,8 @@ class LBVHBroadPhase(BroadPhaseSystem):
                 n_edges,
                 self.bound_type,
                 self.genesis_legacy_sort_reduce,
+                self.genesis_legacy_fp64_bounds,
+                self.genesis_legacy_refit,
             )
             if self.use_dual_ee:
                 self.ee_dual_state = DualEEQueryState(
@@ -173,6 +181,8 @@ class InfoLBVHBatchedBroadPhaseDop14(LBVHBroadPhase):
         dual_target_waves: float = 24.0,
         dual_max_levels: int = 18,
         genesis_legacy_sort_reduce: bool = False,
+        genesis_legacy_fp64_bounds: bool = False,
+        genesis_legacy_refit: bool = False,
     ) -> None:
         super().__init__(
             bound_type="dop14",
@@ -182,4 +192,6 @@ class InfoLBVHBatchedBroadPhaseDop14(LBVHBroadPhase):
             dual_target_waves=dual_target_waves,
             dual_max_levels=dual_max_levels,
             genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,
+            genesis_legacy_fp64_bounds=genesis_legacy_fp64_bounds,
+            genesis_legacy_refit=genesis_legacy_refit,
         )

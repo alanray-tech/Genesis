@@ -106,6 +106,16 @@ def main() -> None:
         default="warp",
         help="select production warp PT or the retained batched A/B path",
     )
+    parser.add_argument(
+        "--genesis-legacy-fp64-bounds",
+        action="store_true",
+        help="use the retained fp64 DOP14 A/B path instead of CGQ DOP14f",
+    )
+    parser.add_argument(
+        "--genesis-legacy-refit",
+        action="store_true",
+        help="use the retained initialize-and-merge BVH refit A/B path",
+    )
     args = parser.parse_args()
     mjcf_path = args.mjcf.resolve()
     if not mjcf_path.is_file():
@@ -198,6 +208,8 @@ def main() -> None:
             "extras/rigid_forest/genesis_legacy": int(args.forest_path == "genesis_legacy"),
             "extras/rigid_contact/genesis_collision": int(args.genesis_collision),
             "extras/sort_reduce/genesis_legacy": int(args.genesis_legacy_sort_reduce),
+            "extras/bvh/genesis_legacy_fp64_bounds": int(args.genesis_legacy_fp64_bounds),
+            "extras/bvh/genesis_legacy_refit": int(args.genesis_legacy_refit),
         },
         contact_tabular=contact_tabular,
         halfplanes=(
@@ -270,6 +282,8 @@ def main() -> None:
         "contact_d_hat": 1e-3,
         "linear_tolerance_rate": 1e-5,
         "pt_query": args.pt_query,
+        "genesis_legacy_fp64_bounds": args.genesis_legacy_fp64_bounds,
+        "genesis_legacy_refit": args.genesis_legacy_refit,
         "requested_forest_path": args.forest_path,
         "selected_forest_path": engine.rigid_forest.selected_path,
         "franka_mjcf": str(mjcf_path),

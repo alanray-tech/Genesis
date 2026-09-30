@@ -208,52 +208,101 @@ as permanent architecture.
 
 ### PERF-B01: Packed conservative DOP14f
 
-Current:
+Implementation:
 
-- DOP14 bounds are stored as fourteen `f64` ndarray values: 112 bytes per node.
+- Production DOP14 bounds are fourteen active `f32` values in a sixteen-lane
+  ndarray row: 64-byte row stride and 64-byte base alignment.
+- Point projection and final radius expansion convert from `f64` with explicit
+  round-down/round-up helpers. Every packed leaf bound conservatively contains
+  the retained fourteen-`f64` reference.
+- `extras/bvh/genesis_legacy_fp64_bounds=1` retains the former 112-byte node
+  representation as an explicit A/B oracle.
 
 CGQ target:
 
 - Outward-rounded `f32` DOP14 values padded/aligned to 64 bytes.
 - Vectorized 16-byte loads with no node straddling.
 
-Rewrite:
+Correctness:
 
-- Add or verify Quadrants support for directed `f64 -> f32` rounding.
-- Use a 64-byte packed/aligned representation whose generated loads are
-  confirmed in PTX.
+- Directed-conversion tests cover exact `f32` values, adjacent `f64` values,
+  subnormals, signed zero, finite extremes, and overflow-adjacent values.
+- Adversarial moving-triangle leaf tests prove outward containment against the
+  retained `f64` path.
+- Packed/direct, `f64`/direct, and `f64`/legacy Franka-Cloth paths all pass the
+  broad-phase suite and one-frame production smoke gate. The packed and
+  retained paths both execute Newton 2, total PCG 6, and line search 0.
 
-Acceptance:
+Matched profile proof:
 
-- Every fp32 bound conservatively contains the fp64 reference.
-- No candidate loss over adversarial rounding tests.
-- Node bandwidth and query time match or beat CGQ DOP14f.
+- Nsight Systems window: frames 20--28, 18 Newton evaluations, RTX 5090.
+- Native-`f32` scene reduction costs `20.448 us/Newton` versus
+  `48.816 us/Newton` for the retained `f64` bounds (`2.387x`).
+- Direct internal refit costs `95.662 us/Newton` with packed bounds versus
+  `132.655 us/Newton` with `f64` bounds (`1.387x`).
+- Warp PT costs `42.911 us/Newton` with packed bounds versus
+  `96.751 us/Newton` with `f64` bounds (`2.255x`).
+- CGQ's corresponding PT kernel costs `65.551 us/Newton` in the pinned
+  capture; the packed Genesis traversal is faster in this matched window.
+
+Ground-truth discrepancy:
+
+- CGQ `DOP14f::expand` rounds the radius upward and then performs
+  round-to-nearest `f32` subtraction/addition. The final arithmetic can move a
+  lower or upper bound inward by one ULP. Genesis deliberately rounds the
+  final expanded values outward. This is a reported safety correction, not an
+  unreported naming or algorithm deviation.
+
+Status: **closed at the Genesis storage/algorithm layer**. A generated-PTX
+probe of one complete sixteen-lane row load shows sixteen scalar `ld.b32`
+instructions at offsets 0--60, not four vector loads. The ndarray has the
+required alignment and stride, but Quadrants does not preserve that fact into
+vectorized memory operations. Native vector-load parity remains open under
+PERF-COMP02 and the Quadrants lowering layer.
 
 ### PERF-B02: Scene-bound reduction and refit
 
-Current:
+Implementation:
 
-- Scene bounds use two generic Quadrants block-reduction phases.
-- Internal refit performs leaf-to-root atomic-CAS walks and explicit fences.
+- Packed bounds use native-`f32` two-phase scene reduction; the retained
+  `f64` path remains available for A/B comparison.
+- Every completed second child directly writes all parent min/max lanes in one
+  refit visit. The former initialize-parent plus two child-merge sequence is
+  retained behind `extras/bvh/genesis_legacy_refit=1`.
+- Body metadata propagates in the same leaf-to-root visit, so Genesis does not
+  require CGQ's separate post-refit body-propagation phase.
 
 CGQ target:
 
 - Tuned BV merge reduction and production refit kernels.
 
-Rewrite:
+Matched profile proof:
 
-- Profile before changing the standard Karras refit.
-- Replace generic reduction stages only when a tuned block/CUB-equivalent path
-  wins end-to-end.
+- With `f64` bounds held fixed, direct refit costs `132.655 us/Newton` versus
+  `199.870 us/Newton` for initialize-plus-two-merge (`1.507x`).
+- Packing then reduces direct refit from `132.655` to `95.662 us/Newton`
+  (`1.387x`).
+- Packed/direct named broad-phase work totals `422.971 us/Newton` versus
+  `608.777 us/Newton` for `f64`/legacy (`1.439x`, 30.5% lower).
+- CGQ refit is `61.984 us/Newton`, plus `40.512 us/Newton` for its separate
+  body propagation. Genesis's combined `95.662 us/Newton` path is slightly
+  faster in the pinned captures.
+- Whole captured GPU-kernel time changes from `178.069` to `170.420 ms`
+  (4.30% lower), but small contact/PCG trajectory differences make the
+  equal-stage named timings above the acceptance evidence. Wall medians
+  (`24.913` versus `24.888 ms`) are measurement noise and are not claimed as
+  layer speedup.
+
+Status: **closed at the Genesis algorithm layer**. The remaining small
+scene-reduction and reorder differences are launch/grid/lowering costs assigned
+to the Quadrants optimization layer.
 
 ### PERF-B03: Query stack storage
 
 Current:
 
-- Dual EE and the warp-per-edge rollback now use bounded per-warp shared
-  stacks.
-- PT still allocates a persistent 64-entry global stack row per surface-vertex
-  query.
+- Production dual EE, warp-per-edge EE, and PT traversal use bounded per-warp
+  shared frontiers.
 - The initialization-only exact ET checker currently reuses one persistent
   64-entry global stack row per surface-edge query.
 
@@ -261,14 +310,11 @@ CGQ target:
 
 - Warp-local DFS state for every production PT/EE traversal.
 
-Rewrite:
-
-- Move PT traversal state to the CGQ 8-warps/block shared frontier.
-- Lower ET's fixed 64-entry stack to the same per-thread local representation
-  as CGQ, after confirming Quadrants does not introduce worse spills.
-- Remove `stack_pool` after no production query references it.
-
-Status: EE is complete; PT remains open.
+Status: **PT and EE closed** by PERF-B05 and PERF-C03. Only the
+initialization-only exact ET diagnostic stack remains open; it must be lowered
+to CGQ's fixed per-thread representation after confirming generated local
+memory traffic does not regress. The stale claim that production PT used a
+global stack is removed.
 
 ### PERF-B04: Contact-table node culling
 
@@ -1300,12 +1346,17 @@ Target:
 
 Current:
 
-- Contact blocks and DOP bounds rely on generic ndarray layout.
+- Packed DOP14f has a verified 64-byte row stride and 64-byte-aligned base
+  address, but Quadrants lowers a complete sixteen-lane row copy to sixteen
+  scalar `ld.b32` instructions at offsets 0--60.
+- Contact blocks continue to rely on generic ndarray lowering.
 
 Target:
 
-- Verify alignment, coalescing, vector loads, and cache-line behavior in PTX;
-  introduce explicit packed layouts where the generic lowering is inferior.
+- Teach Quadrants alias/alignment analysis and CUDA lowering to preserve packed
+  ndarray row alignment and emit four 16-byte vector loads where profitable.
+- Re-profile DOP refit and traversal after vector lowering; do not introduce a
+  Genesis-only native storage workaround.
 
 ### PERF-COMP03: Fastcache misses arithmetic static-property dependencies
 

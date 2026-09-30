@@ -76,6 +76,8 @@ def build_scene_engine(
             rigid_proxy_geometry = staging
 
     genesis_legacy_sort_reduce = bool(int(resolved_contact_config["extras/sort_reduce/genesis_legacy"]))
+    genesis_legacy_fp64_bounds = bool(int(resolved_contact_config["extras/bvh/genesis_legacy_fp64_bounds"]))
+    genesis_legacy_refit = bool(int(resolved_contact_config["extras/bvh/genesis_legacy_refit"]))
     engine = SimEngine()
     engine.add_system(
         GlobalLinearSystem(
@@ -132,6 +134,8 @@ def build_scene_engine(
                     dual_target_waves=float(resolved_contact_config["bvh/dual/target_waves"]),
                     dual_max_levels=int(resolved_contact_config["bvh/dual/max_levels"]),
                     genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,
+                    genesis_legacy_fp64_bounds=genesis_legacy_fp64_bounds,
+                    genesis_legacy_refit=genesis_legacy_refit,
                 )
             elif bvh_type in ("lbvh", "info_lbvh", "info_lbvh_batched"):
                 broad_phase_system = LBVHBroadPhase(

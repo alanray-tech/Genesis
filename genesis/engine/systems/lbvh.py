@@ -25,6 +25,8 @@ from .bvh_math import (
     aabb_init,
     aabb_overlap,
     determine_range,
+    f64_to_f32_rd,
+    f64_to_f32_ru,
     find_split,
     morton_code_30bit,
 )
@@ -196,6 +198,7 @@ def _swept_point_overlap(
     endpoint: qd.template(),
     gap,
     half: qd.template(),
+    use_dop14f: qd.template(),
 ):
     result = qd.i32(1)
     start_projection = qd.Vector(
@@ -221,18 +224,28 @@ def _swept_point_overlap(
         ]
     )
     for axis in qd.static(range(half)):
-        axis_gap = gap
+        scale = qd.f64(1.0)
         if qd.static(axis >= 3):
-            axis_gap = gap * 1.7320508075688772
-        query_lower = qd.min(start_projection[axis], end_projection[axis])
-        query_upper = qd.max(start_projection[axis], end_projection[axis])
-        if (aabbs[node, axis] - query_upper) >= axis_gap or (query_lower - aabbs[node, half + axis]) >= axis_gap:
-            result = 0
+            scale = qd.f64(1.7320508075688772)
+        if qd.static(use_dop14f):
+            query_lower = f64_to_f32_rd(qd.min(start_projection[axis], end_projection[axis]))
+            query_upper = f64_to_f32_ru(qd.max(start_projection[axis], end_projection[axis]))
+            axis_gap = gap * scale
+            if (qd.f64(aabbs[node, axis]) - qd.f64(query_upper)) >= axis_gap or (
+                qd.f64(query_lower) - qd.f64(aabbs[node, half + axis])
+            ) >= axis_gap:
+                result = 0
+        else:
+            axis_gap = gap * scale
+            query_lower = qd.min(start_projection[axis], end_projection[axis])
+            query_upper = qd.max(start_projection[axis], end_projection[axis])
+            if (aabbs[node, axis] - query_upper) >= axis_gap or (query_lower - aabbs[node, half + axis]) >= axis_gap:
+                result = 0
     return result
 
 
 # ---------------------------------------------------------------------------
-# Two-phase AABB reduce (equivalent to cgq CUB DeviceReduce + AABBReduceOp)
+# Two-phase scene-bound merge reduction
 # ---------------------------------------------------------------------------
 
 
@@ -247,6 +260,16 @@ def _bin_max_f64(a: qd.f64, b: qd.f64):
 
 
 @qd.func
+def _bin_min_f32(a: qd.f32, b: qd.f32):
+    return qd.min(a, b)
+
+
+@qd.func
+def _bin_max_f32(a: qd.f32, b: qd.f32):
+    return qd.max(a, b)
+
+
+@qd.func
 def _aabb_reduce_phase1(
     aabbs: qd.template(),
     partials: qd.template(),
@@ -257,10 +280,10 @@ def _aabb_reduce_phase1(
 ):
     """Phase 1: each block reduces its tile of leaf AABBs into per-block partials.
 
-    One kernel launch, each block processes ``block`` leaves, writes 6 f64
-    per block into partials[block_id, 0..5].
+    One kernel launch; each block processes ``block`` leaves and writes one
+    component-wise fp64 partial bound.
     """
-    loop_config(block_dim=block)
+    loop_config(name="bvh_scene_reduce_phase1", block_dim=block)
     for i in range(total_threads):
         qd_block.sync()
         n = n_rt[()]
@@ -299,7 +322,7 @@ def _aabb_reduce_phase2(
     accumulates its stripe of partials, then block-reduces the accumulated
     values.
     """
-    loop_config(block_dim=block)
+    loop_config(name="bvh_scene_reduce_phase2", block_dim=block)
     for i in range(block):
         qd_block.sync()
         nb = n_blocks_rt[()]
@@ -324,6 +347,74 @@ def _aabb_reduce_phase2(
                 aabbs[0, comp] = agg
 
 
+@qd.func
+def _aabb_reduce_phase1_f32(
+    aabbs: qd.template(),
+    partials: qd.template(),
+    n_rt: qd.template(),
+    total_threads: qd.i32,
+    block: qd.template(),
+    half: qd.template(),
+):
+    """DOP14f phase 1: reduce leaf bounds without widening back to f64."""
+    loop_config(name="bvh_scene_reduce_phase1_dop14f", block_dim=block)
+    for i in range(total_threads):
+        qd_block.sync()
+        n = n_rt[()]
+        tid = i % block
+        block_id = i // block
+        leaf = n - 1 + i
+
+        for comp in qd.static(range(half)):
+            value = qd.f32(3e38)
+            if i < n:
+                value = aabbs[leaf, comp]
+            aggregate = qd_block.reduce(value, block, _bin_min_f32, qd.f32)
+            if tid == 0:
+                partials[block_id, comp] = aggregate
+        for comp in qd.static(range(half, half * 2)):
+            value = qd.f32(-3e38)
+            if i < n:
+                value = aabbs[leaf, comp]
+            aggregate = qd_block.reduce(value, block, _bin_max_f32, qd.f32)
+            if tid == 0:
+                partials[block_id, comp] = aggregate
+
+
+@qd.func
+def _aabb_reduce_phase2_f32(
+    partials: qd.template(),
+    aabbs: qd.template(),
+    n_blocks_rt: qd.template(),
+    block: qd.template(),
+    half: qd.template(),
+):
+    """DOP14f phase 2: merge block partials into the scene bound."""
+    loop_config(name="bvh_scene_reduce_phase2_dop14f", block_dim=block)
+    for i in range(block):
+        qd_block.sync()
+        n_blocks = n_blocks_rt[()]
+
+        for comp in qd.static(range(half)):
+            value = qd.f32(3e38)
+            j = i
+            while j < n_blocks:
+                value = qd.min(value, partials[j, comp])
+                j = j + block
+            aggregate = qd_block.reduce(value, block, _bin_min_f32, qd.f32)
+            if i == 0:
+                aabbs[0, comp] = aggregate
+        for comp in qd.static(range(half, half * 2)):
+            value = qd.f32(-3e38)
+            j = i
+            while j < n_blocks:
+                value = qd.max(value, partials[j, comp])
+                j = j + block
+            aggregate = qd_block.reduce(value, block, _bin_max_f32, qd.f32)
+            if i == 0:
+                aabbs[0, comp] = aggregate
+
+
 @qd.data_oriented
 class LBVH:
     """Self-contained LBVH for *n* primitives (faces or edges).
@@ -341,6 +432,8 @@ class LBVH:
         max_queries: int = 0,
         bound_type: str = "aabb",
         genesis_legacy_sort_reduce: bool = False,
+        genesis_legacy_fp64_bounds: bool = False,
+        genesis_legacy_refit: bool = False,
     ) -> None:
         """Create LBVH for *n_prims* primitives.
 
@@ -349,6 +442,10 @@ class LBVH:
             max_queries: Max query count for stack_pool sizing.  For PT query
                 this is n_surf_verts; for EE query this equals n_prims.
                 If 0, defaults to n_prims.
+            genesis_legacy_fp64_bounds: Retain the former fourteen-f64 DOP14
+                storage for explicit A/B profiling.
+            genesis_legacy_refit: Retain the former initialize-and-two-merge
+                internal-node refit for explicit A/B profiling.
         """
         assert n_prims > 0, "LBVH requires n_prims > 0"
         # Radix-sort pass geometry, the u32 "no node" marker and the reduction
@@ -398,6 +495,10 @@ class LBVH:
             raise ValueError(f"Unsupported LBVH bound type {bound_type!r}")
         self.bound_type = bound_type
         self.bounds_width = 14 if bound_type == "dop14" else 6
+        self.use_dop14f_host = bound_type == "dop14" and not genesis_legacy_fp64_bounds
+        self.genesis_legacy_refit_host = bool(genesis_legacy_refit)
+        self.bounds_storage_width = 16 if self.use_dop14f_host else self.bounds_width
+        bounds_dtype = qd.f32 if self.use_dop14f_host else qd.f64
 
         if max_queries <= 0:
             max_queries = n_prims
@@ -407,8 +508,8 @@ class LBVH:
         self.ee_warp_stack_overflow = qd.ndarray(qd.i32, shape=())
 
         # --- Tree buffers ---
-        self.aabbs = qd.ndarray(qd.f64, (n_nodes, self.bounds_width))
-        self.temp_aabbs = qd.ndarray(qd.f64, (n_prims, self.bounds_width))
+        self.aabbs = qd.ndarray(bounds_dtype, (n_nodes, self.bounds_storage_width))
+        self.temp_aabbs = qd.ndarray(bounds_dtype, (n_prims, self.bounds_storage_width))
         self.temp_node_body_id = qd.ndarray(qd.i32, (n_prims,))
         self.indices = qd.ndarray(qd.u32, (n_prims,))
         self.nodes_parent = qd.ndarray(qd.u32, (n_nodes,))
@@ -430,7 +531,7 @@ class LBVH:
 
         # --- Scene AABB reduce workspace ---
         n_blocks = (n_prims + self.bvh_block - 1) // self.bvh_block
-        self.red_partials = qd.ndarray(qd.f64, (max(n_blocks, 1), self.bounds_width))
+        self.red_partials = qd.ndarray(bounds_dtype, (max(n_blocks, 1), self.bounds_storage_width))
         self.n_reduce_blocks = qd.ndarray(qd.i32, shape=())
 
         # --- BVH query stack workspace (per-thread) ---
@@ -453,27 +554,65 @@ class LBVH:
         Matches cgq ``calc_leaf_aabb`` with stride=3.
         """
         n = self.n_prims[()]
+        loop_config(name="bvh_calc_leaf_aabb_tri")
         for idx in range(n):
             leaf = n - 1 + idx
-            aabb_init(self.aabbs, leaf, self.bounds_width // 2)
+            aabb_init(self.aabbs, leaf, self.bounds_width // 2, self.use_dop14f_host)
             for k in qd.static(range(3)):
                 vi = surf_mgr.surf_triangles[idx, k]
                 px = vtx_mgr.positions[vi, 0]
                 py = vtx_mgr.positions[vi, 1]
                 pz = vtx_mgr.positions[vi, 2]
-                aabb_combine_point(self.aabbs, leaf, px, py, pz, self.bounds_width // 2)
+                aabb_combine_point(
+                    self.aabbs,
+                    leaf,
+                    px,
+                    py,
+                    pz,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
                 endpoint_x = vtx_mgr.trajectory_end_positions[vi, 0]
                 endpoint_y = vtx_mgr.trajectory_end_positions[vi, 1]
                 endpoint_z = vtx_mgr.trajectory_end_positions[vi, 2]
-                aabb_combine_point(self.aabbs, leaf, endpoint_x, endpoint_y, endpoint_z, self.bounds_width // 2)
+                aabb_combine_point(
+                    self.aabbs,
+                    leaf,
+                    endpoint_x,
+                    endpoint_y,
+                    endpoint_z,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
             max_thickness = qd.f64(0.0)
             max_path_inflation = qd.f64(0.0)
             for k in qd.static(range(3)):
                 vi = surf_mgr.surf_triangles[idx, k]
                 max_thickness = qd.max(max_thickness, vtx_mgr.thicknesses[vi])
                 max_path_inflation = qd.max(max_path_inflation, vtx_mgr.path_inflation[vi])
-            primitive_gap = vtx_mgr.d_hats[surf_mgr.surf_triangles[idx, 0]] + max_thickness + max_path_inflation
-            aabb_expand(self.aabbs, leaf, primitive_gap, self.bounds_width // 2)
+            if max_thickness > 0.0:
+                aabb_expand(
+                    self.aabbs,
+                    leaf,
+                    max_thickness,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
+            if max_path_inflation > 0.0:
+                aabb_expand(
+                    self.aabbs,
+                    leaf,
+                    max_path_inflation,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
+            aabb_expand(
+                self.aabbs,
+                leaf,
+                vtx_mgr.d_hats[surf_mgr.surf_triangles[idx, 0]],
+                self.bounds_width // 2,
+                self.use_dop14f_host,
+            )
             body_id = vtx_mgr.body_id[surf_mgr.surf_triangles[idx, 0]]
             for k in qd.static(range(1, 3)):
                 if vtx_mgr.body_id[surf_mgr.surf_triangles[idx, k]] != body_id:
@@ -487,27 +626,65 @@ class LBVH:
         Matches cgq ``calc_leaf_aabb`` with stride=2.
         """
         n = self.n_prims[()]
+        loop_config(name="bvh_calc_leaf_aabb_edge")
         for idx in range(n):
             leaf = n - 1 + idx
-            aabb_init(self.aabbs, leaf, self.bounds_width // 2)
+            aabb_init(self.aabbs, leaf, self.bounds_width // 2, self.use_dop14f_host)
             for k in qd.static(range(2)):
                 vi = surf_mgr.surf_edges[idx, k]
                 px = vtx_mgr.positions[vi, 0]
                 py = vtx_mgr.positions[vi, 1]
                 pz = vtx_mgr.positions[vi, 2]
-                aabb_combine_point(self.aabbs, leaf, px, py, pz, self.bounds_width // 2)
+                aabb_combine_point(
+                    self.aabbs,
+                    leaf,
+                    px,
+                    py,
+                    pz,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
                 endpoint_x = vtx_mgr.trajectory_end_positions[vi, 0]
                 endpoint_y = vtx_mgr.trajectory_end_positions[vi, 1]
                 endpoint_z = vtx_mgr.trajectory_end_positions[vi, 2]
-                aabb_combine_point(self.aabbs, leaf, endpoint_x, endpoint_y, endpoint_z, self.bounds_width // 2)
+                aabb_combine_point(
+                    self.aabbs,
+                    leaf,
+                    endpoint_x,
+                    endpoint_y,
+                    endpoint_z,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
             max_thickness = qd.f64(0.0)
             max_path_inflation = qd.f64(0.0)
             for k in qd.static(range(2)):
                 vi = surf_mgr.surf_edges[idx, k]
                 max_thickness = qd.max(max_thickness, vtx_mgr.thicknesses[vi])
                 max_path_inflation = qd.max(max_path_inflation, vtx_mgr.path_inflation[vi])
-            primitive_gap = vtx_mgr.d_hats[surf_mgr.surf_edges[idx, 0]] + max_thickness + max_path_inflation
-            aabb_expand(self.aabbs, leaf, primitive_gap, self.bounds_width // 2)
+            if max_thickness > 0.0:
+                aabb_expand(
+                    self.aabbs,
+                    leaf,
+                    max_thickness,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
+            if max_path_inflation > 0.0:
+                aabb_expand(
+                    self.aabbs,
+                    leaf,
+                    max_path_inflation,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
+            aabb_expand(
+                self.aabbs,
+                leaf,
+                vtx_mgr.d_hats[surf_mgr.surf_edges[idx, 0]],
+                self.bounds_width // 2,
+                self.use_dop14f_host,
+            )
             body_id = vtx_mgr.body_id[surf_mgr.surf_edges[idx, 0]]
             if vtx_mgr.body_id[surf_mgr.surf_edges[idx, 1]] != body_id:
                 body_id = -1
@@ -527,21 +704,38 @@ class LBVH:
         """
         n_blocks = self.n_reduce_blocks[()]
         total_threads = n_blocks * self.bvh_block
-        _aabb_reduce_phase1(
-            self.aabbs,
-            self.red_partials,
-            self.n_prims,
-            total_threads,
-            self.bvh_block,
-            self.bounds_width // 2,
-        )
-        _aabb_reduce_phase2(
-            self.red_partials,
-            self.aabbs,
-            self.n_reduce_blocks,
-            self.bvh_block,
-            self.bounds_width // 2,
-        )
+        if qd.static(self.use_dop14f_host):
+            _aabb_reduce_phase1_f32(
+                self.aabbs,
+                self.red_partials,
+                self.n_prims,
+                total_threads,
+                self.bvh_block,
+                self.bounds_width // 2,
+            )
+            _aabb_reduce_phase2_f32(
+                self.red_partials,
+                self.aabbs,
+                self.n_reduce_blocks,
+                self.bvh_block,
+                self.bounds_width // 2,
+            )
+        if qd.static(not self.use_dop14f_host):
+            _aabb_reduce_phase1(
+                self.aabbs,
+                self.red_partials,
+                self.n_prims,
+                total_threads,
+                self.bvh_block,
+                self.bounds_width // 2,
+            )
+            _aabb_reduce_phase2(
+                self.red_partials,
+                self.aabbs,
+                self.n_reduce_blocks,
+                self.bvh_block,
+                self.bounds_width // 2,
+            )
 
     @qd.func(requires_top_level=True)
     def calc_morton(self):
@@ -554,23 +748,24 @@ class LBVH:
         sort_count = n
         if qd.static(self.genesis_legacy_sort_reduce_host):
             sort_count = self.morton.shape[0]
+        loop_config(name="bvh_calc_morton")
         for idx in range(sort_count):
             if idx < n:
                 half = qd.static(self.bounds_width // 2)
-                scene_lx = self.aabbs[0, 0]
-                scene_ly = self.aabbs[0, 1]
-                scene_lz = self.aabbs[0, 2]
-                scene_sx = self.aabbs[0, half] - scene_lx
-                scene_sy = self.aabbs[0, half + 1] - scene_ly
-                scene_sz = self.aabbs[0, half + 2] - scene_lz
+                scene_lx = qd.f64(self.aabbs[0, 0])
+                scene_ly = qd.f64(self.aabbs[0, 1])
+                scene_lz = qd.f64(self.aabbs[0, 2])
+                scene_sx = qd.f64(self.aabbs[0, half]) - scene_lx
+                scene_sy = qd.f64(self.aabbs[0, half + 1]) - scene_ly
+                scene_sz = qd.f64(self.aabbs[0, half + 2]) - scene_lz
                 scene_sx = max(scene_sx, 1e-30)
                 scene_sy = max(scene_sy, 1e-30)
                 scene_sz = max(scene_sz, 1e-30)
 
                 leaf = n - 1 + idx
-                cx = (self.aabbs[leaf, 0] + self.aabbs[leaf, half]) * 0.5
-                cy = (self.aabbs[leaf, 1] + self.aabbs[leaf, half + 1]) * 0.5
-                cz = (self.aabbs[leaf, 2] + self.aabbs[leaf, half + 2]) * 0.5
+                cx = (qd.f64(self.aabbs[leaf, 0]) + qd.f64(self.aabbs[leaf, half])) * 0.5
+                cy = (qd.f64(self.aabbs[leaf, 1]) + qd.f64(self.aabbs[leaf, half + 1])) * 0.5
+                cz = (qd.f64(self.aabbs[leaf, 2]) + qd.f64(self.aabbs[leaf, half + 2])) * 0.5
                 nx = (cx - scene_lx) / scene_sx
                 ny = (cy - scene_ly) / scene_sy
                 nz = (cz - scene_lz) / scene_sz
@@ -615,6 +810,7 @@ class LBVH:
         Matches cgq ``extract_indices``.
         """
         n = self.n_prims[()]
+        loop_config(name="bvh_extract_indices")
         for idx in range(n):
             self.indices[idx] = qd.u32(self.morton[idx] & qd.u64(0xFFFFFFFF))
 
@@ -625,9 +821,10 @@ class LBVH:
         Matches cgq ``bvh_copy_leaf_aabb_kernel``.
         """
         n = self.n_prims[()]
+        loop_config(name="bvh_copy_leaf_aabb")
         for idx in range(n):
             leaf = n - 1 + idx
-            for k in qd.static(range(self.bounds_width)):
+            for k in qd.static(range(self.bounds_storage_width)):
                 self.temp_aabbs[idx, k] = self.aabbs[leaf, k]
             self.temp_node_body_id[idx] = self.node_body_id[leaf]
 
@@ -638,10 +835,11 @@ class LBVH:
         Matches cgq ``reorder_leaf_aabb``.
         """
         n = self.n_prims[()]
+        loop_config(name="bvh_reorder_leaf_aabb")
         for idx in range(n):
             leaf = n - 1 + idx
             src = qd.i32(self.indices[idx])
-            for k in qd.static(range(self.bounds_width)):
+            for k in qd.static(range(self.bounds_storage_width)):
                 self.aabbs[leaf, k] = self.temp_aabbs[src, k]
             self.node_body_id[leaf] = self.temp_node_body_id[src]
 
@@ -653,6 +851,7 @@ class LBVH:
         """
         n = self.n_prims[()]
         n_nodes = 2 * n - 1
+        loop_config(name="bvh_calc_leaf_nodes")
         for idx in range(n_nodes):
             self.nodes_parent[idx] = qd.u32(self.sentinel)
             self.nodes_left[idx] = qd.u32(self.sentinel)
@@ -670,6 +869,7 @@ class LBVH:
         Matches cgq ``calc_internal_nodes``.
         """
         n = self.n_prims[()]
+        loop_config(name="bvh_calc_internal_nodes")
         for idx in range(n - 1):
             ij = determine_range(self.morton, n, idx)
             first = ij[0]
@@ -697,6 +897,7 @@ class LBVH:
         Matches cgq ``bvh_memset_flags_kernel``.
         """
         n = self.n_prims[()]
+        loop_config(name="bvh_memset_flags")
         for idx in range(n - 1):
             self.flags[idx] = qd.u32(self.sentinel)
 
@@ -704,13 +905,16 @@ class LBVH:
     def calc_internal_aabb(self):
         """Bottom-up parallel AABB refit using atomicCAS on flags.
 
-        Matches cgq ``calc_internal_aabb`` exactly:
+        Matches cgq ``calc_internal_aabb``:
         - flags initialized to 0xFFFFFFFF
         - atomicCAS(flags[parent], 0xFFFFFFFF, 0): first child returns, second merges
+        - production writes the direct min/max merge once; the former
+          initialize-and-two-merge traffic is config-gated for A/B profiling
         - qd.simt.grid.mem_fence() after merge (= __threadfence())
         - walk terminates when parent == 0xFFFFFFFF (root's parent)
         """
         n = self.n_prims[()]
+        loop_config(name="bvh_calc_internal_aabb")
         for idx in range(n):
             node_idx = idx + n - 1
             parent = self.nodes_parent[node_idx]
@@ -721,9 +925,38 @@ class LBVH:
                 else:
                     lidx = qd.i32(self.nodes_left[qd.i32(parent)])
                     ridx = qd.i32(self.nodes_right[qd.i32(parent)])
-                    aabb_init(self.aabbs, qd.i32(parent), self.bounds_width // 2)
-                    aabb_combine_aabb(self.aabbs, qd.i32(parent), self.aabbs, lidx, self.bounds_width // 2)
-                    aabb_combine_aabb(self.aabbs, qd.i32(parent), self.aabbs, ridx, self.bounds_width // 2)
+                    if qd.static(self.genesis_legacy_refit_host):
+                        aabb_init(
+                            self.aabbs,
+                            qd.i32(parent),
+                            self.bounds_width // 2,
+                            self.use_dop14f_host,
+                        )
+                        aabb_combine_aabb(
+                            self.aabbs,
+                            qd.i32(parent),
+                            self.aabbs,
+                            lidx,
+                            self.bounds_width // 2,
+                        )
+                        aabb_combine_aabb(
+                            self.aabbs,
+                            qd.i32(parent),
+                            self.aabbs,
+                            ridx,
+                            self.bounds_width // 2,
+                        )
+                    else:
+                        for component in qd.static(range(self.bounds_width // 2)):
+                            self.aabbs[qd.i32(parent), component] = qd.min(
+                                self.aabbs[lidx, component],
+                                self.aabbs[ridx, component],
+                            )
+                            upper_component = component + self.bounds_width // 2
+                            self.aabbs[qd.i32(parent), upper_component] = qd.max(
+                                self.aabbs[lidx, upper_component],
+                                self.aabbs[ridx, upper_component],
+                            )
                     left_body = self.node_body_id[lidx]
                     right_body = self.node_body_id[ridx]
                     self.node_body_id[qd.i32(parent)] = qd.select(
@@ -748,14 +981,28 @@ class LBVH:
         n = self.n_prims[()]
         for idx in range(n):
             leaf = n - 1 + idx
-            aabb_init(self.aabbs, leaf, self.bounds_width // 2)
+            aabb_init(self.aabbs, leaf, self.bounds_width // 2, self.use_dop14f_host)
             for k in qd.static(range(3)):
                 vi = surf_mgr.surf_triangles[idx, k]
                 px = vtx_mgr.positions[vi, 0]
                 py = vtx_mgr.positions[vi, 1]
                 pz = vtx_mgr.positions[vi, 2]
-                aabb_combine_point(self.aabbs, leaf, px, py, pz, self.bounds_width // 2)
-            aabb_expand(self.aabbs, leaf, d_hat, self.bounds_width // 2)
+                aabb_combine_point(
+                    self.aabbs,
+                    leaf,
+                    px,
+                    py,
+                    pz,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
+            aabb_expand(
+                self.aabbs,
+                leaf,
+                d_hat,
+                self.bounds_width // 2,
+                self.use_dop14f_host,
+            )
 
     @qd.func(requires_top_level=True)
     def calc_leaf_aabb_edge_toy(self, surf_mgr: qd.template(), vtx_mgr: qd.template(), d_hat: qd.f64):
@@ -766,14 +1013,28 @@ class LBVH:
         n = self.n_prims[()]
         for idx in range(n):
             leaf = n - 1 + idx
-            aabb_init(self.aabbs, leaf, self.bounds_width // 2)
+            aabb_init(self.aabbs, leaf, self.bounds_width // 2, self.use_dop14f_host)
             for k in qd.static(range(2)):
                 vi = surf_mgr.surf_edges[idx, k]
                 px = vtx_mgr.positions[vi, 0]
                 py = vtx_mgr.positions[vi, 1]
                 pz = vtx_mgr.positions[vi, 2]
-                aabb_combine_point(self.aabbs, leaf, px, py, pz, self.bounds_width // 2)
-            aabb_expand(self.aabbs, leaf, d_hat, self.bounds_width // 2)
+                aabb_combine_point(
+                    self.aabbs,
+                    leaf,
+                    px,
+                    py,
+                    pz,
+                    self.bounds_width // 2,
+                    self.use_dop14f_host,
+                )
+            aabb_expand(
+                self.aabbs,
+                leaf,
+                d_hat,
+                self.bounds_width // 2,
+                self.use_dop14f_host,
+            )
 
     @qd.func(requires_top_level=True)
     def query_pt_toy(
@@ -1115,6 +1376,7 @@ class LBVH:
                         query_endpoint,
                         query_gap,
                         self.bounds_width // 2,
+                        self.use_dop14f_host,
                     )
                 else:
                     for axis in qd.static(range(3)):
@@ -1190,6 +1452,7 @@ class LBVH:
                         query_endpoint,
                         query_gap,
                         self.bounds_width // 2,
+                        self.use_dop14f_host,
                     )
                 if not _node_pair_enabled(body_mgr, vtx_mgr.body_id[vidx], self.node_body_id[L_idx]):
                     L_overlap = 0
@@ -1243,6 +1506,7 @@ class LBVH:
                         query_endpoint,
                         query_gap,
                         self.bounds_width // 2,
+                        self.use_dop14f_host,
                     )
                 if not _node_pair_enabled(body_mgr, vtx_mgr.body_id[vidx], self.node_body_id[R_idx]):
                     R_overlap = 0
@@ -1327,8 +1591,15 @@ class LBVH:
                         qd.max(start[2], endpoint[2]),
                     ]
                 )
+                query_gap = (
+                    vtx_mgr.d_hats[vertex_index]
+                    + vtx_mgr.thicknesses[vertex_index]
+                    + vtx_mgr.path_inflation[vertex_index]
+                )
                 query_projection_lower = qd.Vector.zero(qd.f64, 7)
                 query_projection_upper = qd.Vector.zero(qd.f64, 7)
+                query_projection_lower_gap_f32 = qd.Vector.zero(qd.f32, 7)
+                query_projection_upper_gap_f32 = qd.Vector.zero(qd.f32, 7)
                 if qd.static(self.bounds_width == 14):
                     start_projection = qd.Vector(
                         [
@@ -1353,19 +1624,24 @@ class LBVH:
                         ]
                     )
                     for axis in qd.static(range(7)):
-                        query_projection_lower[axis] = qd.min(
+                        projection_lower = qd.min(
                             start_projection[axis],
                             endpoint_projection[axis],
                         )
-                        query_projection_upper[axis] = qd.max(
+                        projection_upper = qd.max(
                             start_projection[axis],
                             endpoint_projection[axis],
                         )
-                query_gap = (
-                    vtx_mgr.d_hats[vertex_index]
-                    + vtx_mgr.thicknesses[vertex_index]
-                    + vtx_mgr.path_inflation[vertex_index]
-                )
+                        if qd.static(self.use_dop14f_host):
+                            scale = qd.f64(1.0)
+                            if qd.static(axis >= 3):
+                                scale = qd.f64(1.7320508075688772)
+                            axis_gap = query_gap * scale
+                            query_projection_lower_gap_f32[axis] = f64_to_f32_rd(projection_lower - axis_gap)
+                            query_projection_upper_gap_f32[axis] = f64_to_f32_ru(projection_upper + axis_gap)
+                        else:
+                            query_projection_lower[axis] = projection_lower
+                            query_projection_upper[axis] = projection_upper
                 query_body = vtx_mgr.body_id[vertex_index]
 
                 if n == 1:
@@ -1375,13 +1651,19 @@ class LBVH:
                         overlap = qd.i32(1)
                         if qd.static(self.bounds_width == 14):
                             for axis in qd.static(range(7)):
-                                axis_gap = query_gap
-                                if qd.static(axis >= 3):
-                                    axis_gap = query_gap * 1.7320508075688772
-                                if (self.aabbs[0, axis] - query_projection_upper[axis]) >= axis_gap or (
-                                    query_projection_lower[axis] - self.aabbs[0, axis + 7]
-                                ) >= axis_gap:
-                                    overlap = 0
+                                if qd.static(self.use_dop14f_host):
+                                    if self.aabbs[0, axis] >= query_projection_upper_gap_f32[axis] or (
+                                        query_projection_lower_gap_f32[axis] >= self.aabbs[0, axis + 7]
+                                    ):
+                                        overlap = 0
+                                else:
+                                    axis_gap = query_gap
+                                    if qd.static(axis >= 3):
+                                        axis_gap = query_gap * 1.7320508075688772
+                                    if (self.aabbs[0, axis] - query_projection_upper[axis]) >= axis_gap or (
+                                        query_projection_lower[axis] - self.aabbs[0, axis + 7]
+                                    ) >= axis_gap:
+                                        overlap = 0
                         else:
                             for axis in qd.static(range(3)):
                                 if (self.aabbs[0, axis] - query_upper[axis]) >= query_gap or (
@@ -1452,13 +1734,30 @@ class LBVH:
                                     overlap = qd.i32(1)
                                     if qd.static(self.bounds_width == 14):
                                         for axis in qd.static(range(7)):
-                                            axis_gap = query_gap
-                                            if qd.static(axis >= 3):
-                                                axis_gap = query_gap * 1.7320508075688772
-                                            if (self.aabbs[child, axis] - query_projection_upper[axis]) >= axis_gap or (
-                                                query_projection_lower[axis] - self.aabbs[child, axis + 7]
-                                            ) >= axis_gap:
-                                                overlap = 0
+                                            if qd.static(self.use_dop14f_host):
+                                                if (
+                                                    self.aabbs[
+                                                        child,
+                                                        axis,
+                                                    ]
+                                                    >= query_projection_upper_gap_f32[axis]
+                                                    or query_projection_lower_gap_f32[axis]
+                                                    >= self.aabbs[
+                                                        child,
+                                                        axis + 7,
+                                                    ]
+                                                ):
+                                                    overlap = 0
+                                            else:
+                                                axis_gap = query_gap
+                                                if qd.static(axis >= 3):
+                                                    axis_gap = query_gap * 1.7320508075688772
+                                                if (
+                                                    self.aabbs[child, axis] - query_projection_upper[axis]
+                                                ) >= axis_gap or (
+                                                    query_projection_lower[axis] - self.aabbs[child, axis + 7]
+                                                ) >= axis_gap:
+                                                    overlap = 0
                                     else:
                                         for axis in qd.static(range(3)):
                                             if (self.aabbs[child, axis] - query_upper[axis]) >= query_gap or (

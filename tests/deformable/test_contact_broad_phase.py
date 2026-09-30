@@ -3,6 +3,7 @@ import pytest
 import quadrants as qd
 
 import genesis as gs
+from genesis.engine.systems.bvh_math import f64_to_f32_rd, f64_to_f32_ru
 from genesis.engine.systems.dual_ee_query import DualEEQueryState
 from genesis.engine.systems.global_body_manager import GlobalBodyManager
 from genesis.engine.systems.global_surface_manager import GlobalSurfaceManager
@@ -183,6 +184,26 @@ def sort_morton_only(bvh: qd.template()):
     bvh.sort_morton()
 
 
+@qd.kernel
+def convert_f64_to_f32_outward(
+    values: qd.types.ndarray(qd.f64, ndim=1),
+    lower: qd.types.ndarray(qd.f32, ndim=1),
+    upper: qd.types.ndarray(qd.f32, ndim=1),
+):
+    for index in range(values.shape[0]):
+        lower[index] = f64_to_f32_rd(values[index])
+        upper[index] = f64_to_f32_ru(values[index])
+
+
+@qd.kernel
+def calc_triangle_leaves(
+    bvh: qd.template(),
+    surface: qd.template(),
+    vertex: qd.template(),
+):
+    bvh.calc_leaf_aabb_tri(surface, vertex)
+
+
 def make_single_body_pt_scene(
     positions: np.ndarray,
     triangles: np.ndarray,
@@ -225,6 +246,124 @@ def make_single_body_pt_scene(
         np.empty(0, dtype=np.int32),
     )
     return surface, vertex, body
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_f64_to_f32_outward_rounding_is_directed():
+    f32_values = np.array(
+        [
+            -np.finfo(np.float32).max,
+            -12345.5,
+            -1.0,
+            -np.finfo(np.float32).tiny,
+            -0.0,
+            0.0,
+            np.finfo(np.float32).tiny,
+            1.0,
+            12345.5,
+            np.finfo(np.float32).max,
+        ],
+        dtype=np.float32,
+    )
+    exact = f32_values.astype(np.float64)
+    values = np.concatenate(
+        (
+            exact,
+            np.nextafter(exact, -np.inf),
+            np.nextafter(exact, np.inf),
+            np.array(
+                [
+                    -1e-300,
+                    1e-300,
+                    -np.pi,
+                    np.pi,
+                    -1e20 + 3.0,
+                    1e20 - 3.0,
+                ],
+                dtype=np.float64,
+            ),
+        )
+    )
+    source = qd.ndarray(qd.f64, shape=(len(values),))
+    lower = qd.ndarray(qd.f32, shape=(len(values),))
+    upper = qd.ndarray(qd.f32, shape=(len(values),))
+    source.from_numpy(values)
+    convert_f64_to_f32_outward(source, lower, upper)
+
+    actual_lower = qd_to_numpy(lower)
+    actual_upper = qd_to_numpy(upper)
+    nearest = values.astype(np.float32)
+    expected_lower = nearest.copy()
+    expected_upper = nearest.copy()
+    lower_adjust = nearest.astype(np.float64) > values
+    upper_adjust = nearest.astype(np.float64) < values
+    with np.errstate(over="ignore"):
+        expected_lower[lower_adjust] = np.nextafter(
+            expected_lower[lower_adjust],
+            np.float32(-np.inf),
+        )
+        expected_upper[upper_adjust] = np.nextafter(
+            expected_upper[upper_adjust],
+            np.float32(np.inf),
+        )
+
+    np.testing.assert_array_equal(actual_lower, expected_lower)
+    np.testing.assert_array_equal(actual_upper, expected_upper)
+    bad_lower = np.flatnonzero(actual_lower.astype(np.float64) > values)
+    bad_upper = np.flatnonzero(actual_upper.astype(np.float64) < values)
+    assert not len(bad_lower), [(int(index), values[index], actual_lower[index]) for index in bad_lower]
+    assert not len(bad_upper), [(int(index), values[index], actual_upper[index]) for index in bad_upper]
+    np.testing.assert_array_equal(actual_lower[: len(exact)], f32_values)
+    np.testing.assert_array_equal(actual_upper[: len(exact)], f32_values)
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_dop14f_leaf_bounds_conservatively_contain_fp64_reference():
+    base = np.array(
+        [
+            [0.1, -0.2, 0.3],
+            [0.4, 0.5, -0.6],
+            [-0.7, 0.8, 0.9],
+            [1.0, -1.1, 1.2],
+            [-1.3, 1.4, -1.5],
+            [1.6, 1.7, -1.8],
+        ],
+        dtype=np.float32,
+    ).astype(np.float64)
+    direction = np.where(np.arange(base.size).reshape(base.shape) % 2 == 0, np.inf, -np.inf)
+    positions = np.nextafter(base, direction)
+    triangles = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
+    surface, vertex, _ = make_single_body_pt_scene(positions, triangles)
+    endpoints = np.nextafter(positions + 3.0e-8, -direction)
+    vertex.trajectory_end_positions.from_numpy(endpoints)
+
+    dop14f = LBVH(2, 6, "dop14")
+    fp64_reference = LBVH(
+        2,
+        6,
+        "dop14",
+        False,
+        True,
+    )
+    calc_triangle_leaves(dop14f, surface, vertex)
+    calc_triangle_leaves(fp64_reference, surface, vertex)
+
+    packed = qd_to_numpy(dop14f.aabbs)
+    reference = qd_to_numpy(fp64_reference.aabbs)
+    assert packed.dtype == np.float32
+    assert packed.shape == (3, 16)
+    assert packed.strides[0] == 64
+    device_view = dop14f.aabbs.to_torch(copy=False)
+    assert device_view.data_ptr() % 64 == 0
+    assert device_view.stride(0) * device_view.element_size() == 64
+
+    leaves = slice(1, 3)
+    assert np.all(packed[leaves, :7].astype(np.float64) <= reference[leaves, :7])
+    assert np.all(packed[leaves, 7:14].astype(np.float64) >= reference[leaves, 7:14])
 
 
 @pytest.mark.required
@@ -281,8 +420,23 @@ def test_lbvh_dynamic_morton_sort_matches_retained_generic_path():
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])
-@pytest.mark.parametrize("bound_type", ["aabb", "dop14"])
-def test_lbvh_pt_candidates_match_two_parallel_triangles(bound_type):
+@pytest.mark.parametrize(
+    (
+        "bound_type",
+        "genesis_legacy_fp64_bounds",
+        "genesis_legacy_refit",
+    ),
+    [
+        ("aabb", False, False),
+        ("dop14", False, False),
+        ("dop14", True, True),
+    ],
+)
+def test_lbvh_pt_candidates_match_two_parallel_triangles(
+    bound_type,
+    genesis_legacy_fp64_bounds,
+    genesis_legacy_refit,
+):
     positions = np.array(
         [
             [0.0, 0.0, 0.0],
@@ -327,7 +481,14 @@ def test_lbvh_pt_candidates_match_two_parallel_triangles(bound_type):
         np.empty(0, dtype=np.int32),
     )
 
-    bvh = LBVH(2, 6, bound_type)
+    bvh = LBVH(
+        2,
+        6,
+        bound_type,
+        False,
+        genesis_legacy_fp64_bounds,
+        genesis_legacy_refit,
+    )
     pairs = qd.ndarray(qd.i32, shape=(16, 2))
     n_pairs = qd.ndarray(qd.i32, shape=())
     overflow = qd.ndarray(qd.i32, shape=())

@@ -14,9 +14,9 @@ from .gpu_occupancy import cuda_resident_blocks
 @qd.func
 def _dual_ee_node_area(bvh: qd.template(), node):
     half = bvh.bounds_width // 2
-    x = bvh.aabbs[node, half] - bvh.aabbs[node, 0]
-    y = bvh.aabbs[node, half + 1] - bvh.aabbs[node, 1]
-    z = bvh.aabbs[node, half + 2] - bvh.aabbs[node, 2]
+    x = qd.f64(bvh.aabbs[node, half]) - qd.f64(bvh.aabbs[node, 0])
+    y = qd.f64(bvh.aabbs[node, half + 1]) - qd.f64(bvh.aabbs[node, 1])
+    z = qd.f64(bvh.aabbs[node, half + 2]) - qd.f64(bvh.aabbs[node, 2])
     return x * y + x * z + y * z
 
 
@@ -129,12 +129,7 @@ class DualEEQueryState:
             self.frontier_registers_per_thread,
         )
         self.frontier_threads = self.frontier_blocks * self.block_size
-        dfs_shared_bytes = (
-            self.subgroups_per_block
-            * self.stack_capacity
-            * 2
-            * np.dtype(np.uint32).itemsize
-        )
+        dfs_shared_bytes = self.subgroups_per_block * self.stack_capacity * 2 * np.dtype(np.uint32).itemsize
         self.dfs_blocks = cuda_resident_blocks(
             self.block_size,
             dfs_shared_bytes,
@@ -175,9 +170,7 @@ class DualEEQueryState:
         self.config_target_waves.from_numpy(np.array(target_waves, dtype=np.float64))
         self.config_max_levels.from_numpy(np.array(max_levels, dtype=np.int32))
         self.frontier_capacity.from_numpy(np.array(capacity, dtype=np.int32))
-        self.resident_dfs_warps.from_numpy(
-            np.array(self.resident_dfs_warps_value, dtype=np.int32)
-        )
+        self.resident_dfs_warps.from_numpy(np.array(self.resident_dfs_warps_value, dtype=np.int32))
 
     def handle_overflow(self) -> bool:
         bits = int(self.overflow_bits.to_numpy())
@@ -216,10 +209,7 @@ class DualEEQueryState:
             max_levels = qd.min(qd.max(self.config_max_levels[()], 1), self.max_levels_limit)
             if self.config_frontier_levels[()] <= 0:
                 target_from_waves = qd.i32(
-                    qd.ceil(
-                        qd.max(self.config_target_waves[()], 1.0)
-                        * qd.f64(qd.max(self.resident_dfs_warps[()], 1))
-                    )
+                    qd.ceil(qd.max(self.config_target_waves[()], 1.0) * qd.f64(qd.max(self.resident_dfs_warps[()], 1)))
                 )
                 self.target_frontier[()] = qd.min(tree_n, target_from_waves)
             if tree_n <= 1 or max_levels <= 0:
@@ -338,12 +328,7 @@ class DualEEQueryState:
                     reached_target = level >= qd.min(configured_levels, max_levels)
                 else:
                     reached_target = produced >= self.target_frontier[()]
-                stop = (
-                    reached_target
-                    or produced <= 0
-                    or level >= max_levels
-                    or self.overflow_bits[()] != 0
-                )
+                stop = reached_target or produced <= 0 or level >= max_levels or self.overflow_bits[()] != 0
                 if stop:
                     self.selected_count[()] = produced
                     if qd.static(frontier_in_a):

@@ -1,7 +1,8 @@
 """BVH math primitives: AABB operations, Morton codes, Karras 2012 helpers.
 
-All functions are ``@qd.func`` for use inside graph kernels.  Faithfully ports
-``bvh_types.cuh`` from cgq so numerical results are identical.
+All functions are ``@qd.func`` for use inside graph kernels. They port
+``bvh_types.cuh`` from CGQ, with the documented stricter outward rounding in
+``aabb_expand``.
 """
 
 # ruff: noqa: SIM102
@@ -11,10 +12,38 @@ from __future__ import annotations
 import quadrants as qd
 
 # ---------------------------------------------------------------------------
-# AABB helpers  (stored as 6 contiguous f64: lower_x, lower_y, lower_z,
-#                                             upper_x, upper_y, upper_z)
-# We pass AABB data via the owning field/ndarray + a flat offset.
+# Bounding-volume helpers. AABB uses six contiguous f64 values. DOP14f uses
+# fourteen active f32 values in a sixteen-value row: lo[7], hi[7], padding[2].
+# The 64-byte row stride mirrors CGQ's alignas(64) DOP14f.
 # ---------------------------------------------------------------------------
+
+
+@qd.func
+def f64_to_f32_rd(value: qd.f64):
+    """CGQ ``bvf_rd``: convert f64 to f32 with round-toward-negative-infinity."""
+    result = qd.f32(value)
+    if qd.f64(result) > value:
+        bits = qd.bit_cast(result, qd.u32)
+        if (bits & qd.u32(0x80000000)) != 0:
+            bits = bits + qd.u32(1)
+        else:
+            bits = bits - qd.u32(1)
+        result = qd.bit_cast(bits, qd.f32)
+    return result
+
+
+@qd.func
+def f64_to_f32_ru(value: qd.f64):
+    """CGQ ``bvf_ru``: convert f64 to f32 with round-toward-positive-infinity."""
+    result = qd.f32(value)
+    if qd.f64(result) < value:
+        bits = qd.bit_cast(result, qd.u32)
+        if (bits & qd.u32(0x80000000)) != 0:
+            bits = bits - qd.u32(1)
+        else:
+            bits = bits + qd.u32(1)
+        result = qd.bit_cast(bits, qd.f32)
+    return result
 
 
 @qd.func
@@ -22,18 +51,24 @@ def aabb_init(
     aabbs: qd.template(),
     idx: qd.i32,
     half: qd.template(),
+    use_dop14f: qd.template(),
 ):
     """Reset aabbs[idx] to the empty sentinel (lower=+inf, upper=-inf).
 
-    The +-1e32 bounds are sentinels for "no bound yet" that the min/max
-    expansion reduces away, not a length scale -- nothing in the scene compares
-    against them, so they carry no tunable meaning. They are spelled inline
-    because a module constant read from device code never enters the fastcache
-    key, so editing it would silently reuse a stale kernel.
+    The fp64 AABB uses +-1e32 and DOP14f uses CGQ's +-3e38f. They are
+    sentinels for "no bound yet" that min/max expansion reduces away, not a
+    length scale. They are spelled inline because a module constant read from
+    device code never enters the fastcache key, so editing it would silently
+    reuse a stale kernel.
     """
-    for k in qd.static(range(half)):
-        aabbs[idx, k] = 1e32
-        aabbs[idx, half + k] = -1e32
+    if qd.static(use_dop14f):
+        for k in qd.static(range(half)):
+            aabbs[idx, k] = qd.f32(3e38)
+            aabbs[idx, half + k] = qd.f32(-3e38)
+    else:
+        for k in qd.static(range(half)):
+            aabbs[idx, k] = qd.f64(1e32)
+            aabbs[idx, half + k] = qd.f64(-1e32)
 
 
 @qd.func
@@ -42,14 +77,25 @@ def aabb_expand(
     idx: qd.i32,
     r: qd.f64,
     half: qd.template(),
+    use_dop14f: qd.template(),
 ):
-    """Expand aabbs[idx] by radius r on all sides. Matches cgq ``AABB::expand``."""
+    """Expand a bound by ``r``.
+
+    DOP14f rounds the final lower/upper values outward. CGQ currently rounds
+    only ``r`` upward and then uses round-to-nearest f32 arithmetic; adversarial
+    values prove that can move the final bound inward by one ulp.
+    """
     for k in qd.static(range(half)):
         scale = qd.f64(1.0)
         if qd.static(k >= 3):
             scale = qd.f64(1.7320508075688772)
-        aabbs[idx, k] = aabbs[idx, k] - r * scale
-        aabbs[idx, half + k] = aabbs[idx, half + k] + r * scale
+        if qd.static(use_dop14f):
+            radius = r * scale
+            aabbs[idx, k] = f64_to_f32_rd(qd.f64(aabbs[idx, k]) - radius)
+            aabbs[idx, half + k] = f64_to_f32_ru(qd.f64(aabbs[idx, half + k]) + radius)
+        else:
+            aabbs[idx, k] = aabbs[idx, k] - r * scale
+            aabbs[idx, half + k] = aabbs[idx, half + k] + r * scale
 
 
 @qd.func
@@ -60,12 +106,20 @@ def aabb_combine_point(
     py: qd.f64,
     pz: qd.f64,
     half: qd.template(),
+    use_dop14f: qd.template(),
 ):
     """Expand aabbs[idx] to include point (px, py, pz)."""
     projections = qd.Vector([px, py, pz, px + py + pz, px + py - pz, px - py + pz, px - py - pz])
     for axis in qd.static(range(half)):
-        aabbs[idx, axis] = qd.min(aabbs[idx, axis], projections[axis])
-        aabbs[idx, half + axis] = qd.max(aabbs[idx, half + axis], projections[axis])
+        if qd.static(use_dop14f):
+            aabbs[idx, axis] = qd.min(aabbs[idx, axis], f64_to_f32_rd(projections[axis]))
+            aabbs[idx, half + axis] = qd.max(
+                aabbs[idx, half + axis],
+                f64_to_f32_ru(projections[axis]),
+            )
+        else:
+            aabbs[idx, axis] = qd.min(aabbs[idx, axis], projections[axis])
+            aabbs[idx, half + axis] = qd.max(aabbs[idx, half + axis], projections[axis])
 
 
 @qd.func

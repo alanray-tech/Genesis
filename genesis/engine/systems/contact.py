@@ -36,6 +36,8 @@ CONTACT_CONFIG_DEFAULTS = MappingProxyType(
         "extras/rigid_forest/genesis_legacy": 0,
         "extras/rigid_contact/genesis_collision": 0,
         "extras/sort_reduce/genesis_legacy": 0,
+        "extras/bvh/genesis_legacy_fp64_bounds": 0,
+        "extras/bvh/genesis_legacy_refit": 0,
     }
 )
 

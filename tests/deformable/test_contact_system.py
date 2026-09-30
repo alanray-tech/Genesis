@@ -52,6 +52,7 @@ def test_contact_parameter_manifest_defaults():
         "extras/ls_forensics/test_energy_bias": 0.0,
         "topo/grow_factor": 1.5,
         "bvh/type": "info_lbvh_batched_dop14",
+        "bvh/pt_query": "warp",
         "bvh/ee_query": "dual",
         "bvh/dual/frontier_levels": 0,
         "bvh/dual/target_waves": 24.0,
@@ -63,6 +64,8 @@ def test_contact_parameter_manifest_defaults():
         "extras/rigid_forest/genesis_legacy": 0,
         "extras/rigid_contact/genesis_collision": 0,
         "extras/sort_reduce/genesis_legacy": 0,
+        "extras/bvh/genesis_legacy_fp64_bounds": 0,
+        "extras/bvh/genesis_legacy_refit": 0,
     }
     model = ContactTabular().at(0, 0)
     assert model.friction_rate == 0.05
