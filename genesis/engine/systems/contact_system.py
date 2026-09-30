@@ -20,6 +20,18 @@ from .contact_function.screw_ccd import (
     screw_halfplane_ccd,
     screw_point_triangle_ccd,
 )
+from .dynamic_exclusive_sum import (
+    DynamicExclusiveSum,
+    dynamic_exclusive_sum,
+)
+from .dynamic_radix_sort import (
+    DynamicRadixSort,
+    dynamic_radix_sort,
+)
+from .fsr_reduce import (
+    fast_segmented_reduce_doublet as fsr_reduce_doublet,
+    fast_segmented_reduce_triplet as fsr_reduce_triplet,
+)
 from .sim_system import SimSystem
 
 _CONTACT_SORT_MIN_CAPACITY = 4_865
@@ -36,7 +48,12 @@ def _padded64(value: int) -> int:
 class ContactSystem(SimSystem):
     """Own CGQ collision pairs, contact assembly, friction, energy, and CCD state."""
 
-    def __init__(self, *, intersection_check: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        intersection_check: bool = False,
+        genesis_legacy_sort_reduce: bool = False,
+    ) -> None:
         super().__init__()
         self._contact_constitution = None
         self.is_wired_host = False
@@ -47,6 +64,7 @@ class ContactSystem(SimSystem):
         self.sort_log256_max_n = _CONTACT_SORT_LOG256_MAX_N
         self.ccd_max_iters = _CCD_MAX_ITERS
         self.intersection_check_host = bool(intersection_check)
+        self.genesis_legacy_sort_reduce_host = bool(genesis_legacy_sort_reduce)
 
     def do_build(self) -> None:
         from .global_body_manager import GlobalBodyManager
@@ -262,17 +280,8 @@ class ContactSystem(SimSystem):
             raise RuntimeError("ContactSystem requires a ContactConstitution")
 
         pair_capacity = self.pairs_pt.shape[0]
-        n_halfplanes = self.halfplane_positions.shape[0] if self.has_halfplanes else 0
-        mesh_pair_capacity = pair_capacity * 4
-        friction_multiplier = 2 if self.has_friction else 1
-        doublet_capacity = max(
-            mesh_pair_capacity * 4 * friction_multiplier + n_verts * n_halfplanes * friction_multiplier,
-            _CONTACT_SORT_MIN_CAPACITY,
-        )
-        triplet_capacity = max(
-            mesh_pair_capacity * 10 * friction_multiplier + n_verts * n_halfplanes * friction_multiplier,
-            _CONTACT_SORT_MIN_CAPACITY,
-        )
+        doublet_capacity = _CONTACT_SORT_MIN_CAPACITY
+        triplet_capacity = _CONTACT_SORT_MIN_CAPACITY
 
         self.n_verts = qd.ndarray(qd.i32, shape=())
         self.n_verts.from_numpy(np.array(n_verts, dtype=np.int32))
@@ -342,8 +351,8 @@ class ContactSystem(SimSystem):
 
         self.max_contact_doublets.from_numpy(np.array(doublet_capacity, dtype=np.int32))
         self.max_contact_triplets.from_numpy(np.array(triplet_capacity, dtype=np.int32))
-        self.padded_contact_doublets.from_numpy(np.array(padded_doublets, dtype=np.int32))
-        self.padded_contact_triplets.from_numpy(np.array(padded_triplets, dtype=np.int32))
+        self.padded_contact_doublets.from_numpy(np.array(doublet_capacity, dtype=np.int32))
+        self.padded_contact_triplets.from_numpy(np.array(triplet_capacity, dtype=np.int32))
         for scalar in (
             self.n_contact_doublets,
             self.n_contact_triplets,
@@ -365,33 +374,47 @@ class ContactSystem(SimSystem):
 
         self.doublet_sort_keys = qd.ndarray(qd.u32, shape=(padded_doublets,))
         self.doublet_sort_keys_out = qd.ndarray(qd.u32, shape=(padded_doublets,))
-        self.doublet_sort_perm = qd.ndarray(qd.u32, shape=(padded_doublets,))
-        self.doublet_sort_perm_out = qd.ndarray(qd.u32, shape=(padded_doublets,))
+        self.doublet_sort_perm = qd.ndarray(qd.i32, shape=(padded_doublets,))
+        self.doublet_sort_perm_out = qd.ndarray(qd.i32, shape=(padded_doublets,))
         self.doublet_sort_size = qd.ndarray(qd.i32, shape=())
+        self.doublet_sorter = DynamicRadixSort(
+            qd.u32,
+            padded_doublets,
+        )
         self.doublet_sort_scratch = qd.ndarray(
             qd.u32,
             shape=(max(sort_scratch_slots(padded_doublets, self.sort_log256_max_n), 1),),
         )
-        self.doublet_seg_flags = qd.ndarray(qd.u32, shape=(padded_doublets,))
-        self.doublet_seg_ids = qd.ndarray(qd.u32, shape=(padded_doublets,))
+        self.doublet_seg_flags = qd.ndarray(qd.i32, shape=(padded_doublets,))
+        self.doublet_seg_ids = qd.ndarray(qd.i32, shape=(padded_doublets,))
+        self.doublet_scanner = DynamicExclusiveSum(
+            padded_doublets,
+        )
         self.doublet_scan_scratch = qd.ndarray(
-            qd.u32,
+            qd.i32,
             shape=(max(exclusive_scan_scratch_slots(padded_doublets, self.sort_log256_max_n), 1),),
         )
 
         self.triplet_sort_keys = qd.ndarray(qd.u64, shape=(padded_triplets,))
         self.triplet_sort_keys_out = qd.ndarray(qd.u64, shape=(padded_triplets,))
-        self.triplet_sort_perm = qd.ndarray(qd.u32, shape=(padded_triplets,))
-        self.triplet_sort_perm_out = qd.ndarray(qd.u32, shape=(padded_triplets,))
+        self.triplet_sort_perm = qd.ndarray(qd.i32, shape=(padded_triplets,))
+        self.triplet_sort_perm_out = qd.ndarray(qd.i32, shape=(padded_triplets,))
         self.triplet_sort_size = qd.ndarray(qd.i32, shape=())
+        self.triplet_sorter = DynamicRadixSort(
+            qd.u64,
+            padded_triplets,
+        )
         self.triplet_sort_scratch = qd.ndarray(
             qd.u32,
             shape=(max(sort_scratch_slots(padded_triplets, self.sort_log256_max_n), 1),),
         )
-        self.triplet_seg_flags = qd.ndarray(qd.u32, shape=(padded_triplets,))
-        self.triplet_seg_ids = qd.ndarray(qd.u32, shape=(padded_triplets,))
+        self.triplet_seg_flags = qd.ndarray(qd.i32, shape=(padded_triplets,))
+        self.triplet_seg_ids = qd.ndarray(qd.i32, shape=(padded_triplets,))
+        self.triplet_scanner = DynamicExclusiveSum(
+            padded_triplets,
+        )
         self.triplet_scan_scratch = qd.ndarray(
-            qd.u32,
+            qd.i32,
             shape=(max(exclusive_scan_scratch_slots(padded_triplets, self.sort_log256_max_n), 1),),
         )
         self.doublet_sort_size.from_numpy(np.array(0, dtype=np.int32))
@@ -447,6 +470,20 @@ class ContactSystem(SimSystem):
 
     def handle_broad_phase_overflow(self) -> bool:
         return self.broad_phase.handle_ee_query_overflow()
+
+    def set_assembly_padding(
+        self,
+        padded_doublets: int,
+        padded_triplets: int,
+    ) -> None:
+        doublet_capacity = self.contact_doublet_vertices.shape[0]
+        triplet_capacity = self.contact_triplet_rows.shape[0]
+        if not 0 <= padded_doublets <= doublet_capacity:
+            raise ValueError("Contact doublet padding must fit its allocation")
+        if not 0 <= padded_triplets <= triplet_capacity:
+            raise ValueError("Contact triplet padding must fit its allocation")
+        self.padded_contact_doublets.from_numpy(np.array(padded_doublets, dtype=np.int32))
+        self.padded_contact_triplets.from_numpy(np.array(padded_triplets, dtype=np.int32))
 
     @qd.func(requires_top_level=True)
     def reset_initial_intersections(self):
@@ -798,6 +835,39 @@ class ContactSystem(SimSystem):
             self.count_overflow_flag[()] = qd.i32(overflow)
 
     @qd.func(requires_top_level=True)
+    def check_assembly_padding(self):
+        for _ in range(1):
+            self.contact_padding_overflow[()] = qd.i32(
+                self.n_contact_doublets[()] > self.padded_contact_doublets[()]
+                or self.n_contact_triplets[()] > self.padded_contact_triplets[()]
+            )
+
+    @qd.func(requires_top_level=True)
+    def shrink_assembly_padding(self):
+        for _ in range(1):
+            n_doublets = self.n_contact_doublets[()]
+            n_triplets = self.n_contact_triplets[()]
+            if n_doublets > 0 or n_triplets > 0:
+                target_doublets = qd.i32(qd.ceil(qd.f64(n_doublets) * self.capacity_grow_factor[()]))
+                target_triplets = qd.i32(qd.ceil(qd.f64(n_triplets) * self.capacity_grow_factor[()]))
+                target_doublets = qd.min(
+                    qd.max(target_doublets, 4865),
+                    self.max_contact_doublets[()],
+                )
+                target_triplets = qd.min(
+                    qd.max(target_triplets, 4865),
+                    self.max_contact_triplets[()],
+                )
+                if qd.f64(target_doublets) < (
+                    qd.f64(self.padded_contact_doublets[()]) * self.capacity_shrink_threshold[()]
+                ):
+                    self.padded_contact_doublets[()] = target_doublets
+                if qd.f64(target_triplets) < (
+                    qd.f64(self.padded_contact_triplets[()]) * self.capacity_shrink_threshold[()]
+                ):
+                    self.padded_contact_triplets[()] = target_triplets
+
+    @qd.func(requires_top_level=True)
     def reset_assembly_counts(self):
         for _ in range(1):
             self.n_contact_doublets[()] = 0
@@ -810,78 +880,121 @@ class ContactSystem(SimSystem):
     @qd.func(requires_top_level=True)
     def doublet_sort_seed(self):
         qd.loop_config(name="contact_doublet_sort_seed")
-        for index in range(self.padded_contact_doublets[()]):
-            if index < self.n_contact_doublets[()]:
-                self.doublet_sort_keys[index] = qd.u32(self.contact_doublet_vertices[index])
-                self.doublet_sort_perm[index] = qd.u32(index)
-            else:
-                self.doublet_sort_keys[index] = qd.u32(0xFFFFFFFF)
-                self.doublet_sort_perm[index] = qd.u32(index)
+        for index in range(self.doublet_sort_keys.shape[0]):
+            if index < self.padded_contact_doublets[()]:
+                if index < self.n_contact_doublets[()]:
+                    self.doublet_sort_keys[index] = qd.u32(self.contact_doublet_vertices[index])
+                    self.doublet_sort_perm[index] = index
+                else:
+                    self.doublet_sort_keys[index] = qd.u32(0xFFFFFFFF)
+                    self.doublet_sort_perm[index] = index
         for _ in range(1):
             self.doublet_sort_size[()] = self.n_contact_doublets[()]
 
     @qd.func(requires_top_level=True)
     def doublet_sort_radix(self):
-        sort(
-            self.doublet_sort_keys,
-            self.doublet_sort_keys_out,
-            self.doublet_sort_perm,
-            self.doublet_sort_perm_out,
-            self.doublet_sort_scratch,
-            self.doublet_sort_size,
-            qd.u32,
-            True,
-            32,
-            self.sort_log256_max_n,
-        )
+        if qd.static(self.genesis_legacy_sort_reduce_host):
+            sort(
+                self.doublet_sort_keys,
+                self.doublet_sort_keys_out,
+                self.doublet_sort_perm,
+                self.doublet_sort_perm_out,
+                self.doublet_sort_scratch,
+                self.doublet_sort_size,
+                qd.u32,
+                True,
+                32,
+                self.sort_log256_max_n,
+            )
+        else:
+            dynamic_radix_sort(
+                self.doublet_sorter,
+                self.doublet_sort_keys,
+                self.doublet_sort_keys_out,
+                self.doublet_sort_perm,
+                self.doublet_sort_perm_out,
+                self.padded_contact_doublets[()],
+            )
 
     @qd.func(requires_top_level=True)
     def doublet_segment_flags(self):
         qd.loop_config(name="contact_doublet_segment_flags")
-        for index in range(self.padded_contact_doublets[()]):
-            flag = qd.u32(0)
-            if index < self.n_contact_doublets[()] and (
-                index == self.n_contact_doublets[()] - 1
-                or self.doublet_sort_keys[index] != self.doublet_sort_keys[index + 1]
-            ):
-                flag = qd.u32(1)
-            self.doublet_seg_flags[index] = flag
+        for index in range(self.doublet_sort_keys.shape[0]):
+            if index < self.padded_contact_doublets[()]:
+                flag = qd.i32(0)
+                if index < self.n_contact_doublets[()] and (
+                    index == self.n_contact_doublets[()] - 1
+                    or self.doublet_sort_keys[index] != self.doublet_sort_keys[index + 1]
+                ):
+                    flag = qd.i32(1)
+                self.doublet_seg_flags[index] = flag
 
     @qd.func(requires_top_level=True)
     def doublet_scan(self):
-        exclusive_scan_add(
-            self.doublet_seg_flags,
-            self.doublet_seg_ids,
-            self.doublet_scan_scratch,
-            self.n_contact_doublets[()],
-            qd.u32,
-            self.sort_log256_max_n,
-        )
+        if qd.static(self.genesis_legacy_sort_reduce_host):
+            exclusive_scan_add(
+                self.doublet_seg_flags,
+                self.doublet_seg_ids,
+                self.doublet_scan_scratch,
+                self.n_contact_doublets[()],
+                qd.i32,
+                self.sort_log256_max_n,
+            )
+        else:
+            dynamic_exclusive_sum(
+                self.doublet_scanner,
+                self.doublet_seg_flags,
+                self.doublet_seg_ids,
+                self.padded_contact_doublets[()],
+            )
 
     @qd.func(requires_top_level=True)
     def doublet_zero_unique(self):
         qd.loop_config(name="contact_doublet_zero_unique")
-        for index in range(self.max_contact_doublets[()]):
-            for axis in qd.static(range(3)):
-                self.unique_doublet_gradients[index, axis] = 0.0
+        for index in range(self.unique_doublet_gradients.shape[0]):
+            if index < self.padded_contact_doublets[()]:
+                for axis in qd.static(range(3)):
+                    self.unique_doublet_gradients[index, axis] = 0.0
 
     @qd.func(requires_top_level=True)
     def doublet_fsr_merge(self):
-        qd.loop_config(name="contact_doublet_fsr_merge")
-        for index in range(self.n_contact_doublets[()]):
-            source = qd.i32(self.doublet_sort_perm[index])
-            segment = qd.i32(self.doublet_seg_ids[index])
-            for axis in qd.static(range(3)):
-                qd.atomic_add(
-                    self.unique_doublet_gradients[segment, axis],
-                    self.contact_doublet_gradients[source, axis],
-                )
+        if qd.static(self.genesis_legacy_sort_reduce_host):
+            qd.loop_config(name="contact_doublet_fsr_merge_legacy")
+            for index in range(self.n_contact_doublets[()]):
+                source = qd.i32(self.doublet_sort_perm[index])
+                segment = self.doublet_seg_ids[index]
+                for axis in qd.static(range(3)):
+                    qd.atomic_add(
+                        self.unique_doublet_gradients[
+                            segment,
+                            axis,
+                        ],
+                        self.contact_doublet_gradients[
+                            source,
+                            axis,
+                        ],
+                    )
+        else:
+            fsr_reduce_doublet(
+                self.doublet_seg_ids,
+                self.doublet_sort_perm,
+                self.doublet_sort_keys,
+                self.contact_doublet_gradients,
+                self.unique_doublet_gradients,
+                self.n_contact_doublets,
+                self.padded_contact_doublets,
+                self.doublet_sort_keys.shape[0],
+            )
 
     @qd.func(requires_top_level=True)
     def doublet_extract_unique(self):
         qd.loop_config(name="contact_doublet_extract_unique")
-        for index in range(self.n_contact_doublets[()]):
-            if self.doublet_seg_flags[index] != 0:
+        for index in range(self.doublet_sort_keys.shape[0]):
+            if (
+                index < self.padded_contact_doublets[()]
+                and index < self.n_contact_doublets[()]
+                and self.doublet_seg_flags[index] != 0
+            ):
                 segment = qd.i32(self.doublet_seg_ids[index])
                 self.unique_doublet_vertices[segment] = qd.i32(self.doublet_sort_keys[index])
                 if index == self.n_contact_doublets[()] - 1:
@@ -890,82 +1003,127 @@ class ContactSystem(SimSystem):
     @qd.func(requires_top_level=True)
     def triplet_sort_seed(self):
         qd.loop_config(name="contact_triplet_sort_seed")
-        for index in range(self.padded_contact_triplets[()]):
-            if index < self.n_contact_triplets[()]:
-                row = qd.u64(self.contact_triplet_rows[index])
-                column = qd.u64(self.contact_triplet_cols[index])
-                self.triplet_sort_keys[index] = (row << 32) | column
-                self.triplet_sort_perm[index] = qd.u32(index)
-            else:
-                self.triplet_sort_keys[index] = qd.u64(0xFFFFFFFFFFFFFFFF)
-                self.triplet_sort_perm[index] = qd.u32(index)
+        for index in range(self.triplet_sort_keys.shape[0]):
+            if index < self.padded_contact_triplets[()]:
+                if index < self.n_contact_triplets[()]:
+                    row = qd.u64(self.contact_triplet_rows[index])
+                    column = qd.u64(self.contact_triplet_cols[index])
+                    self.triplet_sort_keys[index] = (row << 32) | column
+                    self.triplet_sort_perm[index] = index
+                else:
+                    self.triplet_sort_keys[index] = qd.u64(0xFFFFFFFFFFFFFFFF)
+                    self.triplet_sort_perm[index] = index
         for _ in range(1):
             self.triplet_sort_size[()] = self.n_contact_triplets[()]
 
     @qd.func(requires_top_level=True)
     def triplet_sort_radix(self):
-        sort(
-            self.triplet_sort_keys,
-            self.triplet_sort_keys_out,
-            self.triplet_sort_perm,
-            self.triplet_sort_perm_out,
-            self.triplet_sort_scratch,
-            self.triplet_sort_size,
-            qd.u64,
-            True,
-            64,
-            self.sort_log256_max_n,
-        )
+        if qd.static(self.genesis_legacy_sort_reduce_host):
+            sort(
+                self.triplet_sort_keys,
+                self.triplet_sort_keys_out,
+                self.triplet_sort_perm,
+                self.triplet_sort_perm_out,
+                self.triplet_sort_scratch,
+                self.triplet_sort_size,
+                qd.u64,
+                True,
+                64,
+                self.sort_log256_max_n,
+            )
+        else:
+            dynamic_radix_sort(
+                self.triplet_sorter,
+                self.triplet_sort_keys,
+                self.triplet_sort_keys_out,
+                self.triplet_sort_perm,
+                self.triplet_sort_perm_out,
+                self.padded_contact_triplets[()],
+            )
 
     @qd.func(requires_top_level=True)
     def triplet_segment_flags(self):
         qd.loop_config(name="contact_triplet_segment_flags")
-        for index in range(self.padded_contact_triplets[()]):
-            flag = qd.u32(0)
-            if index < self.n_contact_triplets[()] and (
-                index == self.n_contact_triplets[()] - 1
-                or self.triplet_sort_keys[index] != self.triplet_sort_keys[index + 1]
-            ):
-                flag = qd.u32(1)
-            self.triplet_seg_flags[index] = flag
+        for index in range(self.triplet_sort_keys.shape[0]):
+            if index < self.padded_contact_triplets[()]:
+                flag = qd.i32(0)
+                if index < self.n_contact_triplets[()] and (
+                    index == self.n_contact_triplets[()] - 1
+                    or self.triplet_sort_keys[index] != self.triplet_sort_keys[index + 1]
+                ):
+                    flag = qd.i32(1)
+                self.triplet_seg_flags[index] = flag
 
     @qd.func(requires_top_level=True)
     def triplet_scan(self):
-        exclusive_scan_add(
-            self.triplet_seg_flags,
-            self.triplet_seg_ids,
-            self.triplet_scan_scratch,
-            self.n_contact_triplets[()],
-            qd.u32,
-            self.sort_log256_max_n,
-        )
+        if qd.static(self.genesis_legacy_sort_reduce_host):
+            exclusive_scan_add(
+                self.triplet_seg_flags,
+                self.triplet_seg_ids,
+                self.triplet_scan_scratch,
+                self.n_contact_triplets[()],
+                qd.i32,
+                self.sort_log256_max_n,
+            )
+        else:
+            dynamic_exclusive_sum(
+                self.triplet_scanner,
+                self.triplet_seg_flags,
+                self.triplet_seg_ids,
+                self.padded_contact_triplets[()],
+            )
 
     @qd.func(requires_top_level=True)
     def triplet_zero_unique(self):
         qd.loop_config(name="contact_triplet_zero_unique")
-        for index in range(self.max_contact_triplets[()]):
-            for row in qd.static(range(3)):
-                for column in qd.static(range(3)):
-                    self.unique_triplet_values[index, row, column] = 0.0
+        for index in range(self.unique_triplet_values.shape[0]):
+            if index < self.padded_contact_triplets[()]:
+                for row in qd.static(range(3)):
+                    for column in qd.static(range(3)):
+                        self.unique_triplet_values[index, row, column] = 0.0
 
     @qd.func(requires_top_level=True)
     def triplet_fsr_merge(self):
-        qd.loop_config(name="contact_triplet_fsr_merge")
-        for index in range(self.n_contact_triplets[()]):
-            source = qd.i32(self.triplet_sort_perm[index])
-            segment = qd.i32(self.triplet_seg_ids[index])
-            for row in qd.static(range(3)):
-                for column in qd.static(range(3)):
-                    qd.atomic_add(
-                        self.unique_triplet_values[segment, row, column],
-                        self.contact_triplet_values[source, row, column],
-                    )
+        if qd.static(self.genesis_legacy_sort_reduce_host):
+            qd.loop_config(name="contact_triplet_fsr_merge_legacy")
+            for index in range(self.n_contact_triplets[()]):
+                source = qd.i32(self.triplet_sort_perm[index])
+                segment = self.triplet_seg_ids[index]
+                for row in qd.static(range(3)):
+                    for column in qd.static(range(3)):
+                        qd.atomic_add(
+                            self.unique_triplet_values[
+                                segment,
+                                row,
+                                column,
+                            ],
+                            self.contact_triplet_values[
+                                source,
+                                row,
+                                column,
+                            ],
+                        )
+        else:
+            fsr_reduce_triplet(
+                self.triplet_seg_ids,
+                self.triplet_sort_perm,
+                self.triplet_sort_keys,
+                self.contact_triplet_values,
+                self.unique_triplet_values,
+                self.n_contact_triplets,
+                self.padded_contact_triplets,
+                self.triplet_sort_keys.shape[0],
+            )
 
     @qd.func(requires_top_level=True)
     def triplet_extract_unique(self):
         qd.loop_config(name="contact_triplet_extract_unique")
-        for index in range(self.n_contact_triplets[()]):
-            if self.triplet_seg_flags[index] != 0:
+        for index in range(self.triplet_sort_keys.shape[0]):
+            if (
+                index < self.padded_contact_triplets[()]
+                and index < self.n_contact_triplets[()]
+                and self.triplet_seg_flags[index] != 0
+            ):
                 segment = qd.i32(self.triplet_seg_ids[index])
                 key = self.triplet_sort_keys[index]
                 self.unique_triplet_rows[segment] = qd.i32(key >> 32)

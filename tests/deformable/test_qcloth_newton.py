@@ -80,6 +80,7 @@ def test_qcloth_graph_step(tmp_path, show_viewer):
     engine._step_kernel(
         engine.checkpoint_never_yield,
         engine.checkpoint_never_yield,
+        engine.checkpoint_never_yield,
         engine.global_linear_system.triplet_overflow,
         engine.checkpoint_never_yield,
         engine.checkpoint_never_yield,

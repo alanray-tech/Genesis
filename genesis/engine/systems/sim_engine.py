@@ -387,6 +387,7 @@ class SimEngine:
         self,
         pair_overflow: qd.types.ndarray(qd.i32, ndim=0),
         assembly_overflow: qd.types.ndarray(qd.i32, ndim=0),
+        padding_overflow: qd.types.ndarray(qd.i32, ndim=0),
         triplet_overflow: qd.types.ndarray(qd.i32, ndim=0),
         friction_overflow: qd.types.ndarray(qd.i32, ndim=0),
         et_overflow: qd.types.ndarray(qd.i32, ndim=0),
@@ -436,12 +437,13 @@ class SimEngine:
                 if qd.static(self.has_contact):
                     self.contact.count_active()
 
-            with qd.checkpoint(ContactCheckpoint.FILTER, yield_on=self.checkpoint_never_yield):
+            with qd.checkpoint(ContactCheckpoint.FILTER, yield_on=padding_overflow):
                 for _ in range(1):
                     self.newton_iter[()] = self.newton_iter[()] + 1
                 if qd.static(self.has_contact):
                     self.contact.adaptive_kappa_newton_tick()
                     self.contact.filter_assemble()
+                    self.contact.check_assembly_padding()
 
             with qd.checkpoint(ContactCheckpoint.SORT, yield_on=triplet_overflow):
                 if qd.static(self.has_rigid_contact_assemble):
@@ -736,6 +738,8 @@ class SimEngine:
             if qd.static(self.has_rigid_contact_proxy):
                 self.rigid_contact_proxy.recover_reaction()
                 self.rigid_contact_proxy.copy_previous_state()
+            if qd.static(self.has_contact):
+                self.contact.shrink_assembly_padding()
 
     def step(self) -> None:
         if not self.is_initialized_host:
@@ -743,10 +747,12 @@ class SimEngine:
         if self.contact is None:
             pair_overflow = self.checkpoint_never_yield
             assembly_overflow = self.checkpoint_never_yield
+            padding_overflow = self.checkpoint_never_yield
             friction_overflow = self.checkpoint_never_yield
         else:
             pair_overflow = self.contact.overflow_flag
             assembly_overflow = self.contact.count_overflow_flag
+            padding_overflow = self.contact.contact_padding_overflow
             friction_overflow = self.contact.friction_overflow_flag
         et_overflow = self.checkpoint_never_yield if self.contact is None else self.contact.et_overflow_flag
         triplet_overflow = self.global_linear_system.triplet_overflow
@@ -754,6 +760,7 @@ class SimEngine:
         status = self._step_kernel(
             pair_overflow,
             assembly_overflow,
+            padding_overflow,
             triplet_overflow,
             friction_overflow,
             et_overflow,
@@ -776,8 +783,34 @@ class SimEngine:
                     qd_to_numpy(self.contact.n_friction_demand_triplets)
                 )
                 self.contact.realloc_assembly_buffers(required_doublets, required_triplets)
+                if self.rigid_contact_assemble is not None:
+                    self.rigid_contact_assemble.realloc_assembly_buffers()
                 assembly_overflow.from_numpy(np.array(0, dtype=np.int32))
                 resume_from = ContactCheckpoint.FILTER
+            elif self.contact is not None and checkpoint == ContactCheckpoint.FILTER:
+                n_doublets = int(qd_to_numpy(self.contact.n_contact_doublets))
+                n_triplets = int(qd_to_numpy(self.contact.n_contact_triplets))
+                grow_factor = CONTACT_CONFIG_DEFAULTS["extras/capacity_grow_factor"]
+                padded_doublets = max(
+                    int(qd_to_numpy(self.contact.padded_contact_doublets)),
+                    min(
+                        int(np.ceil(n_doublets * grow_factor)),
+                        self.contact.contact_doublet_vertices.shape[0],
+                    ),
+                )
+                padded_triplets = max(
+                    int(qd_to_numpy(self.contact.padded_contact_triplets)),
+                    min(
+                        int(np.ceil(n_triplets * grow_factor)),
+                        self.contact.contact_triplet_rows.shape[0],
+                    ),
+                )
+                self.contact.set_assembly_padding(
+                    padded_doublets,
+                    padded_triplets,
+                )
+                padding_overflow.from_numpy(np.array(0, dtype=np.int32))
+                resume_from = ContactCheckpoint.SORT
             elif checkpoint == ContactCheckpoint.SORT:
                 required = int(qd_to_numpy(self.global_linear_system.n_triplets))
                 grow_factor = CONTACT_CONFIG_DEFAULTS["extras/capacity_grow_factor"]
@@ -853,6 +886,7 @@ class SimEngine:
             status = self._step_kernel.resume(
                 pair_overflow,
                 assembly_overflow,
+                padding_overflow,
                 triplet_overflow,
                 friction_overflow,
                 et_overflow,

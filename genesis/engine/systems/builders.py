@@ -75,8 +75,13 @@ def build_scene_engine(
         if staging.init(scene, float(resolved_contact_config["contact/d_hat"])):
             rigid_proxy_geometry = staging
 
+    genesis_legacy_sort_reduce = bool(int(resolved_contact_config["extras/sort_reduce/genesis_legacy"]))
     engine = SimEngine()
-    engine.add_system(GlobalLinearSystem())
+    engine.add_system(
+        GlobalLinearSystem(
+            genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,
+        )
+    )
     engine.add_system(StandardPCGSolver())
     if scene.rigid_solver.is_active:
         rigid = RigidSystem(scene.rigid_solver)
@@ -115,7 +120,8 @@ def build_scene_engine(
             engine.add_system(system)
         if enable_contact:
             contact_system = ContactSystem(
-                intersection_check=bool(int(resolved_contact_config["contact/intersection_check"]))
+                intersection_check=bool(int(resolved_contact_config["contact/intersection_check"])),
+                genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,
             )
             bvh_type = str(resolved_contact_config["bvh/type"])
             if bvh_type == "info_lbvh_batched_dop14":

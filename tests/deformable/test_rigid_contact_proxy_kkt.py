@@ -797,6 +797,21 @@ def test_rigid_proxy_cloth_contact_step():
     sphere.set_dofs_velocity([0.0, 0.0, -5.0, 0.0, 0.0, 0.0])
 
     engine = build_scene_engine(scene, contact_config={})
+    old_doublet_capacity = engine.contact.unique_doublet_vertices.shape[0]
+    old_triplet_capacity = engine.contact.unique_triplet_rows.shape[0]
+    engine.contact.realloc_assembly_buffers(
+        old_doublet_capacity + 1,
+        old_triplet_capacity + 1,
+    )
+    engine.rigid_contact_assemble.realloc_assembly_buffers()
+    assert engine.rigid_contact_assemble.doublet_scanner.status.shape[0] == max(
+        (engine.contact.unique_doublet_vertices.shape[0] + 3071) // 3072,
+        1,
+    )
+    assert engine.rigid_contact_assemble.triplet_scanner.status.shape[0] == max(
+        (engine.contact.unique_triplet_rows.shape[0] + 3071) // 3072,
+        1,
+    )
     engine.step()
 
     assert int(qd_to_numpy(engine.contact.intersection_flag)) == 0

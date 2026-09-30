@@ -95,6 +95,11 @@ def main() -> None:
         choices=("genesis_legacy", "cgq_level", "cgq_tree"),
         default="cgq_tree",
     )
+    parser.add_argument(
+        "--genesis-legacy-sort-reduce",
+        action="store_true",
+        help="use the retained generic radix/scan/atomic-reduce A/B path",
+    )
     args = parser.parse_args()
     mjcf_path = args.mjcf.resolve()
     if not mjcf_path.is_file():
@@ -185,6 +190,7 @@ def main() -> None:
             "rigid_forest/fused": int(args.forest_path == "cgq_tree"),
             "extras/rigid_forest/genesis_legacy": int(args.forest_path == "genesis_legacy"),
             "extras/rigid_contact/genesis_collision": int(args.genesis_collision),
+            "extras/sort_reduce/genesis_legacy": int(args.genesis_legacy_sort_reduce),
         },
         contact_tabular=contact_tabular,
         halfplanes=(

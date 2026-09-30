@@ -61,6 +61,8 @@ def test_contact_parameter_manifest_defaults():
         "rigid_proxy/test_merit_energy_bias": 0.0,
         "rigid_forest/fused": 1,
         "extras/rigid_forest/genesis_legacy": 0,
+        "extras/rigid_contact/genesis_collision": 0,
+        "extras/sort_reduce/genesis_legacy": 0,
     }
     model = ContactTabular().at(0, 0)
     assert model.friction_rate == 0.05
@@ -72,7 +74,15 @@ def test_contact_parameter_manifest_defaults():
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])
-def test_qcloth_contact_graph_step(tmp_path, show_viewer):
+@pytest.mark.parametrize(
+    "genesis_legacy_sort_reduce",
+    (False, True),
+)
+def test_qcloth_contact_graph_step(
+    tmp_path,
+    show_viewer,
+    genesis_legacy_sort_reduce,
+):
     path = tmp_path / "contact_grid.obj"
     make_contact_grid(path, height=0.008)
     scene = gs.Scene(
@@ -87,7 +97,9 @@ def test_qcloth_contact_graph_step(tmp_path, show_viewer):
 
     engine = build_scene_engine(
         scene,
-        contact_config={},
+        contact_config={
+            "extras/sort_reduce/genesis_legacy": int(genesis_legacy_sort_reduce),
+        },
         halfplanes=(
             np.array([[0.0, 0.0, 0.0]], dtype=np.float64),
             np.array([[0.0, 0.0, 1.0]], dtype=np.float64),

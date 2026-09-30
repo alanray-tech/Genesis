@@ -5,6 +5,10 @@ import quadrants as qd
 from quadrants.algorithms import exclusive_scan_add, exclusive_scan_scratch_slots
 
 from .contact_system import ContactSystem
+from .dynamic_exclusive_sum import (
+    DynamicExclusiveSum,
+    dynamic_exclusive_sum,
+)
 from .finite_element import FiniteElementMethod
 from .global_linear_system import GlobalLinearSystem
 from .global_vertex_manager import GlobalVertexManager
@@ -39,8 +43,14 @@ class RigidContactAssemble(SimSystem):
         doublet_capacity = self.contact.unique_doublet_vertices.shape[0]
         self.triplet_multipliers = qd.ndarray(qd.i32, shape=(triplet_capacity,))
         self.triplet_offsets = qd.ndarray(qd.i32, shape=(triplet_capacity,))
+        self.triplet_scanner = DynamicExclusiveSum(
+            triplet_capacity,
+        )
         self.doublet_flags = qd.ndarray(qd.i32, shape=(doublet_capacity,))
         self.doublet_offsets = qd.ndarray(qd.i32, shape=(doublet_capacity,))
+        self.doublet_scanner = DynamicExclusiveSum(
+            doublet_capacity,
+        )
         self.triplet_scan_scratch = qd.ndarray(
             qd.i32,
             shape=(
@@ -71,6 +81,62 @@ class RigidContactAssemble(SimSystem):
         self.rigid_doublet_total.from_numpy(np.array(0, dtype=np.int32))
         self.is_initialized_host = True
 
+    def realloc_assembly_buffers(self) -> None:
+        if not self.is_initialized_host:
+            raise RuntimeError("RigidContactAssemble must be initialized before reallocation")
+
+        triplet_capacity = self.contact.unique_triplet_rows.shape[0]
+        if triplet_capacity > self.triplet_multipliers.shape[0]:
+            self.triplet_multipliers = qd.ndarray(
+                qd.i32,
+                shape=(triplet_capacity,),
+            )
+            self.triplet_offsets = qd.ndarray(
+                qd.i32,
+                shape=(triplet_capacity,),
+            )
+            self.triplet_scanner = DynamicExclusiveSum(
+                triplet_capacity,
+            )
+            self.triplet_scan_scratch = qd.ndarray(
+                qd.i32,
+                shape=(
+                    max(
+                        exclusive_scan_scratch_slots(
+                            triplet_capacity,
+                            self.scan_log256_max_n,
+                        ),
+                        1,
+                    ),
+                ),
+            )
+
+        doublet_capacity = self.contact.unique_doublet_vertices.shape[0]
+        if doublet_capacity > self.doublet_flags.shape[0]:
+            self.doublet_flags = qd.ndarray(
+                qd.i32,
+                shape=(doublet_capacity,),
+            )
+            self.doublet_offsets = qd.ndarray(
+                qd.i32,
+                shape=(doublet_capacity,),
+            )
+            self.doublet_scanner = DynamicExclusiveSum(
+                doublet_capacity,
+            )
+            self.doublet_scan_scratch = qd.ndarray(
+                qd.i32,
+                shape=(
+                    max(
+                        exclusive_scan_scratch_slots(
+                            doublet_capacity,
+                            self.scan_log256_max_n,
+                        ),
+                        1,
+                    ),
+                ),
+            )
+
     @qd.func(requires_top_level=True)
     def classify(self):
         proxy_vertex_begin = self.proxy.global_vert_offset[()]
@@ -83,27 +149,41 @@ class RigidContactAssemble(SimSystem):
             elif row >= proxy_vertex_begin:
                 multiplier = 4
             self.triplet_multipliers[index] = multiplier
-        exclusive_scan_add(
-            self.triplet_multipliers,
-            self.triplet_offsets,
-            self.triplet_scan_scratch,
-            self.contact.n_unique_triplets[()],
-            qd.i32,
-            self.scan_log256_max_n,
-        )
+        if qd.static(self.contact.genesis_legacy_sort_reduce_host):
+            exclusive_scan_add(
+                self.triplet_multipliers,
+                self.triplet_offsets,
+                self.triplet_scan_scratch,
+                self.contact.n_unique_triplets[()],
+                qd.i32,
+                self.scan_log256_max_n,
+            )
+        else:
+            dynamic_exclusive_sum(
+                self.triplet_scanner,
+                self.triplet_multipliers,
+                self.triplet_offsets,
+                self.contact.n_unique_triplets[()],
+            )
 
         for index in range(self.contact.n_unique_doublets[()]):
-            self.doublet_flags[index] = qd.i32(
-                self.contact.unique_doublet_vertices[index] >= proxy_vertex_begin
+            self.doublet_flags[index] = qd.i32(self.contact.unique_doublet_vertices[index] >= proxy_vertex_begin)
+        if qd.static(self.contact.genesis_legacy_sort_reduce_host):
+            exclusive_scan_add(
+                self.doublet_flags,
+                self.doublet_offsets,
+                self.doublet_scan_scratch,
+                self.contact.n_unique_doublets[()],
+                qd.i32,
+                self.scan_log256_max_n,
             )
-        exclusive_scan_add(
-            self.doublet_flags,
-            self.doublet_offsets,
-            self.doublet_scan_scratch,
-            self.contact.n_unique_doublets[()],
-            qd.i32,
-            self.scan_log256_max_n,
-        )
+        else:
+            dynamic_exclusive_sum(
+                self.doublet_scanner,
+                self.doublet_flags,
+                self.doublet_offsets,
+                self.contact.n_unique_doublets[()],
+            )
 
         for _ in range(1):
             n_triplets = self.contact.n_unique_triplets[()]
@@ -126,9 +206,7 @@ class RigidContactAssemble(SimSystem):
         pair = self.proxy.vertex_pair[local_vertex]
         lever = qd.Vector.zero(qd.f64, 3)
         for axis in qd.static(range(3)):
-            lever[axis] = (
-                self.vertex.positions[global_vertex, axis] - self.proxy.t[pair, axis]
-            )
+            lever[axis] = self.vertex.positions[global_vertex, axis] - self.proxy.t[pair, axis]
         return qd.Vector([qd.f64(pair), lever[0], lever[1], lever[2]])
 
     @qd.func
@@ -139,10 +217,7 @@ class RigidContactAssemble(SimSystem):
     def distribute_gradient(self):
         proxy_vertex_begin = self.proxy.global_vert_offset[()]
         proxy_block_base = self.forest.proxy_dof_offset[()] // 3
-        geometric_base = (
-            self.linear_system.extent_offsets[self.extent_slot]
-            + self.pair_triplet_total[()]
-        )
+        geometric_base = self.linear_system.extent_offsets[self.extent_slot] + self.pair_triplet_total[()]
         for index in range(self.contact.n_unique_doublets[()]):
             global_vertex = self.contact.unique_doublet_vertices[index]
             if global_vertex < proxy_vertex_begin:
@@ -177,9 +252,9 @@ class RigidContactAssemble(SimSystem):
                             angular_gradient[axis],
                         )
 
-                    geometric = 0.5 * (
-                        gradient.outer_product(lever) + lever.outer_product(gradient)
-                    ) - gradient.dot(lever) * qd.Matrix.identity(qd.f64, 3)
+                    geometric = 0.5 * (gradient.outer_product(lever) + lever.outer_product(gradient)) - gradient.dot(
+                        lever
+                    ) * qd.Matrix.identity(qd.f64, 3)
                     geometric = qd.make_spd(geometric, qd.f64)
                     slot = geometric_base + self.doublet_offsets[index]
                     self._set_triplet(
@@ -263,9 +338,7 @@ class RigidContactAssemble(SimSystem):
                     block[:3, :3] += transpose_hessian
                     block[:3, 3:] += -(transpose_hessian @ left_skew)
                     block[3:, :3] += right_skew @ transpose_hessian
-                    block[3:, 3:] += -(
-                        right_skew @ transpose_hessian @ left_skew
-                    )
+                    block[3:, 3:] += -(right_skew @ transpose_hessian @ left_skew)
                 left_base = proxy_block_base + left_pair * 2
                 right_base = proxy_block_base + right_pair * 2
                 slot_offset = qd.i32(0)
@@ -274,9 +347,7 @@ class RigidContactAssemble(SimSystem):
                         value = qd.Matrix.zero(qd.f64, 3, 3)
                         row_id = left_base + block_row
                         column_id = right_base + block_column
-                        if not (
-                            left_pair == right_pair and block_row > block_column
-                        ):
+                        if not (left_pair == right_pair and block_row > block_column):
                             for row in qd.static(range(3)):
                                 for column in qd.static(range(3)):
                                     value[row, column] = block[
@@ -285,10 +356,7 @@ class RigidContactAssemble(SimSystem):
                                     ]
                         else:
                             column_id = row_id
-                        if (
-                            self.vertex.is_fixed[left_vertex] != 0
-                            or self.vertex.is_fixed[right_vertex] != 0
-                        ):
+                        if self.vertex.is_fixed[left_vertex] != 0 or self.vertex.is_fixed[right_vertex] != 0:
                             value = qd.Matrix.zero(qd.f64, 3, 3)
                         self._set_triplet(
                             output + slot_offset,

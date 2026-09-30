@@ -386,15 +386,60 @@ Long-term investigation:
 
 ### PERF-A06: Generic radix/scan/FSR lowering
 
-Current:
+Implementation:
 
-- Quadrants generic radix sort, exclusive scan, and atomic segmented reduction
-  are used for contact and body BCOO.
+- Contact doublets, contact triplets, and global body BCOO use a
+  Quadrants implementation of CGQ's dynamic OneSweep radix sort, decoupled
+  lookback exclusive sum, and warp head-segmented FSR.
+- Every live extent is a zero-dimensional device scalar. The sort and scan
+  launch ranges are derived from those scalars; allocation growth does not
+  bake a Python capacity into the compiled graph.
+- Contact assembly starts at CGQ's 4,865-entry floor, grows by checkpoint, and
+  shrinks its active padded extent with hysteresis. One integer extent, not a
+  mask, describes valid padded work.
+- `extras/sort_reduce/genesis_legacy=1` retains the former generic
+  radix/scan/atomic-reduce path as an explicit A/B oracle.
 
 CGQ target:
 
 - Dynamic OneSweep radix sort, dynamic exclusive sum, warp head-segmented FSR,
   exact live extents, and grid-parameter patching on growth.
+
+Correctness:
+
+- Stable u32/u64 key and permutation parity is covered at zero, warp, block,
+  CGQ floor, 100k, 500k, and 1M live counts.
+- Scan and FSR correctness are covered through 1M entries.
+- A growth regression runs one compiled graph at capacity 4,865, replaces its
+  storage with capacity 20,000, and verifies the complete stable sort. This
+  caught and removed an invalid first implementation that froze the launch
+  extent in Python; that implementation failed the Franka trajectory when
+  contact storage grew.
+- Contact legacy/new A/B, checkpoint growth, rigid-proxy assembly growth, and
+  the 100-frame Franka-Cloth trajectory pass.
+
+Performance:
+
+- The matched nine-frame Franka window executes 18 Newton evaluations. The
+  complete doublet/triplet/body sort-reduce stages fall from 24.881 ms in the
+  retained current fallback to 12.534 ms (`1.985x`), while variants fall from
+  432 to 131 and instances from 7,776 to 2,358.
+- Against the pre-layer profile, the same stages fall from 30.421 to
+  12.534 ms (`2.427x`). Total GPU time falls from 216.494 to 190.349 ms
+  (`1.137x`).
+- Synchronized 100-frame medians are 27.019 ms for the retained fallback and
+  26.323 ms for OneSweep/scan/FSR (`1.026x`). Against the pre-layer
+  29.165-ms result, the complete layer is `1.108x` faster.
+- Numerical work remains matched: both paths execute exactly two Newton
+  evaluations per frame; mean total PCG work is 72.44 versus 72.38.
+- Device-only u64 sort coverage follows the CGQ-defined `<100 ms` domain
+  through 100M entries. At the simulation-scale 1M point, Genesis is
+  approximately 0.353 ms versus CGQ's 0.254 ms. The remaining standalone and
+  in-scene gap is generated-code/grid policy, not an application fallback.
+
+Status: **closed at the Genesis application layer**. The remaining native-CGQ
+gap is tracked as Quadrants dynamic-range/grid and lowering work; no
+scene-specific launch or frozen-capacity specialization is admissible.
 
 ### PERF-A07: Adaptive-kappa no-op traversal
 
@@ -482,13 +527,28 @@ CGQ target:
 
 ### PERF-L01: Atomic body FSR
 
-Current:
+Implementation:
 
-- Every raw 3x3 triplet contributes nine global atomics during body reduction.
+- Each warp performs a head-segmented reduction for all nine 3x3 components.
+- Only segment heads issue global atomics, matching CGQ's production FSR
+  decomposition.
+- Sentinel lanes contribute zero and never write; segments spanning warps
+  produce one partial atomic per warp.
 
 Target:
 
 - Warp-segmented reduction matching the production CGQ FSR path.
+
+Evidence:
+
+- Doublet, triplet, and flattened body layouts match NumPy segmented sums
+  through 1M entries.
+- At 1M entries Genesis FSR plus live-output clearing measures approximately
+  0.182 ms. CGQ's broader flags+scan+clear+FSR+extract benchmark measures
+  approximately 0.173 ms; these figures deliberately do not claim an
+  isolated-kernel ratio because the measured stage boundaries differ.
+
+Status: **closed**.
 
 ### PERF-L02: Atomic BCOO SpMV
 
@@ -1113,6 +1173,44 @@ conformance/optimization sequence is `1.475x` faster (32.2% lower median).
 Single-run wall medians were not monotonic across every micro-optimization;
 the per-layer acceptance figures above therefore use equal-work named-kernel
 profiles.
+
+### Post-OneSweep residual and stop condition
+
+The standalone primitive gate and production integration described in
+PERF-A06/PERF-L01 were applied after the preceding profile. The matched
+nine-frame window now reports:
+
+- 18 Newton evaluations in both Genesis and CGQ;
+- 646 Genesis PCG iterations versus 676 in the pinned CGQ window;
+- Genesis GPU time 190.349 ms versus CGQ 145.500 ms (`1.308x`);
+- Genesis kernel instances 40,462, down from 46,657 before this layer;
+- complete Genesis sort-reduce 12.534 ms versus 30.421 ms before the layer
+  and 5.526 ms in CGQ.
+
+The remaining Genesis GPU excess is 44.849 ms. The profile attributes:
+
+- 422 confirmed Quadrants dynamic-range bound-helper variants, 16,127
+  instances, and 16.056 ms;
+- a 7.008-ms residual sort-reduce gap, dominated by per-pass dynamic range
+  helpers, generated OneSweep code, and small-kernel launch floors;
+- 149.46 microseconds per standard-PCG iteration across 36 Genesis variants,
+  versus the pinned CGQ 106.68 microseconds across 26 variants.
+
+The forest is not an application-owned regression: current expand, project,
+control/inertia, and shared tree-preconditioner work remains comparable to the
+pinned CGQ decomposition. BCOO SpMV is likewise not a leading cost. After
+subtracting bound-helper time, Genesis GPU work is 174.293 ms (`1.198x` CGQ);
+the rest is explained by the additional generated range kernels and their grid
+policy/launch floor. This is the requested stop condition for Genesis-side
+optimization: further native or scene-specialized replacements would hide
+Quadrants compiler/runtime work instead of improving the simulation
+architecture.
+
+The final synchronized 100-frame Genesis median is 26.323 ms with Newton mean
+2.0 and total-PCG mean 72.38. Relative to the pre-layer 29.165 ms it is
+`1.108x` faster; relative to CGQ's 14.491 ms it is `1.816x`. The wall ratio is
+larger than the GPU-kernel ratio because Python/graph submission and
+synchronization are outside the captured kernel sum.
 
 ## Compile-time and memory-layout debt
 
