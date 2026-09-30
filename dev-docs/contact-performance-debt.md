@@ -1553,6 +1553,71 @@ larger than the `1.312 ms/frame` remaining union gap. Further removal requires
 Quadrants range-helper fusion/lowering; a Genesis fixed extent, host size,
 mask, or scene-specific replacement remains forbidden.
 
+### Quadrants dynamic-range bound inlining
+
+Quadrants commit `bf3a00645` removes the separate CUDA helper kernel and
+global-temporary round trip for safe dynamic `range` bounds. The offloader
+clones a side-effect-free bound-expression DAG into the consuming range task;
+every worker evaluates the live device value before entering the grid-stride
+loop. This preserves zero-dimensional device-scalar sizes and graph replay.
+It introduces no host readback, mask, frozen capacity, or scene-dependent
+specialization. Volatile expressions and reverse-mode tasks whose launcher
+needs the exact extent for adstack sizing deliberately retain the old path.
+
+This complements, rather than replaces, the resident-grid work in Quadrants
+commit `12119f03e`. CUDA
+`cuOccupancyMaxActiveBlocksPerMultiprocessor` and the live SM count determine
+the resource-optimal resident grid; the worker's grid-stride loop determines
+the logical dynamic extent. Reading a device scalar on the host merely to
+choose the logical grid would recreate the synchronization and helper cost
+that this change removes.
+
+The regression changes both dynamic begin and end values between graph
+replays and verifies that the graph contains exactly one worker task/node,
+instead of a scalar helper plus worker. Dynamic-range/graph replay,
+adstack-fallback, graph-parallel, and checkpoint-resume coverage reports 49
+passes. The native extension rebuild and the complete formatting/lint suite
+also pass.
+
+The matched Nsight Systems windows cover frames 20--28 and 18 Newton
+evaluations. Their PCG work differs (`2,606` before versus `2,495` after), so
+aggregate time changes are reported separately from direct node evidence:
+
+- the repeated standard-PCG body changes from 16 kernels per iteration to 11;
+  the five removed `grid(1) x block(1)` variants are precisely the range-bound
+  helpers, while all eleven numerical PCG kernels remain;
+- those five helpers account for 13,030 launches and `10.340 ms` in the
+  baseline window (`3.97 us/PCG iteration`);
+- all graph kernel instances fall from `52,600` to `36,474`;
+- `grid(1) x block(1)` instances fall from `19,290` to `4,385`, and their
+  time falls from `1.979` to `0.492 ms/frame`; the remaining high-frequency
+  scalar kernel is the required graph-do-while condition;
+- mean graph span falls from `20.576` to `18.659 ms/frame` (`1.103x`), and
+  kernel-interval union falls from `18.161` to `16.751 ms/frame` (`1.084x`).
+
+The 200-frame post-warmup result provides the long-window wall measurement:
+
+- Genesis before: median/mean/p95
+  `27.071 / 26.651 / 30.463 ms`, 81,894 total PCG iterations;
+- Genesis after: median/mean/p95
+  `23.933 / 23.285 / 27.466 ms`, 76,239 total PCG iterations;
+- raw before/after speedup: `1.131x / 1.145x / 1.109x`;
+- pinned CGQ: median/mean/p95
+  `23.762 / 23.116 / 27.303 ms`, 78,733 total PCG iterations;
+- raw Genesis/CGQ ratios after the change:
+  `1.007x / 1.007x / 1.006x`;
+- total wall time divided by total PCG work gives a coarse Genesis/CGQ ratio
+  of `1.040x`, down from `1.108x` before the change. This remains a
+  whole-frame normalization, not a pure PCG-kernel metric.
+
+Both Genesis runs execute exactly 400 Newton evaluations, zero line-search
+backtracks, and full CCD steps. Final vertical position sum/min/max differ by
+at most `5.03e-5 / 4.64e-8 / 1.88e-7`. The helper removal changes CUDA graph
+scheduling and therefore floating-point reduction order, so it also changes
+the later PCG trajectory. The direct acceptance proof is the disappearance of
+the five helper launches per PCG iteration; the complete raw wall improvement
+must not be attributed exclusively to their measured kernel-active time.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size
