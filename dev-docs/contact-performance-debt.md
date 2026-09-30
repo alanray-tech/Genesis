@@ -1495,6 +1495,36 @@ equalize LinearPCG work (`6,583` serial versus `6,570` parallel iterations):
 - relative to the pinned CGQ median `22.425 ms`, the Genesis ratio changes
   from `1.191x` to `1.144x`.
 
+The long-window validation uses Quadrants `3b0f9c2ad`, CGQ
+`42e7d4cbbad08739107ad830a17918f5f0f209ff`, 20 warmup frames, and 200
+measured frames per implementation:
+
+- CGQ median/mean/p95: `23.762 / 23.116 / 27.305 ms`;
+- Genesis median/mean/p95: `27.071 / 26.651 / 30.465 ms`;
+- Genesis/CGQ median/mean/p95 ratios: `1.139x / 1.153x / 1.116x`;
+- both execute 400 Newton evaluations, zero line-search backtracks, and no CCD
+  truncation;
+- total PCG work is `78,733` in CGQ and `81,894` in Genesis (`1.040x`);
+- total wall time divided by total PCG work gives a coarse `1.108x` ratio.
+  This is not a kernel-only PCG metric because it includes fixed contact and
+  graph work, but it removes the leading long-window Krylov-count difference;
+- 38 frames whose PCG counts agree within 1% have a median per-frame wall
+  ratio of `1.117x` and a mean ratio of `1.126x`.
+
+The four consecutive 50-frame median ratios are `1.113x`, `1.121x`,
+`1.143x`, and `1.196x`; their PCG-work ratios are respectively `1.008x`,
+`1.023x`, `1.052x`, and `1.078x`. The increasing raw ratio therefore includes
+trajectory-dependent work, not only implementation cost. After all 220
+simulated frames, position differences remain small (`1.30e-4` maximum,
+`1.85e-5` RMS), but broad-phase candidate populations have diverged. The
+long-window conclusion is consequently:
+
+- actual trajectory wall gap: approximately `1.14x--1.15x`;
+- near-equal-work / coarsely normalized gap: approximately `1.11x--1.13x`;
+- the remaining implementation gap is in the expected 10--15% range already
+  attributed to Quadrants helper and graph-node lowering. It does not justify
+  a Genesis scene specialization or fixed-size workaround.
+
 The independent Nsight frames 20--28 prove that the serialized bottleneck is
 gone:
 

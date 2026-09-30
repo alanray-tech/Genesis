@@ -17,7 +17,6 @@ from pathlib import Path
 
 import numpy as np
 
-
 DT = 0.01
 GRAVITY = (0.0, -9.8, 0.0)
 D_HAT = 1.0e-3
@@ -247,7 +246,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=("genesis", "cgq"), required=True)
     parser.add_argument("--warmup", type=int, default=20)
-    parser.add_argument("--frames", type=int, default=100)
+    parser.add_argument(
+        "--frames",
+        type=int,
+        default=200,
+        help="Measured frames after warmup; use at least 200 for performance comparisons",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--state-output", type=Path, default=None)
     parser.add_argument("--disable-contact", action="store_true")
