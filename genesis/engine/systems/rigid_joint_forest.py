@@ -396,7 +396,6 @@ class RigidJointForestSystem(SimSystem):
         self.precond_velocity.from_numpy(np.zeros((max(n_mechanism_bodies, 1), 6), dtype=np.float64))
         self.kkt_proxy_diagonal.from_numpy(np.zeros((capacity, 6, 6), dtype=np.float64))
 
-        self.configuration_scale = self.rigid.h * self.rigid.h
         self.n_entities_host = self.rigid.dyn_info.entities.link_start.shape[0]
         self.is_initialized_host = True
 
@@ -645,7 +644,7 @@ class RigidJointForestSystem(SimSystem):
 
             if edge >= 0:
                 reduced_index = self.rigid.dof_offset[()] + self.edge_dof_index[edge]
-                coefficient = self.configuration_scale * reduced[reduced_index]
+                coefficient = reduced[reduced_index]
                 for component in qd.static(range(6)):
                     twist[component] = twist[component] + coefficient * self.edge_basis[edge, component]
         else:
@@ -666,7 +665,7 @@ class RigidJointForestSystem(SimSystem):
                         joint,
                         dof,
                     )
-                    coefficient = self.configuration_scale * reduced[reduced_index]
+                    coefficient = reduced[reduced_index]
                     twist = twist + coefficient * basis
         for component in qd.static(range(6)):
             self.body_twist[body, component] = twist[component]
@@ -706,7 +705,7 @@ class RigidJointForestSystem(SimSystem):
                     joint,
                     dof,
                 )
-                coefficient = self.configuration_scale * reduced[reduced_index]
+                coefficient = reduced[reduced_index]
                 twist = twist + coefficient * basis
         for component in qd.static(range(6)):
             self.body_twist[body, component] = twist[component]
@@ -821,7 +820,6 @@ class RigidJointForestSystem(SimSystem):
                 for component in qd.static(range(6)):
                     contribution = contribution + self.edge_basis[edge, component] * wrench[component]
                 reduced_index = self.rigid.dof_offset[()] + self.edge_dof_index[edge]
-                contribution = self.configuration_scale * contribution
                 if qd.static(use_atomics):
                     qd.atomic_add(reduced[reduced_index], contribution)
                 else:
@@ -866,10 +864,8 @@ class RigidJointForestSystem(SimSystem):
                         joint,
                         dof,
                     )
-                    reduced_index = (
-                        self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
-                    )
-                    contribution = self.configuration_scale * basis.dot(wrench)
+                    reduced_index = self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
+                    contribution = basis.dot(wrench)
                     if qd.static(use_atomics):
                         qd.atomic_add(reduced[reduced_index], contribution)
                     else:
@@ -905,7 +901,7 @@ class RigidJointForestSystem(SimSystem):
                     dof,
                 )
                 reduced_index = self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
-                contribution = self.configuration_scale * basis.dot(wrench)
+                contribution = basis.dot(wrench)
                 if qd.static(use_atomics):
                     qd.atomic_add(reduced[reduced_index], contribution)
                 else:
@@ -1143,7 +1139,7 @@ class RigidJointForestSystem(SimSystem):
             if self.rigid.dyn_state.dofs.ctrl_mode[dof, environment] <= gs.CTRL_MODE.VELOCITY:
                 augmentation = augmentation - self.rigid.dyn_info.dofs.act_bias[dof_index][2] * self.rigid.h
             reduced_index = self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
-            result[reduced_index] = result[reduced_index] + self.rigid.h4 * augmentation * reduced[reduced_index]
+            result[reduced_index] = result[reduced_index] + augmentation * reduced[reduced_index]
 
     @qd.func(requires_top_level=True)
     def expand_solution(self, solution: qd.template()):
@@ -1631,7 +1627,7 @@ class RigidJointForestSystem(SimSystem):
                         edge_rhs = qd.f64(0.0)
                         if edge >= 0:
                             dof = self.rigid.dof_offset[()] + self.edge_dof_index[edge]
-                            edge_rhs = residual[dof] / self.rigid.h4
+                            edge_rhs = residual[dof]
                             for component in qd.static(range(6)):
                                 edge_rhs = edge_rhs + self.edge_basis[edge, component] * tree_force[local, component]
                             self.precond_a[edge] = edge_rhs
@@ -1666,7 +1662,7 @@ class RigidJointForestSystem(SimSystem):
                 root_basis = qd.Matrix.zero(qd.f64, 6, 6)
                 if lane < 6 and root_dof >= 0:
                     root_basis = self._root_basis(root)
-                    projected_rhs = residual[self.rigid.dof_offset[()] + root_dof + lane] / self.rigid.h4
+                    projected_rhs = residual[self.rigid.dof_offset[()] + root_dof + lane]
                     for component in qd.static(range(6)):
                         projected_rhs = projected_rhs + root_basis[component, lane] * tree_force[0, component]
                     root_rhs[lane] = projected_rhs
@@ -1762,7 +1758,6 @@ class RigidJointForestSystem(SimSystem):
                 self.precond_force[body, component] = 0.0
                 self.precond_velocity[body, component] = 0.0
 
-        inverse_h4 = 1.0 / self.rigid.h4
         for reverse_level in qd.static(range(self.n_links_host)):
             level = self.max_depth[()] - reverse_level
             for body in range(self.n_mechanism_bodies[()]):
@@ -1782,7 +1777,7 @@ class RigidJointForestSystem(SimSystem):
                             basis[component] = self.edge_basis[edge, component]
                             u[component] = self.edge_u[edge, component]
                         dof = self.rigid.dof_offset[()] + self.edge_dof_index[edge]
-                        edge_rhs = residual[dof] * inverse_h4 + basis.dot(force)
+                        edge_rhs = residual[dof] + basis.dot(force)
                         self.precond_a[edge] = edge_rhs
                         propagated = propagated - u * (edge_rhs / self.edge_d[edge])
                     for component in qd.static(range(6)):
@@ -1800,7 +1795,7 @@ class RigidJointForestSystem(SimSystem):
                 rhs = qd.Vector.zero(qd.f64, 6)
                 for row in qd.static(range(6)):
                     force[row] = self.precond_force[body, row]
-                    rhs[row] = residual[self.rigid.dof_offset[()] + root_dof + row] * inverse_h4
+                    rhs[row] = residual[self.rigid.dof_offset[()] + root_dof + row]
                     for column in qd.static(range(6)):
                         inverse[row, column] = self.root_inverse[
                             body,

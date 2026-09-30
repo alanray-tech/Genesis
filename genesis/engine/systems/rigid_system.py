@@ -79,9 +79,7 @@ class RigidSystem(SimSystem):
         self.Jaref_temp = qd.ndarray(qd.f64, shape=self.constraint_state.Jaref.shape)
         self.n_dofs_per_instance.from_numpy(np.array(self.n_dofs_per_instance_host, dtype=np.int32))
         self.n_instances.from_numpy(np.array(self.n_instances_host, dtype=np.int32))
-        self.n_links.from_numpy(
-            np.array(rigid_solver.n_links, dtype=np.int32)
-        )
+        self.n_links.from_numpy(np.array(rigid_solver.n_links, dtype=np.int32))
         self.n_dofs.from_numpy(np.array(self.dof_count_host, dtype=np.int32))
         self.dof_offset.from_numpy(np.array(0, dtype=np.int32))
         self.n_storage_dofs.from_numpy(np.array(self.storage_dof_count_host, dtype=np.int32))
@@ -301,9 +299,17 @@ class RigidSystem(SimSystem):
         )
 
     @qd.func(requires_top_level=True)
-    def assemble(self, sim_config: qd.template(), global_linear_system: qd.template()):
+    def assemble(
+        self,
+        sim_config: qd.template(),
+        global_linear_system: qd.template(),
+        displacement_coordinates: qd.template(),
+    ):
         for _ in range(1):
             self.gradient_squared[()] = qd.f64(0.0)
+        gradient_scale = self.h4
+        if qd.static(displacement_coordinates):
+            gradient_scale = self.h * self.h
         for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
             i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
             gradient = qd.f64(0.0)
@@ -313,7 +319,7 @@ class RigidSystem(SimSystem):
                 has_live_constraints = self.constraint_state.n_constraints[i_b] > 0
             if has_live_constraints:
                 gradient_unscaled = self.constraint_state.grad[i_d, i_b]
-                gradient = self.h4 * gradient_unscaled
+                gradient = gradient_scale * gradient_unscaled
             global_linear_system.b_rhs[i_global] = gradient
             qd.atomic_add(self.gradient_squared[()], gradient_unscaled * gradient_unscaled)
 
@@ -417,11 +423,17 @@ class RigidSystem(SimSystem):
             result[i_global] = residual[i_global]
 
     @qd.func(requires_top_level=True)
-    def negate_dq(self, global_linear_system: qd.template()):
+    def negate_dq(
+        self,
+        global_linear_system: qd.template(),
+        displacement_coordinates: qd.template(),
+    ):
         if qd.static(self.has_constraints):
             for i_d, i_b in qd.ndrange(self.n_dofs_per_instance[()], self.n_instances[()]):
                 i_global = self.dof_offset[()] + i_b * self.n_dofs_per_instance[()] + i_d
                 direction = global_linear_system.x_sol[i_global]
+                if qd.static(displacement_coordinates):
+                    direction = direction / (self.h * self.h)
                 self.constraint_state.search[i_d, i_b] = -direction
                 self.constraint_state.Mgrad[i_d, i_b] = direction
             for i_b in range(self.n_instances[()]):

@@ -466,7 +466,11 @@ class SimEngine:
                     self.global_linear_system.zero_triplet()
 
                 if qd.static(self.has_rigid):
-                    self.rigid.assemble(self.sim_config, self.global_linear_system)
+                    self.rigid.assemble(
+                        self.sim_config,
+                        self.global_linear_system,
+                        self.has_rigid_forest,
+                    )
                 if qd.static(self.has_fem):
                     self.fem.assemble(self.sim_config, self.global_linear_system)
                 if qd.static(self.has_rigid_contact_assemble):
@@ -504,7 +508,10 @@ class SimEngine:
                     self.total_pcg_iters[()] = self.total_pcg_iters[()] + self.pcg_solver.linear_pcg.n_iterations[()]
 
                 if qd.static(self.has_rigid):
-                    self.rigid.negate_dq(self.global_linear_system)
+                    self.rigid.negate_dq(
+                        self.global_linear_system,
+                        self.has_rigid_forest,
+                    )
                 if qd.static(self.has_fem):
                     self.fem.negate_dx(self.global_linear_system)
                 if qd.static(self.has_rigid_forest):

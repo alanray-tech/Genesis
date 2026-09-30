@@ -28,6 +28,7 @@ from genesis.utils.misc import qd_to_numpy
 @qd.data_oriented
 class ProxyContactFixture:
     def __init__(self):
+        self.genesis_legacy_sort_reduce_host = False
         self.n_unique_doublets = qd.ndarray(qd.i32, shape=())
         self.n_unique_triplets = qd.ndarray(qd.i32, shape=())
         self.unique_doublet_vertices = qd.ndarray(qd.i32, shape=(3,))
@@ -475,7 +476,14 @@ def test_proxy_system_initializes_on_genesis_inertial_pose(forest_path):
         proxy_wrench,
         reduced_wrench,
     )
+    mechanism_twist = qd_to_numpy(forest.body_twist)[0]
     proxy_twist = qd_to_numpy(forest.body_twist)[1]
+    np.testing.assert_allclose(
+        mechanism_twist,
+        direction_host[:6],
+        rtol=1.0e-12,
+        atol=1.0e-13,
+    )
     np.testing.assert_allclose(
         direction_host @ qd_to_numpy(reduced_wrench),
         proxy_twist @ wrench_host,

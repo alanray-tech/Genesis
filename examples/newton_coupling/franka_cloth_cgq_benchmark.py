@@ -83,8 +83,10 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--frames", type=int, default=100)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--state-output", type=Path, default=None)
     parser.add_argument("--mjcf", type=Path, default=CGQ_FRANKA_MJCF)
     parser.add_argument("--disable-contact-model", action="store_true")
+    parser.add_argument("--fix-cloth", action="store_true")
     parser.add_argument(
         "--genesis-collision",
         action="store_true",
@@ -159,7 +161,7 @@ def main() -> None:
         ),
         vis_mode="collision",
     )
-    scene.add_entity(
+    cloth = scene.add_entity(
         morph=gs.morphs.Mesh(
             file=str(
                 cloth_grid_asset(
@@ -178,6 +180,8 @@ def main() -> None:
         ),
     )
     scene.build(compile_kernels=False)
+    if args.fix_cloth:
+        cloth.set_vertex_constraints(np.arange(CLOTH_RESOLUTION * CLOTH_RESOLUTION, dtype=np.int32))
     franka.set_qpos(HOME_QPOS)
     franka.set_dofs_kp(CGQ_KP)
     franka.set_dofs_kv(CGQ_KV)
@@ -237,8 +241,11 @@ def main() -> None:
     max_disp = []
     proxy_residual = []
     contact_info = []
+    rigid_q = []
+    fem_x = []
     for frame in range(args.frames):
-        profile_window_mark(args.warmup + frame)
+        absolute_frame = args.warmup + frame
+        profile_window_mark(absolute_frame)
         start = time.perf_counter()
         engine.step()
         qd.sync()
@@ -258,6 +265,9 @@ def main() -> None:
                 int(qd_to_numpy(engine.contact.n_active_pairs)),
             ]
         )
+        rigid_q.append(np.asarray(franka.get_qpos().cpu(), dtype=np.float64).reshape(-1).tolist())
+        if args.state_output is not None:
+            fem_x.append(qd_to_numpy(engine.fem.x).copy())
 
     result = {
         "implementation": "GenesisWorld",
@@ -274,11 +284,13 @@ def main() -> None:
         "max_disp": max_disp,
         "proxy_residual": proxy_residual,
         "contact_info": contact_info,
+        "rigid_q": rigid_q,
         "build_seconds": build_seconds,
         "process_seconds": time.perf_counter() - process_start,
         "dt": DT,
         "cloth_resolution": CLOTH_RESOLUTION,
         "cloth_size": CLOTH_SIZE,
+        "bending": "quadratic",
         "contact_d_hat": 1e-3,
         "linear_tolerance_rate": 1e-5,
         "pt_query": args.pt_query,
@@ -292,9 +304,17 @@ def main() -> None:
         "franka_n_geoms": franka.n_geoms,
         "contact_model_enabled": not args.disable_contact_model,
         "genesis_collision_enabled": args.genesis_collision,
+        "fixed_cloth": args.fix_cloth,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    if args.state_output is not None:
+        args.state_output.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(
+            args.state_output,
+            fem_x=np.asarray(fem_x, dtype=np.float64),
+            rigid_q=np.asarray(rigid_q, dtype=np.float64),
+        )
     print(f"[benchmark] wrote {args.output}")
     print(
         "[benchmark] measured "

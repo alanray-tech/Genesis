@@ -1302,9 +1302,12 @@ Genesis contains 646. Historical 75-frame means remain close (71.6 versus
 framewise synchronized. The 116-iteration early-window difference is therefore
 tracked as numerical-work debt, not charged to implementation speed.
 
-The isolated frozen-state, contact-free, and fixed-proxy gates above still
-prove PCG algebra and iteration parity. Per-iteration timing remains useful
-for implementation profiling, but it is not evidence of framewise trajectory
+The isolated frozen-state FEM and fixed-proxy gates above still prove PCG
+algebra and iteration parity for those isolated operators. The complete
+contact-free Franka-plus-free-cloth trajectory does **not** have framewise PCG
+parity; the diagnosis below narrows that difference to the rigid contribution
+to the shared Krylov recurrence. Per-iteration timing remains useful for
+implementation profiling, but it is not evidence of framewise trajectory
 parity.
 
 ### Quadrants resident occupancy grid
@@ -1347,8 +1350,82 @@ CGQ's current standard-PCG reference is approximately
 5.7%, and the unchanged Quadrants helper kernels are its dominant named
 source. Eliminating or fusing those helpers belongs in Quadrants; a
 Genesis-only fixed range, mask, host extent, or scene specialization is
-forbidden. Independently, framewise PCG trajectory parity remains open and
-must be resolved without tolerance changes.
+forbidden. The framewise PCG mismatch is characterized below; strict parity
+requires changing the rigid-model contract rather than tolerance changes.
+
+### Framewise PCG workload diagnosis
+
+The framewise difference is now resolved as a model-boundary difference, not
+as an unlocated StandardPCG defect:
+
+- A 40-frame free-cloth-only scene produces exactly the same `pcg` and
+  `total_pcg` arrays in CGQ and Genesis: sums `920` and `1080`,
+  respectively.
+- With every cloth vertex fixed, the Franka/rigid-proxy subsystem needs at
+  most one PCG iteration in both implementations. CGQ reports total PCG `80`;
+  Genesis reports `76` because two zero-residual solves exit without an
+  iteration.
+- Combining the two uncoupled blocks with contact models disabled produces
+  different shared-PCG histories: CGQ total PCG `1390` and Genesis `1101`
+  over 40 frames. Both still execute exactly two Newton evaluations per frame,
+  all candidate counts remain zero, and CCD alpha remains one.
+- At frame zero the rigid joint-position maximum error is `1.85e-6` and the
+  axis-mapped cloth-position maximum error is `9.44e-7`; at frame 39 those
+  values are `1.35e-5` and `1.37e-4`. The movable-link masses and principal
+  inertias agree to numerical precision, so this is not an asset or inertia
+  mismatch.
+
+The reason an uncoupled block can change the cloth iteration history is that
+standard PCG uses one global `r^T M^-1 r`, `p^T A p`, alpha, and beta. It is
+not two independent block solves. Genesis retains the native RigidSolver
+prediction and gradient
+`Ma - qf_smooth - qfrc_constraint`, while CGQ constructs its rigid BDF1 and
+controller residual directly in the physical-body/forest pipeline. Those
+rigid formulations remain close but are not the same trajectory. Their
+different rigid Krylov component therefore changes the scalar recurrence
+shared with an otherwise identical FEM block.
+
+Two rejected explanations are recorded:
+
+- Rewriting the Genesis forest unknown from native `qacc` units to CGQ
+  displacement units is an exact congruence. Across 40 contact-free frames it
+  leaves Newton, PCG, total-PCG, line-search, and CCD sequences unchanged;
+  joint positions change by at most `8.53e-14`. The displacement form is kept
+  because it matches CGQ semantics, not as a performance claim.
+- The FEM operator, diagonal preconditioner, Newton acceptance, and StandardPCG
+  recurrence are not the source: the isolated 40-frame FEM sequence is
+  element-for-element identical.
+
+Strict framewise CGQ trajectory parity would therefore require a selectable
+CGQ rigid BDF1/state implementation (or direct use of CGQ's rigid runtime),
+not tolerance tuning and not another PCG workaround. Replacing Genesis
+RigidSolver is outside this migration's current authoritative-state contract.
+Performance comparisons consequently report both actual trajectory work and
+equal-work per-iteration cost.
+
+The final same-window Nsight capture (frames 20--28, 18 Newton evaluations)
+measures:
+
+- Genesis: `146.637 ms`, `37,611` kernel instances, `759` variants, and
+  `675` actual PCG iterations in that capture.
+- CGQ: `110.796 ms`, `21,897` instances, `297` variants, and `520` PCG
+  iterations.
+- Genesis's 36 repeated PCG kernels cost `123.373 us/iteration`.
+  CGQ's 19 iteration kernels plus seven preconditioner kernels cost
+  `114.051 us/iteration`, so the equal-work PCG ratio is `1.082x`.
+- Fourteen Quadrants scalar helper kernels inside each Genesis iteration cost
+  `13.376 us/iteration`. They are the dominant remaining named PCG lowering
+  cost; no fixed extent, mask, or scene-specific replacement is admissible.
+- Normalizing Genesis to 520 PCG iterations gives `127.514 ms` of projected
+  kernel work, or `1.151x` CGQ. Normalized kernel-instance count remains
+  approximately `1.46x`, exposing generated graph-node fragmentation and
+  launch scheduling beyond summed kernel-active time.
+
+The synchronized 100-frame run, whose long-run mean PCG work is already close
+(`87.27` Genesis versus `86.80` CGQ), reports warm-frame medians
+`20.003 ms` and `12.927 ms` (`1.547x`). This wall ratio is not assigned to
+extra Krylov work alone: the Nsight evidence above separates trajectory work
+from the remaining Quadrants helper/node-lowering overhead.
 
 ## Compile-time and memory-layout debt
 
