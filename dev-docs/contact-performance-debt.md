@@ -1618,6 +1618,62 @@ the later PCG trajectory. The direct acceptance proof is the disappearance of
 the five helper launches per PCG iteration; the complete raw wall improvement
 must not be attributed exclusively to their measured kernel-active time.
 
+### 250-frame cloth cross-case validation
+
+The range-bound inlining and occupancy-grid changes were revalidated on four
+matched, rigid-free cloth workloads. Each backend received the same generated
+vertices and triangles, material and contact parameters, constraints, `dt`,
+LinearPCG solver, and diagonal preconditioner. Every run used 20 unmeasured
+warmup frames followed by 250 measured frames:
+
+- `pinned_drape` (6,561 vertices, 12,800 triangles, no contact) is the
+  equal-work control. Genesis/CGQ had the same 648 total Newton iterations and
+  112,804/112,791 total PCG iterations. Their median/mean/p95 frame times were
+  `18.153/19.057/23.634 ms` and `18.094/19.745/25.146 ms`, respectively.
+  The mean wall ratio and wall-per-PCG-work ratio were both `0.965x`; 249 of
+  250 frames were within 1% PCG work and the final maximum position difference
+  was `3.29e-6`.
+- `inclined_drop` (6,561 vertices, 12,800 triangles, halfplane impact) recorded
+  Genesis/CGQ median/mean/p95 times of `19.877/20.604/21.548 ms` and
+  `20.255/20.828/22.672 ms`. Total Newton work was 513/508 and total PCG work
+  was 101,981/100,879. The raw mean ratio was `0.989x`; normalizing the total
+  wall time by total PCG work gave `0.979x`. The final vertical-coordinate
+  difference was `4.62e-11`, while the translation-independent maximum shape
+  difference was `2.11e-3`.
+- `multilayer` (8,804 vertices, 17,000 triangles, four heterogeneous layers)
+  recorded Genesis/CGQ median/mean/p95 times of `25.008/24.938/28.734 ms` and
+  `23.295/23.095/27.398 ms`. Both executed 500 Newton iterations, but total PCG
+  work was 103,919/96,749. The raw mean ratio was `1.080x`, while the
+  wall-per-PCG-work ratio was `1.005x`. On the 17 frames whose PCG work was
+  within 1%, the median ratio was `1.019x`. The observed raw gap therefore
+  comes predominantly from trajectory-dependent solver work, not a comparable
+  per-unit implementation overhead.
+- `crossed_drop` (5,202 vertices, 10,000 triangles, two vertical sheets) is a
+  trajectory-divergence stress case, not an equal-work timing case. Genesis/CGQ
+  medians were `25.865/19.108 ms`, but means were `34.224/35.240 ms`; total
+  Newton work was 971/1,081 and total PCG work was 157,472/168,193. Only 2 of
+  250 frames were within 1% PCG work, and high-work phases occurred at
+  different frames. Consequently, the raw `1.354x` median ratio is not an
+  implementation comparison. The coarse wall-per-PCG-work ratio was `1.037x`.
+  Both endpoints remained above the halfplane, but the final centered shapes
+  differed by `0.993` after frictionless collapse.
+
+The interpretable normalized ratios are therefore `0.965x`, `0.979x`, and
+`1.005x`, with the trajectory-divergent stress case giving only a coarse
+`1.037x` bound. This validates that the optimizations are general rather than
+specific to the original multilayer stack; no remaining cross-case evidence
+supports a large helper/grid implementation tax. Ratios within a few percent
+must not be treated as a throughput claim without repeated runs and matched
+kernel profiles.
+
+Impact trajectories still need a separate frozen-state parity test. During the
+measured window, minimum reported CCD alpha was `1.0` in Genesis versus
+`0.219745` for CGQ in `inclined_drop`, and `1.0` versus `0.051993` in
+`crossed_drop`. In addition, the two public line-search counters do not expose
+the same semantics, so line-search counts were excluded from the comparison.
+These observations prohibit using the impact cases as strict equal-work
+evidence; they do not change the no-contact control result.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size

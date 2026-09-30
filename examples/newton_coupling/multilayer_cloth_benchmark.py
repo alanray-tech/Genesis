@@ -1,18 +1,20 @@
-"""Matched Genesis/CGQ multi-layer cloth performance benchmark.
+"""Matched Genesis/CGQ cloth performance benchmark suite.
 
 Run this file with the virtual environment belonging to the selected backend.
 Both backends receive the same vertices, triangles, material values, solver
-limits, halfplane, and contact parameters.  The scene deliberately contains
-no rigid body so rigid integration cannot affect the comparison.
+limits, constraints, halfplanes, and contact parameters. Every case contains
+only cloth so rigid integration cannot affect the comparison.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -28,19 +30,126 @@ DENSITY = 200.0
 THICKNESS = 1.0e-3
 BENDING_YOUNGS_MODULUS = 1.0e6
 
-LAYER_SPECS = (
-    ("cloth_large", 80, 0.5, 0.10),
-    ("cloth_mid", 40, 0.3, 0.14),
-    ("cloth_small", 20, 0.2, 0.16),
-    ("cloth_tiny", 10, 0.1, 0.18),
-)
+
+@dataclass(frozen=True)
+class ClothSpec:
+    name: str
+    subdivisions: int
+    size: float
+    center: tuple[float, float, float]
+    axis_u: tuple[float, float, float] = (1.0, 0.0, 0.0)
+    axis_v: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    fixed_vertices: tuple[int, ...] = ()
 
 
-def make_cloth_grid(
-    subdivisions: int,
-    size: float,
-    height: float,
-) -> tuple[np.ndarray, np.ndarray]:
+@dataclass(frozen=True)
+class CaseSpec:
+    name: str
+    description: str
+    cloths: tuple[ClothSpec, ...]
+    contact_enabled: bool
+    halfplane: bool
+
+
+def rotated_horizontal_axes(
+    tilt_x_degrees: float,
+    tilt_z_degrees: float,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    tilt_x = math.radians(tilt_x_degrees)
+    tilt_z = math.radians(tilt_z_degrees)
+    cos_x, sin_x = math.cos(tilt_x), math.sin(tilt_x)
+    cos_z, sin_z = math.cos(tilt_z), math.sin(tilt_z)
+    return (
+        (cos_z, sin_z, 0.0),
+        (sin_z * sin_x, -cos_z * sin_x, cos_x),
+    )
+
+
+INCLINED_AXIS_U, INCLINED_AXIS_V = rotated_horizontal_axes(-8.0, 12.0)
+
+CASES = {
+    "multilayer": CaseSpec(
+        name="multilayer",
+        description="Four heterogeneous horizontal layers falling onto a halfplane",
+        cloths=(
+            ClothSpec("cloth_large", 80, 0.5, (0.0, 0.10, 0.0)),
+            ClothSpec("cloth_mid", 40, 0.3, (0.0, 0.14, 0.0)),
+            ClothSpec("cloth_small", 20, 0.2, (0.0, 0.16, 0.0)),
+            ClothSpec("cloth_tiny", 10, 0.1, (0.0, 0.18, 0.0)),
+        ),
+        contact_enabled=True,
+        halfplane=True,
+    ),
+    "pinned_drape": CaseSpec(
+        name="pinned_drape",
+        description="One 80x80 sheet pinned at two corners with contact disabled",
+        cloths=(
+            ClothSpec(
+                "cloth_pinned",
+                80,
+                0.8,
+                (0.0, 0.8, 0.0),
+                fixed_vertices=(0, 80),
+            ),
+        ),
+        contact_enabled=False,
+        halfplane=False,
+    ),
+    "inclined_drop": CaseSpec(
+        name="inclined_drop",
+        description="One tilted 80x80 sheet impacting a halfplane",
+        cloths=(
+            ClothSpec(
+                "cloth_inclined",
+                80,
+                0.5,
+                (0.0, 0.14, 0.0),
+                axis_u=INCLINED_AXIS_U,
+                axis_v=INCLINED_AXIS_V,
+            ),
+        ),
+        contact_enabled=True,
+        halfplane=True,
+    ),
+    "crossed_drop": CaseSpec(
+        name="crossed_drop",
+        description="Two vertical 50x50 sheets crossing after ground impact",
+        cloths=(
+            ClothSpec(
+                "cloth_x",
+                50,
+                0.38,
+                (0.0, 0.23, 0.0),
+                axis_u=(1.0, 0.0, 0.0),
+                axis_v=(0.0, 1.0, 0.0),
+            ),
+            ClothSpec(
+                "cloth_z",
+                50,
+                0.38,
+                (0.0, 0.73, 0.0),
+                axis_u=(0.0, 0.0, 1.0),
+                axis_v=(0.0, 1.0, 0.0),
+            ),
+        ),
+        contact_enabled=True,
+        halfplane=True,
+    ),
+}
+
+DEFAULT_CASE = "multilayer"
+
+
+def make_cloth_grid(spec: ClothSpec) -> tuple[np.ndarray, np.ndarray]:
+    subdivisions = spec.subdivisions
+    center = np.asarray(spec.center, dtype=np.float64)
+    axis_u = np.asarray(spec.axis_u, dtype=np.float64)
+    axis_v = np.asarray(spec.axis_v, dtype=np.float64)
+    if not np.isclose(np.linalg.norm(axis_u), 1.0) or not np.isclose(np.linalg.norm(axis_v), 1.0):
+        raise ValueError(f"{spec.name}: cloth axes must be unit length")
+    if not np.isclose(np.dot(axis_u, axis_v), 0.0):
+        raise ValueError(f"{spec.name}: cloth axes must be orthogonal")
+
     vertices = np.empty(
         ((subdivisions + 1) * (subdivisions + 1), 3),
         dtype=np.float64,
@@ -48,11 +157,9 @@ def make_cloth_grid(
     cursor = 0
     for row in range(subdivisions + 1):
         for column in range(subdivisions + 1):
-            vertices[cursor] = (
-                (column / subdivisions - 0.5) * size,
-                height,
-                (row / subdivisions - 0.5) * size,
-            )
+            u = (column / subdivisions - 0.5) * spec.size
+            v = (row / subdivisions - 0.5) * spec.size
+            vertices[cursor] = center + u * axis_u + v * axis_v
             cursor += 1
 
     triangles = np.empty((2 * subdivisions * subdivisions, 3), dtype=np.int32)
@@ -103,16 +210,17 @@ def profile_window_mark(frame: int) -> None:
         print(f"[profile] cudaProfilerStop at frame {frame}", flush=True)
 
 
-def build_cgq(disable_contact: bool):
+def build_cgq(case: CaseSpec, disable_contact: bool):
     import torch
     from qipc import Cloth, Scene, trimesh
     from qipc.geometry import ground
 
+    contact_enabled = case.contact_enabled and not disable_contact
     scene = Scene(
         dt=DT,
         gravity=GRAVITY,
         **{
-            "contact/enable": int(not disable_contact),
+            "contact/enable": int(contact_enabled),
             "contact/d_hat": D_HAT,
             "contact/init_collision_pair_capacity": PAIR_CAPACITY,
             "contact/ccd_partition": 0,
@@ -130,10 +238,14 @@ def build_cgq(disable_contact: bool):
         friction_rate=0.0,
         resistance=CONTACT_RESISTANCE,
     )
-    scene.geometries.create("ground", ground(height=0.0, N=(0.0, 1.0, 0.0)))
-    for name, subdivisions, size, height in LAYER_SPECS:
-        vertices, triangles = make_cloth_grid(subdivisions, size, height)
+    if case.halfplane:
+        scene.geometries.create("ground", ground(height=0.0, N=(0.0, 1.0, 0.0)))
+    for cloth in case.cloths:
+        vertices, triangles = make_cloth_grid(cloth)
         geometry = trimesh(vertices, triangles)
+        is_fixed = np.zeros(len(vertices), dtype=np.int32)
+        if cloth.fixed_vertices:
+            is_fixed[np.asarray(cloth.fixed_vertices, dtype=np.int32)] = 1
         Cloth().apply_to(
             geometry,
             youngs_modulus=YOUNGS_MODULUS,
@@ -142,13 +254,14 @@ def build_cgq(disable_contact: bool):
             thickness=THICKNESS,
             bending="quadratic",
             bending_youngs_modulus=BENDING_YOUNGS_MODULUS,
+            is_fixed=is_fixed,
         )
-        scene.geometries.create(name, geometry)
+        scene.geometries.create(cloth.name, geometry)
     scene.init()
 
     def sample() -> dict[str, object]:
         solver = scene.solver
-        contact = [0, 0, 0] if disable_contact else [int(value) for value in solver.get_contact_info()]
+        contact = [0, 0, 0] if not contact_enabled else [int(value) for value in solver.get_contact_info()]
         return {
             "newton": int(solver.newton_iters),
             "max_pcg": int(solver.max_pcg_iters),
@@ -164,7 +277,11 @@ def build_cgq(disable_contact: bool):
     return scene.step, torch.cuda.synchronize, sample, positions
 
 
-def build_genesis(disable_contact: bool, genesis_serial_pipeline: bool):
+def build_genesis(
+    case: CaseSpec,
+    disable_contact: bool,
+    genesis_serial_pipeline: bool,
+):
     import quadrants as qd
 
     import genesis as gs
@@ -177,11 +294,12 @@ def build_genesis(disable_contact: bool, genesis_serial_pipeline: bool):
         coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
         show_viewer=False,
     )
-    for name, subdivisions, size, height in LAYER_SPECS:
-        vertices, triangles = make_cloth_grid(subdivisions, size, height)
-        scene.add_entity(
+    entities = []
+    for cloth in case.cloths:
+        vertices, triangles = make_cloth_grid(cloth)
+        entity = scene.add_entity(
             morph=gs.morphs.Mesh(
-                file=str(write_obj(name, vertices, triangles)),
+                file=str(write_obj(f"{case.name}_{cloth.name}", vertices, triangles)),
             ),
             material=gs.materials.FEM.QCloth(
                 E=YOUNGS_MODULUS,
@@ -191,8 +309,13 @@ def build_genesis(disable_contact: bool, genesis_serial_pipeline: bool):
                 bending_youngs_modulus=BENDING_YOUNGS_MODULUS,
             ),
         )
+        entities.append((entity, cloth))
     scene.build(compile_kernels=False)
+    for entity, cloth in entities:
+        if cloth.fixed_vertices:
+            entity.set_vertex_constraints(list(cloth.fixed_vertices))
 
+    contact_enabled = case.contact_enabled and not disable_contact
     contact_tabular = ContactTabular()
     contact_tabular.default_model(
         friction_rate=0.0,
@@ -201,7 +324,7 @@ def build_genesis(disable_contact: bool, genesis_serial_pipeline: bool):
     engine = build_scene_engine(
         scene,
         contact_config={
-            "contact/enable": int(not disable_contact),
+            "contact/enable": int(contact_enabled),
             "contact/d_hat": D_HAT,
             "contact/init_collision_pair_capacity": PAIR_CAPACITY,
             "contact/ccd_partition": 0,
@@ -212,15 +335,19 @@ def build_genesis(disable_contact: bool, genesis_serial_pipeline: bool):
         },
         contact_tabular=contact_tabular,
         halfplanes=(
-            np.zeros((1, 3), dtype=np.float64),
-            np.array([[0.0, 1.0, 0.0]], dtype=np.float64),
+            (
+                np.zeros((1, 3), dtype=np.float64),
+                np.array([[0.0, 1.0, 0.0]], dtype=np.float64),
+            )
+            if case.halfplane
+            else None
         ),
     )
 
     def sample() -> dict[str, object]:
         contact = (
             [0, 0, 0]
-            if disable_contact
+            if not contact_enabled
             else [
                 int(qd_to_numpy(engine.contact.n_pairs_pt)),
                 int(qd_to_numpy(engine.contact.n_pairs_ee)),
@@ -232,7 +359,7 @@ def build_genesis(disable_contact: bool, genesis_serial_pipeline: bool):
             "max_pcg": int(engine.get_max_pcg_iters()),
             "total_pcg": int(engine.get_total_pcg_iters()),
             "line_search": int(engine.get_max_ls_iters()),
-            "ccd_alpha": (1.0 if disable_contact else float(qd_to_numpy(engine.contact.ccd_alpha))),
+            "ccd_alpha": (1.0 if not contact_enabled else float(qd_to_numpy(engine.contact.ccd_alpha))),
             "contact": contact,
         }
 
@@ -245,6 +372,7 @@ def build_genesis(disable_contact: bool, genesis_serial_pipeline: bool):
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=("genesis", "cgq"), required=True)
+    parser.add_argument("--case", choices=tuple(CASES), default=DEFAULT_CASE)
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument(
         "--frames",
@@ -258,15 +386,20 @@ def main() -> None:
     parser.add_argument("--genesis-serial-pipeline", action="store_true")
     args = parser.parse_args()
 
+    case = CASES[args.case]
     if args.backend == "genesis":
         step, synchronize, sample, positions = build_genesis(
+            case,
             args.disable_contact,
             args.genesis_serial_pipeline,
         )
     else:
         if args.genesis_serial_pipeline:
             parser.error("--genesis-serial-pipeline is only valid with --backend genesis")
-        step, synchronize, sample, positions = build_cgq(args.disable_contact)
+        step, synchronize, sample, positions = build_cgq(
+            case,
+            args.disable_contact,
+        )
 
     samples_ms: list[float] = []
     newton: list[int] = []
@@ -275,6 +408,10 @@ def main() -> None:
     line_search: list[int] = []
     ccd_alpha: list[float] = []
     contact_info: list[list[int]] = []
+    print(
+        f"[benchmark] case={case.name} backend={args.backend} " f"description={case.description}",
+        flush=True,
+    )
     total_frames = args.warmup + args.frames
     for frame in range(total_frames):
         profile_window_mark(frame)
@@ -302,13 +439,14 @@ def main() -> None:
     final_positions = positions()
     result = {
         "implementation": args.backend,
-        "scene": "multilayer_cloth_halfplane",
-        "contact_enabled": not args.disable_contact,
+        "scene": case.name,
+        "description": case.description,
+        "contact_enabled": case.contact_enabled and not args.disable_contact,
         "genesis_serial_pipeline": args.genesis_serial_pipeline,
         "warmup_frames": args.warmup,
         "measured_frames": args.frames,
         "n_vertices": int(final_positions.shape[0]),
-        "n_triangles": int(sum(2 * spec[1] * spec[1] for spec in LAYER_SPECS)),
+        "n_triangles": int(sum(2 * cloth.subdivisions**2 for cloth in case.cloths)),
         "samples_ms": samples_ms,
         "newton": newton,
         "max_pcg": max_pcg,
