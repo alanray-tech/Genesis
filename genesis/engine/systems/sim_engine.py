@@ -65,6 +65,7 @@ class SimEngine:
         self.is_built_host = False
         self.is_initialized_host = False
         self.params_wired_host = False
+        self.genesis_serial_pipeline = False
 
         self.newton_cond = qd.ndarray(qd.i32, shape=())
         self.ls_cond = qd.ndarray(qd.i32, shape=())
@@ -84,6 +85,11 @@ class SimEngine:
 
         self.sim_config = SimConfig()
         self.add_system(self.sim_config)
+
+    def configure_genesis_serial_pipeline(self, enabled: bool) -> None:
+        if self.is_built_host:
+            raise RuntimeError("Pipeline scheduling must be configured before build_systems()")
+        self.genesis_serial_pipeline = bool(enabled)
 
     def add_system(self, system: SimSystem) -> None:
         if self.is_built_host:
@@ -242,8 +248,15 @@ class SimEngine:
             if qd.static(True):
                 self.fem.forward_global_vertices(self.global_vertex_manager)
                 self.global_vertex_manager.reset_trajectory()
-                self.contact.bvh_triangle_build()
-                self.contact.bvh_edge_build()
+                if qd.static(self.genesis_serial_pipeline):
+                    self.contact.bvh_triangle_build()
+                    self.contact.bvh_edge_build()
+                else:
+                    with qd.graph.parallel_context():
+                        with qd.graph.parallel():
+                            self.contact.bvh_triangle_build()
+                        with qd.graph.parallel():
+                            self.contact.bvh_edge_build()
         if qd.static(self.has_et_check):
             with qd.checkpoint(
                 ContactCheckpoint.INITIAL_INTERSECTION,
@@ -255,10 +268,48 @@ class SimEngine:
         with qd.checkpoint(ContactCheckpoint.QUERY, yield_on=pair_overflow):
             if qd.static(True):
                 self.contact.reset_collision_counts()
-                self.contact.trajectory_query()
+                if qd.static(self.genesis_serial_pipeline):
+                    self.contact.trajectory_query()
+                else:
+                    with qd.graph.parallel_context():
+                        with qd.graph.parallel():
+                            self.contact.broad_phase.pt_query()
+                        with qd.graph.parallel():
+                            self.contact.broad_phase.ee_query()
+                        with qd.graph.parallel():
+                            if qd.static(self.contact.has_halfplanes):
+                                self.contact.halfplane_query()
         with qd.checkpoint(ContactCheckpoint.COUNT, yield_on=self.checkpoint_never_yield):
             if qd.static(True):
-                self.contact.count_active()
+                self.contact.reset_counted_demand()
+                if qd.static(self.genesis_serial_pipeline):
+                    self.contact.contact_constitution.count_active(
+                        self.contact,
+                        self.contact.surface,
+                        self.contact.vertex,
+                    )
+                else:
+                    with qd.graph.parallel_context():
+                        with qd.graph.parallel():
+                            self.contact.contact_constitution.count_active_pt(
+                                self.contact,
+                                self.contact.surface,
+                                self.contact.vertex,
+                            )
+                        with qd.graph.parallel():
+                            self.contact.contact_constitution.count_active_ee(
+                                self.contact,
+                                self.contact.surface,
+                                self.contact.vertex,
+                            )
+                        with qd.graph.parallel():
+                            if qd.static(self.contact.has_halfplanes):
+                                self.contact.contact_constitution.count_active_ph(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                self.contact.check_assembly_capacity()
 
     def _handle_pair_overflow(self) -> None:
         self.contact.handle_broad_phase_overflow()
@@ -424,7 +475,33 @@ class SimEngine:
         with qd.checkpoint(ContactCheckpoint.FRICTION, yield_on=friction_overflow):
             if qd.static(self.has_contact):  # noqa: SIM102
                 if qd.static(self.contact.has_friction):
-                    self.contact.friction_snapshot()
+                    if qd.static(self.genesis_serial_pipeline):
+                        self.contact.friction_snapshot()
+                    else:
+                        self.contact.contact_constitution.snapshot_lagged_positions(
+                            self.contact,
+                            self.contact.vertex,
+                        )
+                        with qd.graph.parallel_context():
+                            with qd.graph.parallel():
+                                self.contact.contact_constitution.friction_pair_filter_pt(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                            with qd.graph.parallel():
+                                self.contact.contact_constitution.friction_pair_filter_ee(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_halfplanes):
+                                    self.contact.contact_constitution.friction_pair_filter_ph(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
 
         while qd.graph.do_while(self.newton_cond):
             with qd.checkpoint(ContactCheckpoint.COUNT, yield_on=assembly_overflow):
@@ -435,14 +512,91 @@ class SimEngine:
                 if qd.static(self.has_rigid_contact_proxy):
                     self.rigid_contact_proxy.prepare_constraint()
                 if qd.static(self.has_contact):
-                    self.contact.count_active()
+                    self.contact.reset_counted_demand()
+                    if qd.static(self.genesis_serial_pipeline):
+                        self.contact.contact_constitution.count_active(
+                            self.contact,
+                            self.contact.surface,
+                            self.contact.vertex,
+                        )
+                    else:
+                        with qd.graph.parallel_context():
+                            with qd.graph.parallel():
+                                self.contact.contact_constitution.count_active_pt(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                            with qd.graph.parallel():
+                                self.contact.contact_constitution.count_active_ee(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_halfplanes):
+                                    self.contact.contact_constitution.count_active_ph(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                    self.contact.check_assembly_capacity()
 
             with qd.checkpoint(ContactCheckpoint.FILTER, yield_on=padding_overflow):
                 for _ in range(1):
                     self.newton_iter[()] = self.newton_iter[()] + 1
                 if qd.static(self.has_contact):
                     self.contact.adaptive_kappa_newton_tick()
-                    self.contact.filter_assemble()
+                    self.contact.vertex.zero_in_contact()
+                    self.contact.reset_assembly_counts()
+                    if qd.static(self.genesis_serial_pipeline):
+                        self.contact.contact_constitution.filter_assemble(
+                            self.contact,
+                            self.contact.surface,
+                            self.contact.vertex,
+                        )
+                    else:
+                        with qd.graph.parallel_context():
+                            with qd.graph.parallel():
+                                self.contact.contact_constitution.filter_assemble_pt(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                            with qd.graph.parallel():
+                                self.contact.contact_constitution.filter_assemble_ee(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_halfplanes):
+                                    self.contact.contact_constitution.filter_assemble_ph(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_friction):
+                                    self.contact.contact_constitution.friction_assemble_pt(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_friction):
+                                    self.contact.contact_constitution.friction_assemble_ee(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_friction and self.contact.has_halfplanes):
+                                    self.contact.contact_constitution.friction_assemble_ph(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
                     self.contact.check_assembly_padding()
 
             with qd.checkpoint(ContactCheckpoint.SORT, yield_on=triplet_overflow):
@@ -555,7 +709,52 @@ class SimEngine:
                     self.rigid_contact_proxy.forward_global_vertices(self.global_vertex_manager)
                     self.rigid_contact_proxy.publish_trajectory_end_positions(self.global_vertex_manager)
                 if qd.static(self.has_contact):
-                    self.contact.contact_energy()
+                    if qd.static(self.genesis_serial_pipeline):
+                        self.contact.contact_energy()
+                    else:
+                        self.contact.reset_contact_energy()
+                        with qd.graph.parallel_context():
+                            with qd.graph.parallel():
+                                self.contact.contact_constitution.filter_energy_pt(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                            with qd.graph.parallel():
+                                self.contact.contact_constitution.filter_energy_ee(
+                                    self.contact,
+                                    self.contact.surface,
+                                    self.contact.vertex,
+                                )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_halfplanes):
+                                    self.contact.contact_constitution.filter_energy_ph(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_friction):
+                                    self.contact.contact_constitution.friction_energy_pt(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_friction):
+                                    self.contact.contact_constitution.friction_energy_ee(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_friction and self.contact.has_halfplanes):
+                                    self.contact.contact_constitution.friction_energy_ph(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                        self.contact.sum_contact_energy()
                 if qd.static(self.has_rigid_contact_proxy):
                     self.rigid_contact_proxy.compute_restoration_energy(False)
 
@@ -575,18 +774,46 @@ class SimEngine:
                     self.rigid_contact_proxy.initialize_merit()
 
                 if qd.static(self.has_contact):
-                    self.contact.bvh_triangle_build()
-                    self.contact.bvh_edge_build()
+                    if qd.static(self.genesis_serial_pipeline):
+                        self.contact.bvh_triangle_build()
+                        self.contact.bvh_edge_build()
+                    else:
+                        with qd.graph.parallel_context():
+                            with qd.graph.parallel():
+                                self.contact.bvh_triangle_build()
+                            with qd.graph.parallel():
+                                self.contact.bvh_edge_build()
 
             with qd.checkpoint(ContactCheckpoint.QUERY, yield_on=pair_overflow):
                 if qd.static(self.has_contact):
                     self.contact.reset_collision_counts()
-                    self.contact.trajectory_query()
+                    if qd.static(self.genesis_serial_pipeline):
+                        self.contact.trajectory_query()
+                    else:
+                        with qd.graph.parallel_context():
+                            with qd.graph.parallel():
+                                self.contact.broad_phase.pt_query()
+                            with qd.graph.parallel():
+                                self.contact.broad_phase.ee_query()
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_halfplanes):
+                                    self.contact.halfplane_query()
 
             with qd.checkpoint(ContactCheckpoint.CCD, yield_on=self.checkpoint_never_yield):
                 if qd.static(self.has_contact):
                     self.contact.init_ccd()
-                    self.contact.ccd()
+                    if qd.static(self.genesis_serial_pipeline):
+                        self.contact.ccd()
+                    else:
+                        with qd.graph.parallel_context():
+                            with qd.graph.parallel():
+                                self.contact.ccd_alpha_pt_kernel()
+                            with qd.graph.parallel():
+                                self.contact.ccd_alpha_ee_kernel()
+                            with qd.graph.parallel():
+                                if qd.static(self.contact.has_halfplanes):
+                                    self.contact.halfplane_ccd_alpha_kernel()
+                        self.contact.reduce_ccd_alpha_final_kernel()
 
             with qd.checkpoint(ContactCheckpoint.LINE_SEARCH, yield_on=self.checkpoint_never_yield):
                 for _ in range(1):
@@ -621,7 +848,52 @@ class SimEngine:
                         self.rigid_contact_proxy.forward_global_vertices(self.global_vertex_manager)
                         self.rigid_contact_proxy.evaluate_trial_guard()
                     if qd.static(self.has_contact):
-                        self.contact.contact_energy()
+                        if qd.static(self.genesis_serial_pipeline):
+                            self.contact.contact_energy()
+                        else:
+                            self.contact.reset_contact_energy()
+                            with qd.graph.parallel_context():
+                                with qd.graph.parallel():
+                                    self.contact.contact_constitution.filter_energy_pt(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                                with qd.graph.parallel():
+                                    self.contact.contact_constitution.filter_energy_ee(
+                                        self.contact,
+                                        self.contact.surface,
+                                        self.contact.vertex,
+                                    )
+                                with qd.graph.parallel():
+                                    if qd.static(self.contact.has_halfplanes):
+                                        self.contact.contact_constitution.filter_energy_ph(
+                                            self.contact,
+                                            self.contact.surface,
+                                            self.contact.vertex,
+                                        )
+                                with qd.graph.parallel():
+                                    if qd.static(self.contact.has_friction):
+                                        self.contact.contact_constitution.friction_energy_pt(
+                                            self.contact,
+                                            self.contact.surface,
+                                            self.contact.vertex,
+                                        )
+                                with qd.graph.parallel():
+                                    if qd.static(self.contact.has_friction):
+                                        self.contact.contact_constitution.friction_energy_ee(
+                                            self.contact,
+                                            self.contact.surface,
+                                            self.contact.vertex,
+                                        )
+                                with qd.graph.parallel():
+                                    if qd.static(self.contact.has_friction and self.contact.has_halfplanes):
+                                        self.contact.contact_constitution.friction_energy_ph(
+                                            self.contact,
+                                            self.contact.surface,
+                                            self.contact.vertex,
+                                        )
+                            self.contact.sum_contact_energy()
                     if qd.static(self.has_rigid_contact_proxy):
                         self.rigid_contact_proxy.compute_restoration_energy(True)
 

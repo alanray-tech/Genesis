@@ -58,6 +58,10 @@ Primary sources:
 - `extras/rigid_forest/genesis_legacy`: Genesis-only integer boolean, default
   `0`; one forces the original scan-all level implementation as a
   non-production performance baseline and overrides `rigid_forest/fused`.
+- `extras/pipeline/genesis_serial`: Genesis-only integer boolean, default `0`;
+  one retains the pre-overlap serial ordering of independent contact/BVH/CCD
+  branches as a non-production A/B baseline. It changes scheduling only, not
+  contact formulas, live extents, or solver selection.
 
 ## Contact table
 

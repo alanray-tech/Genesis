@@ -29,9 +29,7 @@ class LBVHBroadPhase(BroadPhaseSystem):
         if ee_query not in ("dual", "warp"):
             raise ValueError(f"Unsupported bvh/ee_query {ee_query!r}")
         self.bound_type = bound_type
-        self.pt_query = pt_query
         self.use_warp_pt = pt_query == "warp"
-        self.ee_query = ee_query
         self.use_dual_ee = ee_query == "dual"
         self.dual_frontier_levels = dual_frontier_levels
         self.dual_target_waves = dual_target_waves
@@ -110,7 +108,7 @@ class LBVHBroadPhase(BroadPhaseSystem):
             self.edge_bvh.calc_internal_aabb()
 
     @qd.func(requires_top_level=True)
-    def trajectory_query(self):
+    def pt_query(self):
         if qd.static(self.has_triangle_bvh):
             if qd.static(self.use_warp_pt):
                 self.triangle_bvh.query_pt_warp(
@@ -136,6 +134,9 @@ class LBVHBroadPhase(BroadPhaseSystem):
                     self.contact.d_hat[()],
                     self.contact.overflow_flag,
                 )
+
+    @qd.func(requires_top_level=True)
+    def ee_query(self):
         if qd.static(self.has_edge_bvh):
             if qd.static(self.use_dual_ee):
                 self.ee_dual_state.query(
@@ -161,6 +162,11 @@ class LBVHBroadPhase(BroadPhaseSystem):
                     qd.f64(0.0),
                     self.contact.overflow_flag,
                 )
+
+    @qd.func(requires_top_level=True)
+    def trajectory_query(self):
+        self.pt_query()
+        self.ee_query()
 
     def handle_ee_query_overflow(self) -> bool:
         if not self.has_edge_bvh:

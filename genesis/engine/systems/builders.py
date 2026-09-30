@@ -79,6 +79,7 @@ def build_scene_engine(
     genesis_legacy_fp64_bounds = bool(int(resolved_contact_config["extras/bvh/genesis_legacy_fp64_bounds"]))
     genesis_legacy_refit = bool(int(resolved_contact_config["extras/bvh/genesis_legacy_refit"]))
     engine = SimEngine()
+    engine.configure_genesis_serial_pipeline(bool(int(resolved_contact_config["extras/pipeline/genesis_serial"])))
     engine.add_system(
         GlobalLinearSystem(
             genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,

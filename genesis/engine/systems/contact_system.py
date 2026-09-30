@@ -231,15 +231,9 @@ class ContactSystem(SimSystem):
                 dtype=np.int32,
             ).reshape(-1)
             if len(plane_contact_element_ids) != len(plane_positions):
-                raise ValueError(
-                    "ContactSystem halfplane contact element IDs must match "
-                    "the number of halfplanes"
-                )
+                raise ValueError("ContactSystem halfplane contact element IDs must match the number of halfplanes")
             if np.any(plane_contact_element_ids < 0):
-                raise ValueError(
-                    "ContactSystem halfplane contact element IDs must be "
-                    "non-negative"
-                )
+                raise ValueError("ContactSystem halfplane contact element IDs must be non-negative")
 
         self.n_halfplanes = qd.ndarray(qd.i32, shape=())
         self.halfplane_positions = qd.ndarray(qd.f64, shape=(max(len(plane_positions), 1), 3))
@@ -254,9 +248,7 @@ class ContactSystem(SimSystem):
         )
         self.halfplane_normals.from_numpy(plane_normals if len(plane_normals) else np.zeros((1, 3), dtype=np.float64))
         self.halfplane_contact_element_ids.from_numpy(
-            plane_contact_element_ids
-            if len(plane_contact_element_ids)
-            else np.zeros(1, dtype=np.int32)
+            plane_contact_element_ids if len(plane_contact_element_ids) else np.zeros(1, dtype=np.int32)
         )
         self.has_halfplanes = len(plane_positions) != 0
 
@@ -602,13 +594,9 @@ class ContactSystem(SimSystem):
 
     @qd.func(requires_top_level=True)
     def contact_energy(self):
-        for _ in range(1):
-            self.barrier_energy[()] = 0.0
-            self.friction_energy[()] = 0.0
-            self.contact_energy_value[()] = 0.0
+        self.reset_contact_energy()
         self.contact_constitution.contact_energy(self, self.surface, self.vertex)
-        for _ in range(1):
-            self.contact_energy_value[()] = self.barrier_energy[()] + self.friction_energy[()]
+        self.sum_contact_energy()
 
     @qd.func(requires_top_level=True)
     def bvh_triangle_build(self):
@@ -724,13 +712,7 @@ class ContactSystem(SimSystem):
             vertex_id = self.surface.surf_verts[surface_vertex]
             vertex_element = self.vert_contact_element_ids[vertex_id]
             plane_element = self.halfplane_contact_element_ids[plane]
-            if (
-                self.enable_table[
-                    vertex_element * self.n_contact_elements[()]
-                    + plane_element
-                ]
-                == 0
-            ):
+            if self.enable_table[vertex_element * self.n_contact_elements[()] + plane_element] == 0:
                 continue
             current_distance = halfplane_signed_distance(
                 self.vertex.positions[vertex_id, 0],
@@ -778,7 +760,7 @@ class ContactSystem(SimSystem):
             self.frame_ccd_alpha[()] = 1.0
 
     @qd.func(requires_top_level=True)
-    def ccd(self):
+    def ccd_alpha_pt_kernel(self):
         for pair_index in range(self.n_pairs_pt[()]):
             surface_vertex = self.pairs_pt[pair_index, 0]
             face = self.pairs_pt[pair_index, 1]
@@ -805,6 +787,8 @@ class ContactSystem(SimSystem):
             self.ccd_alpha_pt[pair_index] = result[0]
             qd.atomic_min(self.ccd_alpha[()], result[0])
 
+    @qd.func(requires_top_level=True)
+    def ccd_alpha_ee_kernel(self):
         for pair_index in range(self.n_pairs_ee[()]):
             edge_a = self.pairs_ee[pair_index, 0]
             edge_b = self.pairs_ee[pair_index, 1]
@@ -831,6 +815,8 @@ class ContactSystem(SimSystem):
             self.ccd_alpha_ee[pair_index] = result[0]
             qd.atomic_min(self.ccd_alpha[()], result[0])
 
+    @qd.func(requires_top_level=True)
+    def halfplane_ccd_alpha_kernel(self):
         for pair_index in range(self.n_pairs_ph[()]):
             surface_vertex = self.pairs_ph[pair_index, 0]
             plane = self.pairs_ph[pair_index, 1]
@@ -862,11 +848,33 @@ class ContactSystem(SimSystem):
             )
             self.ccd_alpha_ph[pair_index] = result[0]
             qd.atomic_min(self.ccd_alpha[()], result[0])
+
+    @qd.func(requires_top_level=True)
+    def reduce_ccd_alpha_final_kernel(self):
         for _ in range(1):
             self.frame_ccd_alpha[()] = qd.min(
                 self.frame_ccd_alpha[()],
                 self.ccd_alpha[()],
             )
+
+    @qd.func(requires_top_level=True)
+    def ccd(self):
+        self.ccd_alpha_pt_kernel()
+        self.ccd_alpha_ee_kernel()
+        self.halfplane_ccd_alpha_kernel()
+        self.reduce_ccd_alpha_final_kernel()
+
+    @qd.func(requires_top_level=True)
+    def reset_contact_energy(self):
+        for _ in range(1):
+            self.barrier_energy[()] = 0.0
+            self.friction_energy[()] = 0.0
+            self.contact_energy_value[()] = 0.0
+
+    @qd.func(requires_top_level=True)
+    def sum_contact_energy(self):
+        for _ in range(1):
+            self.contact_energy_value[()] = self.barrier_energy[()] + self.friction_energy[()]
 
     @qd.func(requires_top_level=True)
     def check_assembly_capacity(self):

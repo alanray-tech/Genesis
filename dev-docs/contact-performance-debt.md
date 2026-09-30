@@ -1427,6 +1427,81 @@ The synchronized 100-frame run, whose long-run mean PCG work is already close
 extra Krylov work alone: the Nsight evidence above separates trajectory work
 from the remaining Quadrants helper/node-lowering overhead.
 
+### Cloth-only contact branch concurrency
+
+A robot-free benchmark now isolates non-algorithm contact scheduling:
+`examples/newton_coupling/multilayer_cloth_benchmark.py` contains four cloth
+layers (8,804 vertices, 17,000 triangles) and one halfplane. Genesis and CGQ
+use the same generated vertices/triangles, material values, timestep, contact
+parameters, LinearPCG, and diagonal preconditioner. Both execute exactly two
+Newton evaluations per frame with no line-search backtracking. No rigid
+integration or reduced-KKT work is present.
+
+The pre-change Nsight profile showed that Genesis serialized all PT, EE,
+halfplane, BVH, filter, energy, and CCD branches: summed kernel time equalled
+the kernel interval union, while CGQ overlapped approximately `2.797
+ms/frame`. The blocker was not a Genesis algorithm. Quadrants rejected
+`qd.graph.parallel_context()` inside a `checkpoints=True` graph, and its CUDA
+graph builder could not keep dynamic-range bound helpers in a
+checkpoint-owned fork/join.
+
+Quadrants commit `3b0f9c2ad` adds checkpoint-owned parallel regions with
+yield/resume coverage. The runtime admits the interleaved `checkpoint_id=-1`
+pure range-bound helpers into the active checkpoint's section chain without
+changing their unconditional resume semantics. The complete graph-parallel
+suite passes (`33/33`). Genesis then reproduces CGQ's independent subgraphs
+for:
+
+- friction snapshot PT/EE/halfplane filters;
+- active-pair counting;
+- barrier and friction filter/assembly branches;
+- barrier and friction energy branches;
+- triangle and edge BVH builds;
+- PT, EE, and halfplane trajectory queries; and
+- PT, EE, and halfplane CCD.
+
+The implementation is general scheduling over contact channels; it contains
+no scene size, geometry, contact-count, or benchmark-specific condition. The
+old ordering remains available only as the explicit A/B oracle
+`extras/pipeline/genesis_serial=1`; production defaults to the CGQ-parallel
+path.
+
+Matched unprofiled frames 20--39 keep the contact counts identical and nearly
+equalize LinearPCG work (`6,583` serial versus `6,570` parallel iterations):
+
+- synchronized wall median: `26.711 -> 25.656 ms` (`1.041x`, 4.0% lower);
+- synchronized wall mean: `25.359 -> 23.916 ms` (`1.060x`, 5.7% lower);
+- relative to the pinned CGQ median `22.425 ms`, the Genesis ratio changes
+  from `1.191x` to `1.144x`.
+
+The independent Nsight frames 20--28 prove that the serialized bottleneck is
+gone:
+
+- mean CUDA-graph kernel span: `22.609 -> 20.576 ms/frame` (`1.099x`, 9.0%
+  lower);
+- summed kernel work: `20.359 -> 20.697 ms/frame`;
+- kernel interval union: `20.359 -> 18.161 ms/frame` (`1.121x`, 10.8%
+  lower);
+- measured overlap: `0.000 -> 2.536 ms/frame`, or 12.3% of summed parallel
+  kernel work;
+- active CUDA streams: `13 -> 25`.
+
+The profile windows are not strict aggregate equal-work captures: atomic
+assembly ordering perturbs the later PCG count while preserving the converged
+state. A near-equal-work frame (`411` versus `412` PCG iterations) independently
+shows kernel union `25.363 -> 22.352 ms` and graph span `28.173 -> 25.406 ms`.
+The synchronized 20-frame result above is the primary end-to-end comparison
+because its total PCG difference is only 0.2%.
+
+The pinned CGQ profile has a `16.849 ms/frame` kernel union, so the remaining
+Genesis GPU-union ratio is `1.078x`. Genesis still launches 19,290
+`grid(1) x block(1)` scalar/helper kernels over the nine-frame capture
+(`1.979 ms/frame`, 9.6% of summed kernel work), including dynamic-range
+helpers and graph/checkpoint control. That compiler-owned bucket is already
+larger than the `1.312 ms/frame` remaining union gap. Further removal requires
+Quadrants range-helper fusion/lowering; a Genesis fixed extent, host size,
+mask, or scene-specific replacement remains forbidden.
+
 ## Compile-time and memory-layout debt
 
 ### PERF-COMP01: Generated contact IR size

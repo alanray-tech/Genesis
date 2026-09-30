@@ -21,6 +21,7 @@ CONTACT_CONFIG_DEFAULTS = MappingProxyType(
         "linear_system/tol_rate": 1e-4,
         "extras/capacity_grow_factor": 1.2,
         "extras/capacity_shrink_threshold": 0.8,
+        "extras/pipeline/genesis_serial": 0,
         "extras/ls_forensics/test_energy_bias": 0.0,
         "topo/grow_factor": 1.5,
         "bvh/type": "info_lbvh_batched_dop14",
