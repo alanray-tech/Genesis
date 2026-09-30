@@ -98,6 +98,62 @@ def query_ee_dual_only(
     dual.query(bvh, surface, vertex, body, pairs, n_pairs, 64, overflow)
 
 
+@qd.kernel
+def sort_morton_only(bvh: qd.template()):
+    bvh.sort_morton()
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_lbvh_dynamic_morton_sort_matches_retained_generic_path():
+    count = 257
+    rng = np.random.default_rng(31)
+    padded = ((count + 63) // 64) * 64
+    keys = np.full(padded, np.iinfo(np.uint64).max, dtype=np.uint64)
+    keys[:count] = rng.integers(
+        0,
+        np.iinfo(np.uint64).max,
+        size=count,
+        dtype=np.uint64,
+        endpoint=False,
+    )
+    keys[1:count:17] = keys[:count:17][: len(keys[1:count:17])]
+    permutation = np.full(padded, -1, dtype=np.int32)
+    permutation[:count] = np.arange(count, dtype=np.int32)
+
+    outputs = []
+    for genesis_legacy_sort_reduce in (False, True):
+        bvh = LBVH(
+            count,
+            count,
+            "aabb",
+            genesis_legacy_sort_reduce,
+        )
+        bvh.morton.from_numpy(keys)
+        bvh.morton_tmp.from_numpy(np.zeros(padded, dtype=np.uint64))
+        bvh.srt_perm.from_numpy(permutation)
+        bvh.srt_tmp_perm.from_numpy(np.zeros(padded, dtype=np.int32))
+        sort_morton_only(bvh)
+        qd.sync()
+        outputs.append(
+            (
+                qd_to_numpy(bvh.morton)[:count],
+                qd_to_numpy(bvh.srt_perm)[:count],
+            )
+        )
+
+    order = np.argsort(keys[:count], kind="stable")
+    for actual_keys, actual_permutation in outputs:
+        np.testing.assert_array_equal(actual_keys, keys[:count][order])
+        np.testing.assert_array_equal(
+            actual_permutation,
+            permutation[:count][order],
+        )
+    np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
+    np.testing.assert_array_equal(outputs[0][1], outputs[1][1])
+
+
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])

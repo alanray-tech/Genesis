@@ -18,6 +18,7 @@ class LBVHBroadPhase(BroadPhaseSystem):
         dual_frontier_levels: int = 0,
         dual_target_waves: float = 24.0,
         dual_max_levels: int = 18,
+        genesis_legacy_sort_reduce: bool = False,
     ) -> None:
         super().__init__()
         if ee_query not in ("dual", "warp"):
@@ -28,6 +29,7 @@ class LBVHBroadPhase(BroadPhaseSystem):
         self.dual_frontier_levels = dual_frontier_levels
         self.dual_target_waves = dual_target_waves
         self.dual_max_levels = dual_max_levels
+        self.genesis_legacy_sort_reduce = bool(genesis_legacy_sort_reduce)
         self.has_triangle_bvh = False
         self.has_edge_bvh = False
         self.has_codim_point_bvh = False
@@ -42,10 +44,16 @@ class LBVHBroadPhase(BroadPhaseSystem):
                     1,
                 ),
                 self.bound_type,
+                self.genesis_legacy_sort_reduce,
             )
             self.has_triangle_bvh = True
         if n_edges > 0:
-            self.edge_bvh = LBVH(n_edges, n_edges, self.bound_type)
+            self.edge_bvh = LBVH(
+                n_edges,
+                n_edges,
+                self.bound_type,
+                self.genesis_legacy_sort_reduce,
+            )
             if self.use_dual_ee:
                 self.ee_dual_state = DualEEQueryState(
                     n_edges,
@@ -146,6 +154,7 @@ class InfoLBVHBatchedBroadPhaseDop14(LBVHBroadPhase):
         dual_frontier_levels: int = 0,
         dual_target_waves: float = 24.0,
         dual_max_levels: int = 18,
+        genesis_legacy_sort_reduce: bool = False,
     ) -> None:
         super().__init__(
             bound_type="dop14",
@@ -153,4 +162,5 @@ class InfoLBVHBatchedBroadPhaseDop14(LBVHBroadPhase):
             dual_frontier_levels=dual_frontier_levels,
             dual_target_waves=dual_target_waves,
             dual_max_levels=dual_max_levels,
+            genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,
         )

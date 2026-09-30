@@ -312,6 +312,49 @@ Acceptance:
 - Compiled register/shared-memory occupancy and Nsight timing match or beat the
   pinned CGQ path.
 
+### PERF-B06: LBVH Morton dynamic OneSweep
+
+Implementation:
+
+- Triangle and edge LBVH Morton keys use the shared `DynamicRadixSort` u64
+  OneSweep path with `n_prims[()]` as the live device-scalar extent.
+- Morton generation initializes only that live range. No mask or padded
+  sentinel range participates in the production sort.
+- `extras/sort_reduce/genesis_legacy=1` retains the former padded generic
+  Quadrants radix sort as the explicit comparison path.
+- Permutation storage is `i32`, matching CGQ's OneSweep accessor contract.
+
+Correctness:
+
+- Stable key and permutation parity with the retained generic path is covered
+  with a non-power-of-two live count and duplicate keys.
+- The full broad-phase suite and dynamic-radix suite pass.
+- In the matched Franka-cloth trajectory, Newton, PCG, line-search, CCD, and
+  contact-count sequences are unchanged. Displacements and proxy residuals
+  agree to floating-point roundoff.
+
+Matched profile proof:
+
+- Nsight Systems capture window: frames 20--28, 18 Newton evaluations, RTX
+  5090, the same scene/configuration before and after the rewrite.
+- The two generic Morton sort stages cost `16.105 ms`, with 288 generated
+  variants and 5,184 kernel instances.
+- Dynamic OneSweep costs `6.888 ms`, with 72 generated variants and 1,296
+  instances: `2.338x` faster, `57.23%` lower, and `9.217 ms` removed from the
+  captured window.
+- Whole-window GPU kernel time falls from `188.504` to `177.448 ms`
+  (`1.062x`, `5.87%` lower); total kernel instances fall from 40,462 to
+  36,538.
+- Pinned CGQ Morton OneSweep costs `2.119 ms`, with 7 native variants and 756
+  instances. The remaining `3.251x` sort-stage gap is generated-code,
+  dynamic-range-helper, and grid/lowering debt assigned to the Quadrants
+  optimization layer; it is not admissible as a scene-specific Genesis
+  workaround.
+
+Status: **closed at the Genesis application layer**. The generic production
+sort is gone; native-CGQ parity remains open under the Quadrants
+range/grid/lowering work.
+
 ## Contact evaluation and assembly debt
 
 ### PERF-A01: PT and friction dense temporaries

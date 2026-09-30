@@ -130,6 +130,7 @@ def build_scene_engine(
                     dual_frontier_levels=int(resolved_contact_config["bvh/dual/frontier_levels"]),
                     dual_target_waves=float(resolved_contact_config["bvh/dual/target_waves"]),
                     dual_max_levels=int(resolved_contact_config["bvh/dual/max_levels"]),
+                    genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,
                 )
             elif bvh_type in ("lbvh", "info_lbvh", "info_lbvh_batched"):
                 broad_phase_system = LBVHBroadPhase(
@@ -138,6 +139,7 @@ def build_scene_engine(
                     dual_frontier_levels=int(resolved_contact_config["bvh/dual/frontier_levels"]),
                     dual_target_waves=float(resolved_contact_config["bvh/dual/target_waves"]),
                     dual_max_levels=int(resolved_contact_config["bvh/dual/max_levels"]),
+                    genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,
                 )
             else:
                 raise NotImplementedError(f"Unsupported CGQ bvh/type {bvh_type!r}")

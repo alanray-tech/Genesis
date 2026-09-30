@@ -33,6 +33,7 @@ from .contact_function.contact_table_query import ct_enabled_pt
 from .contact_function.edge_triangle_intersection import (
     triangle_edge_intersect,
 )
+from .dynamic_radix_sort import DynamicRadixSort
 from .gpu_occupancy import cuda_resident_blocks
 
 # structural, host-only: traversal stack depth. Read once to shape `stack_pool`
@@ -328,7 +329,13 @@ class LBVH:
     - ``element_idx == 0xFFFFFFFF`` for internal nodes.
     """
 
-    def __init__(self, n_prims: int, max_queries: int = 0, bound_type: str = "aabb") -> None:
+    def __init__(
+        self,
+        n_prims: int,
+        max_queries: int = 0,
+        bound_type: str = "aabb",
+        genesis_legacy_sort_reduce: bool = False,
+    ) -> None:
         """Create LBVH for *n_prims* primitives.
 
         Args:
@@ -345,6 +352,7 @@ class LBVH:
         # arguments and enter the fastcache key.
         self.sort_end_bit = 64
         self.sort_log256_max_n = 4
+        self.genesis_legacy_sort_reduce_host = bool(genesis_legacy_sort_reduce)
         self.sentinel = 0xFFFFFFFF
         self.stack_capacity = _BVH_STACK_CAPACITY
         self.bvh_block = 256
@@ -394,10 +402,11 @@ class LBVH:
         sort_scratch = max(sort_scratch_slots(padded, self.sort_log256_max_n), 1)
         self.morton = qd.ndarray(qd.u64, (padded,))
         self.morton_tmp = qd.ndarray(qd.u64, (padded,))
-        self.srt_perm = qd.ndarray(qd.u32, (padded,))
-        self.srt_tmp_perm = qd.ndarray(qd.u32, (padded,))
+        self.srt_perm = qd.ndarray(qd.i32, (padded,))
+        self.srt_tmp_perm = qd.ndarray(qd.i32, (padded,))
         self.srt_scratch = qd.ndarray(qd.u32, (sort_scratch,))
         self.srt_n = qd.ndarray(qd.i32, shape=())
+        self.morton_sort = DynamicRadixSort(qd.u64, padded)
 
         # --- Scene AABB reduce workspace ---
         n_blocks = (n_prims + self.bvh_block - 1) // self.bvh_block
@@ -527,11 +536,13 @@ class LBVH:
         """Compute Morton codes from leaf AABB centers, normalized to scene AABB.
 
         Matches cgq ``calc_morton``: each thread reads scene AABB independently.
-        Padding slots filled with max u64 in the same loop.
+        The legacy generic-sort fallback additionally fills its padded tail.
         """
-        padded_n = self.morton.shape[0]
         n = self.n_prims[()]
-        for idx in range(padded_n):
+        sort_count = n
+        if qd.static(self.genesis_legacy_sort_reduce_host):
+            sort_count = self.morton.shape[0]
+        for idx in range(sort_count):
             if idx < n:
                 half = qd.static(self.bounds_width // 2)
                 scene_lx = self.aabbs[0, 0]
@@ -555,25 +566,35 @@ class LBVH:
                 self.morton[idx] = (qd.u64(mc32) << qd.u64(32)) | qd.u64(qd.u32(idx))
             else:
                 self.morton[idx] = qd.u64(0xFFFFFFFFFFFFFFFF)
+            self.srt_perm[idx] = idx
 
     @qd.func(requires_top_level=True)
     def sort_morton(self):
-        """Radix sort Morton keys (u64, all 64 bits).
+        """Sort Morton keys with CGQ's dynamic OneSweep u64 path.
 
-        Matches cgq ``cub::DeviceRadixSort::SortKeys``.
+        The retained generic Quadrants radix sort is an explicit A/B fallback.
         """
-        sort(
-            self.morton,
-            self.morton_tmp,
-            self.srt_perm,
-            self.srt_tmp_perm,
-            self.srt_scratch,
-            self.srt_n,
-            qd.u64,
-            True,
-            self.sort_end_bit,
-            self.sort_log256_max_n,
-        )
+        if qd.static(self.genesis_legacy_sort_reduce_host):
+            sort(
+                self.morton,
+                self.morton_tmp,
+                self.srt_perm,
+                self.srt_tmp_perm,
+                self.srt_scratch,
+                self.srt_n,
+                qd.u64,
+                True,
+                self.sort_end_bit,
+                self.sort_log256_max_n,
+            )
+        else:
+            self.morton_sort.sort(
+                self.morton,
+                self.morton_tmp,
+                self.srt_perm,
+                self.srt_tmp_perm,
+                self.n_prims[()],
+            )
 
     @qd.func(requires_top_level=True)
     def extract_indices(self):
