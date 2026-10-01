@@ -57,34 +57,8 @@ HOME_QPOS = np.array(
 )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--no-gui",
-        action="store_true",
-        help="Run headless for --steps frames",
-    )
-    parser.add_argument("--steps", type=int, default=1)
-    parser.add_argument(
-        "--press-depth",
-        type=float,
-        default=0.0,
-        help="Headless check: command the hand below the tabletop",
-    )
-    parser.add_argument(
-        "--ee-query",
-        choices=("dual", "warp"),
-        default="dual",
-    )
-    parser.add_argument(
-        "--advanced-optimization",
-        action="store_true",
-        help="Enable slower production compilation for maximum steady-state performance",
-    )
-    args = parser.parse_args()
-
-    gs.init(backend=gs.gpu, precision="64", logging_level="info")
-    qd.cfg.advanced_optimization = args.advanced_optimization
+def build_franka_cloth_cube_scene(*, show_viewer: bool):
+    """Build the shared Franka/cloth scene without compiling coupling kernels."""
     scene = gs.Scene(
         sim_options=gs.options.SimOptions(dt=DT),
         coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
@@ -95,7 +69,7 @@ def main() -> None:
             camera_fov=38,
             enable_gui=True,
         ),
-        show_viewer=not args.no_gui,
+        show_viewer=show_viewer,
     )
 
     franka = scene.add_entity(
@@ -159,19 +133,69 @@ def main() -> None:
     )
     franka.set_dofs_kp(100.0, dofs_idx_local=finger_dofs)
     franka.set_dofs_kv(10.0, dofs_idx_local=finger_dofs)
+    return scene, franka, arm_dofs, finger_dofs
 
+
+def build_franka_cloth_cube_engine(scene, *, ee_query: str):
+    """Build the coupling engine used by teleoperation and compile benchmarks."""
     contact_tabular = ContactTabular()
     contact_tabular.default_model(friction_rate=1.0, resistance=1e4)
-    engine = build_scene_engine(
+    return build_scene_engine(
         scene,
         contact_config={
             "contact/d_hat": 1e-3,
             "contact/init_collision_pair_capacity": 20_000,
             "contact/intersection_check": 1,
-            "bvh/ee_query": args.ee_query,
+            "bvh/ee_query": ee_query,
         },
         contact_tabular=contact_tabular,
     )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--no-gui",
+        action="store_true",
+        help="Run headless for --steps frames",
+    )
+    parser.add_argument("--steps", type=int, default=1)
+    parser.add_argument(
+        "--press-depth",
+        type=float,
+        default=0.0,
+        help="Headless check: command the hand below the tabletop",
+    )
+    parser.add_argument(
+        "--ee-query",
+        choices=("dual", "warp"),
+        default="dual",
+    )
+    parser.add_argument(
+        "--advanced-optimization",
+        action="store_true",
+        help="Enable the production compiler policy (advanced optimization and LLVM O3)",
+    )
+    parser.add_argument(
+        "--external-optimization-level",
+        type=int,
+        choices=range(4),
+        default=None,
+        help="Override LLVM optimization level; development defaults to O1 and production to O3",
+    )
+    args = parser.parse_args()
+
+    gs.init(backend=gs.gpu, precision="64", logging_level="info")
+    qd.cfg.advanced_optimization = args.advanced_optimization
+    qd.cfg.external_optimization_level = (
+        args.external_optimization_level
+        if args.external_optimization_level is not None
+        else (3 if args.advanced_optimization else 1)
+    )
+    scene, franka, arm_dofs, finger_dofs = build_franka_cloth_cube_scene(
+        show_viewer=not args.no_gui,
+    )
+    engine = build_franka_cloth_cube_engine(scene, ee_query=args.ee_query)
 
     end_effector = franka.get_link("hand")
     target_home_pos = end_effector.get_pos().cpu().numpy().reshape(3)
