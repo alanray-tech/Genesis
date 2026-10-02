@@ -401,3 +401,31 @@ class GlobalLinearSystem(SimSystem):
                 y_col = block.transpose() @ x_row
                 for r in qd.static(range(3)):
                     qd.atomic_add(y[col * 3 + r], y_col[r])
+
+    @qd.func(requires_top_level=True)
+    def spmv_masked(
+        self,
+        x: qd.template(),
+        y: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        for i in range(self.bcoo_nnz[()]):
+            row = self.bcoo_row[i]
+            if converged[component_labels[row]] == 0:
+                col = self.bcoo_col[i]
+                block = qd.Matrix.zero(qd.f64, 3, 3)
+                for r in qd.static(range(3)):
+                    for c in qd.static(range(3)):
+                        block[r, c] = self.bcoo_val[i * 9 + r * 3 + c]
+
+                x_col = qd.Vector([x[col * 3], x[col * 3 + 1], x[col * 3 + 2]])
+                y_row = block @ x_col
+                for r in qd.static(range(3)):
+                    qd.atomic_add(y[row * 3 + r], y_row[r])
+
+                if row != col:
+                    x_row = qd.Vector([x[row * 3], x[row * 3 + 1], x[row * 3 + 2]])
+                    y_col = block.transpose() @ x_row
+                    for r in qd.static(range(3)):
+                        qd.atomic_add(y[col * 3 + r], y_col[r])

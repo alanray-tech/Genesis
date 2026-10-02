@@ -1,5 +1,6 @@
 from .broad_phase_system import BroadPhaseSystem
 from .builders import build_rigid_engine, build_scene_engine
+from .component_partitioner import ComponentPartitioner
 from .consistent_ipc_contact import ConsistentIPCContactConstitution
 from .contact import ContactElement, ContactModel, ContactTabular
 from .contact_constitution import ContactConstitution
@@ -16,10 +17,11 @@ from .global_linear_system import GlobalLinearSystem
 from .global_surface_manager import GlobalSurfaceManager
 from .global_vertex_manager import GlobalVertexManager
 from .lbvh_broad_phase import InfoLBVHBatchedBroadPhaseDop14, LBVHBroadPhase
+from .partition_pcg_solver import PartitionPCGSolver
 from .rigid_contact_assemble import RigidContactAssemble
 from .rigid_contact_proxy import RigidContactProxyGeometry, RigidContactProxySystem
 from .rigid_joint_forest import RigidJointForestSystem
-from .rigid_system import RigidSystem
+from .rigid_system import RIGID_DYNAMICS_BACKENDS, RigidSystem, validate_rigid_dynamics_backend
 from .sim_config import SimConfig
 from .sim_engine import SimEngine
 from .sim_system import SimSystem
@@ -27,7 +29,9 @@ from .standard_pcg_solver import StandardPCGSolver
 
 __all__ = [
     "FEMBDF1",
+    "RIGID_DYNAMICS_BACKENDS",
     "BroadPhaseSystem",
+    "ComponentPartitioner",
     "ConsistentIPCContactConstitution",
     "ContactConstitution",
     "ContactElement",
@@ -44,6 +48,7 @@ __all__ = [
     "GlobalVertexManager",
     "InfoLBVHBatchedBroadPhaseDop14",
     "LBVHBroadPhase",
+    "PartitionPCGSolver",
     "RigidContactAssemble",
     "RigidContactProxyGeometry",
     "RigidContactProxySystem",
@@ -55,4 +60,5 @@ __all__ = [
     "StandardPCGSolver",
     "build_rigid_engine",
     "build_scene_engine",
+    "validate_rigid_dynamics_backend",
 ]

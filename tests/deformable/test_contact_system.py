@@ -33,6 +33,8 @@ def make_contact_grid(path, n=3, size=0.2, height=0.5):
 
 def test_contact_parameter_manifest_defaults():
     assert dict(CONTACT_CONFIG_DEFAULTS) == {
+        "rigid/dynamics_backend": "genesis",
+        "rigid/joint_limit_kappa": 1.0e6,
         "contact/enable": 1,
         "contact/d_hat": 0.01,
         "contact/max_step_in_d_hat": -1.0,
@@ -46,6 +48,8 @@ def test_contact_parameter_manifest_defaults():
         "contact/intersection_check_capacity": 1_024,
         "contact/constitution": "auto",
         "friction/eps_v": 1e-2,
+        "linear_system/solver": "partition_pcg",
+        "linear_system/partition_sv_max_iter": 64,
         "linear_system/tol_rate": 1e-4,
         "extras/capacity_grow_factor": 1.2,
         "extras/capacity_shrink_threshold": 0.8,

@@ -698,15 +698,27 @@ CGQ target:
 
 - Masked/fused PCG node layout and convergence masking.
 
-### PERF-L05: No component masking
+### PERF-L05: Component masking
 
-Current:
+Implementation:
 
-- Converged disconnected components continue participating in PCG.
+- `partition_pcg` is the default, with `linear_pcg` retained as the matched
+  global-solver fallback.
+- A graph-native fast-SV pass merges static FEM/rigid/forest/proxy
+  connectivity with the live BCOO graph before every solve.
+- Per-component PCG scalars and convergence masks skip converged BCOO, FEM,
+  rigid matrix-free, forest/proxy, preconditioner, reduction, and vector work.
+- A fast-SV iteration-cap hit safely collapses to one component.
 
-CGQ target:
+Evidence:
 
-- Static component labels and MaskedPCG skip work per converged component.
+- Unit coverage includes static/live edges and the safe global fallback.
+- QCloth covers single-component parity and disconnected two-body labels.
+- Genesis and CGQ MinCoo proxy-KKT tests cover reduced tree/proxy component
+  representatives.
+
+Status: **closed for the Hessian solve**. Component-partitioned CCD remains
+tracked separately by PERF-D02.
 
 ### PERF-L06: FEM diagonal preconditioner gather
 
@@ -1673,6 +1685,53 @@ measured window, minimum reported CCD alpha was `1.0` in Genesis versus
 the same semantics, so line-search counts were excluded from the comparison.
 These observations prohibit using the impact cases as strict equal-work
 evidence; they do not change the no-contact control result.
+
+## Future Quadrants runtime experiments
+
+### CGQ-style automatic grid and block selection
+
+Current:
+
+- CGQ's default `GridStrideKernel<KernelFunc, -1>` calls
+  `cudaOccupancyMaxPotentialBlockSize` and caches both the suggested grid and
+  block dimensions. Its explicit-`BlockDim` path instead calls
+  `cudaOccupancyMaxActiveBlocksPerMultiprocessor` and derives the resident grid
+  from the SM count.
+- Quadrants commit `12119f03e` implements only the second half of that policy.
+  An unspecified loop block size is currently lowered to
+  `default_gpu_block_dim=128`; after JIT, QD calls
+  `cuOccupancyMaxActiveBlocksPerMultiprocessor` and
+  `cuDeviceGetAttribute(..., CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, ...)` to
+  clamp the grid to one resident wave.
+
+Proposed experiment:
+
+- Preserve the user-unspecified `block_dim == 0` state through offload,
+  codegen, and offline-cache serialization.
+- After CUDA JIT, call `cuOccupancyMaxPotentialBlockSize` once per eligible
+  compiled kernel, cache the selected `(grid_dim, block_dim)`, and use the same
+  pair in graph and streaming launchers.
+- Preserve `qd.loop_config(block_dim=N)` exactly. Kernels whose generated code
+  depends on a compile-time block size--including block collectives,
+  block-local/shared-memory layouts, and relevant adstack paths--must retain
+  the fixed-block path unless that lowering is first made runtime-block-safe.
+- Treat the CUDA result as occupancy-optimal, not automatically
+  throughput-optimal. Accept the change only after matched A/B profiles across
+  simple range kernels, contact/PCG kernels, Franka-Cloth, and the pure-cloth
+  suite.
+
+Required validation:
+
+- Graph and non-graph launch parity, dynamic-range replay, checkpoint resume,
+  offline-cache reload, explicit-block preservation, and dynamic shared-memory
+  coverage.
+- Numerical and overflow parity with the fixed-128 baseline.
+- Recorded selected launch dimensions, occupancy, kernel time, graph span, and
+  end-to-end runtime; no scene-specific launch policy is admissible.
+
+Status: **open future Quadrants experiment**. This is the remaining
+launch-policy difference from CGQ's generic `GridStrideKernel`; it is not a
+Genesis-side workaround target.
 
 ## Compile-time and memory-layout debt
 

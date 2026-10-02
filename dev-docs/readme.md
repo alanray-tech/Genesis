@@ -8,7 +8,10 @@ Read these documents before changing the Rigid Newton framework:
 4. [CGQ contact parameter manifest](cgq-contact-parameter-manifest.md)
 5. [Contact performance debt register](contact-performance-debt.md)
 6. [Reduced-KKT contact proxy migration](reduced-kkt-migration.md)
-7. [Quadrants compile-speed optimization handoff](quadrants-compile-speed-optimization-handoff.md)
+7. [CGQ MinCoo rigid dynamics backend](cgq-mincoo-rigid-backend.md)
+8. [Quadrants compile-speed optimization handoff](quadrants-compile-speed-optimization-handoff.md)
+9. [Static graph composition and data-oriented rationale](data-oriented-static-dispatch-rationale.md)
+10. [Component-partitioned PCG](partition-pcg.md)
 
 Hard admission gate: production and milestone runtime code must be
 load-balanced and must use the most efficient applicable warp/subgroup-level

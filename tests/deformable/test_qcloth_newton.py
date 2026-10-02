@@ -99,7 +99,12 @@ def test_qcloth_graph_step(tmp_path, show_viewer):
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])
-def test_qcloth_freefall_matches_cgq_converged_step(tmp_path, show_viewer):
+@pytest.mark.parametrize("linear_solver", ["partition_pcg", "linear_pcg"])
+def test_qcloth_freefall_matches_cgq_converged_step(
+    tmp_path,
+    linear_solver,
+    show_viewer,
+):
     path = tmp_path / "qcloth_freefall.obj"
     make_grid(path)
     dt = 0.01
@@ -127,9 +132,11 @@ def test_qcloth_freefall_matches_cgq_converged_step(tmp_path, show_viewer):
         scene,
         contact_config={
             "contact/enable": 0,
+            "linear_system/solver": linear_solver,
             "linear_system/tol_rate": 1.0e-10,
         },
     )
+    assert engine.linear_solver_name == linear_solver
 
     expected_bending_stiffness = bending_youngs_modulus * (2.0 * thickness) ** 3 / 12.0
     np.testing.assert_allclose(
@@ -158,18 +165,28 @@ def test_qcloth_global_managers_two_entities(tmp_path, show_viewer):
     path = tmp_path / "qcloth_grid.obj"
     make_grid(path)
     scene = gs.Scene(show_viewer=show_viewer)
-    material = gs.materials.FEM.QCloth(E=1e4, thickness=1e-3)
     scene.add_entity(
         morph=gs.morphs.Mesh(file=str(path)),
-        material=material,
+        material=gs.materials.FEM.QCloth(E=1e4, thickness=1e-3),
     )
     scene.add_entity(
         morph=gs.morphs.Mesh(file=str(path), pos=(0.3, 0.0, 0.2)),
-        material=material,
+        material=gs.materials.FEM.QCloth(E=1e6, thickness=1e-3),
     )
     scene.build(compile_kernels=False)
 
     engine = build_scene_engine(scene)
+    component_labels = qd_to_numpy(engine.component_partitioner.comp_label)[:18]
+    assert int(qd_to_numpy(engine.component_partitioner.K)) == 2
+    np.testing.assert_array_equal(
+        component_labels[:9],
+        np.full(9, component_labels[0], dtype=np.int32),
+    )
+    np.testing.assert_array_equal(
+        component_labels[9:],
+        np.full(9, component_labels[9], dtype=np.int32),
+    )
+    assert component_labels[0] != component_labels[9]
     np.testing.assert_array_equal(qd_to_numpy(engine.global_vertex_manager.n_verts), 18)
     np.testing.assert_array_equal(qd_to_numpy(engine.global_body_manager.n_bodies), 2)
     np.testing.assert_array_equal(
@@ -192,6 +209,14 @@ def test_qcloth_global_managers_two_entities(tmp_path, show_viewer):
     )
 
     engine.step()
+    component_count = int(qd_to_numpy(engine.component_partitioner.K))
+    assert component_count == 2
+    component_iterations = qd_to_numpy(engine.pcg_solver.linear_pcg.component_iterations)[:component_count]
+    assert int(qd_to_numpy(engine.pcg_solver.linear_pcg.n_iterations)) == int(component_iterations.max(initial=0))
+    np.testing.assert_array_equal(
+        qd_to_numpy(engine.pcg_solver.linear_pcg.converged)[:component_count],
+        np.ones(component_count, dtype=np.int32),
+    )
     np.testing.assert_allclose(
         qd_to_numpy(engine.global_vertex_manager.positions)[:18],
         qd_to_numpy(engine.fem.x)[:18],

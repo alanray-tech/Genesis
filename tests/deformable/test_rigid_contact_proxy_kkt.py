@@ -653,7 +653,8 @@ def test_proxy_contact_routes_emit_cgq_block_counts():
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])
-def test_standard_pcg_kkt_builder_path():
+@pytest.mark.parametrize("rigid_backend", ["genesis", "cgq_mincoo"])
+def test_partition_pcg_kkt_builder_path(rigid_backend):
     scene = gs.Scene(
         coupler_options=gs.options.LegacyCouplerOptions(rigid_fem=False),
     )
@@ -674,14 +675,32 @@ def test_standard_pcg_kkt_builder_path():
     scene.build(compile_kernels=False)
     cloth.set_vertex_constraints([0, 4, 20, 24])
 
-    engine = build_scene_engine(scene, contact_config={})
+    engine = build_scene_engine(
+        scene,
+        contact_config={"rigid/dynamics_backend": rigid_backend},
+    )
+    assert engine.linear_solver_name == "partition_pcg"
     assert engine.rigid_contact_proxy is not None
     assert engine.rigid_forest is not None
     assert engine.rigid_contact_assemble is not None
     assert engine.rigid_forest.selected_path == "cgq_tree"
-    engine.step()
-
+    labels = qd_to_numpy(engine.component_partitioner.comp_label)
+    assert int(qd_to_numpy(engine.component_partitioner.K)) == 2
+    proxy_block = int(qd_to_numpy(engine.rigid_forest.proxy_dof_offset)) // 3
+    fem_block = int(qd_to_numpy(engine.fem.dof_offset)) // 3
+    assert labels[0] == labels[proxy_block]
+    assert labels[proxy_block] == labels[proxy_block + 1]
+    assert labels[fem_block] != labels[proxy_block]
     mechanism = int(qd_to_numpy(engine.rigid_contact_proxy.mechanism_body)[0])
+    tree = int(qd_to_numpy(engine.rigid_forest.tree_id)[mechanism])
+    tree_block = int(qd_to_numpy(engine.rigid_forest.component_block_row)[tree])
+    assert tree_block >= 0
+    assert labels[tree_block] == labels[proxy_block]
+    engine.step()
+    labels = qd_to_numpy(engine.component_partitioner.comp_label)
+    assert int(qd_to_numpy(engine.component_partitioner.K)) == 2
+    assert labels[fem_block] != labels[proxy_block]
+
     link = mechanism % engine.rigid_contact_proxy.n_links_host
     mechanism_position = (
         scene.rigid_solver.get_links_pos(links_idx=np.array([link], dtype=np.int32)).cpu().numpy().reshape(-1, 3)[0]

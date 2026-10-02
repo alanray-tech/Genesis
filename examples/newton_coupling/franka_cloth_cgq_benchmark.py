@@ -88,6 +88,18 @@ def main() -> None:
     parser.add_argument("--disable-contact-model", action="store_true")
     parser.add_argument("--fix-cloth", action="store_true")
     parser.add_argument(
+        "--rigid-backend",
+        choices=("genesis", "cgq_mincoo"),
+        default="genesis",
+        help="select the rigid dynamics implementation",
+    )
+    parser.add_argument(
+        "--linear-solver",
+        choices=("linear_pcg", "partition_pcg"),
+        default="partition_pcg",
+        help="select global or component-partitioned PCG",
+    )
+    parser.add_argument(
         "--genesis-collision",
         action="store_true",
         help="retain Genesis native rigid collision as an A/B fallback",
@@ -203,6 +215,8 @@ def main() -> None:
     engine = build_scene_engine(
         scene,
         contact_config={
+            "rigid/dynamics_backend": args.rigid_backend,
+            "linear_system/solver": args.linear_solver,
             "contact/d_hat": 1e-3,
             "contact/init_collision_pair_capacity": 20_000,
             "contact/intersection_check": 0,
@@ -241,6 +255,7 @@ def main() -> None:
     max_disp = []
     proxy_residual = []
     contact_info = []
+    partition_components = []
     rigid_q = []
     fem_x = []
     for frame in range(args.frames):
@@ -264,6 +279,9 @@ def main() -> None:
                 int(qd_to_numpy(engine.contact.n_pairs_ee)),
                 int(qd_to_numpy(engine.contact.n_active_pairs)),
             ]
+        )
+        partition_components.append(
+            int(qd_to_numpy(engine.component_partitioner.K)) if engine.component_partitioner is not None else 1
         )
         rigid_q.append(np.asarray(franka.get_qpos().cpu(), dtype=np.float64).reshape(-1).tolist())
         if args.state_output is not None:
@@ -293,6 +311,9 @@ def main() -> None:
         "bending": "quadratic",
         "contact_d_hat": 1e-3,
         "linear_tolerance_rate": 1e-5,
+        "linear_solver": engine.linear_solver_name,
+        "partition_components": partition_components,
+        "rigid_backend": engine.rigid.dynamics_backend,
         "pt_query": args.pt_query,
         "genesis_legacy_fp64_bounds": args.genesis_legacy_fp64_bounds,
         "genesis_legacy_refit": args.genesis_legacy_refit,
