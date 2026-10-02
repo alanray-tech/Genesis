@@ -46,6 +46,12 @@ class ContactCheckpoint(IntEnum):
     INITIAL_INTERSECTION = 11
     ET_OVERFLOW = 12
     ET_FAILURE = 13
+    SOLVE_POST = 14
+    LINE_SEARCH_TRIAL = 15
+    PCG_INIT = 16
+    PCG_ITERATION = 17
+    PCG_FINISH = 18
+    LINE_SEARCH_POST = 19
 
 
 @qd.data_oriented
@@ -641,8 +647,13 @@ class SimEngine:
                     self.rigid_forest.project_physical_rhs(self.global_linear_system)
                     self.rigid_forest.build_preconditioner(self.global_linear_system)
 
+            # SORT yields before an undersized triplet buffer can reach this solve. Keep the child WHILE outside the
+            # explicit SOLVE checkpoint, and gate each inlined qd.func stage explicitly: checkpoint auto-wrapping does
+            # not currently propagate across a top-level qd.func call that follows a yielding checkpoint
+            # (Quadrants #956).
+            with qd.checkpoint(ContactCheckpoint.PCG_INIT, yield_on=self.checkpoint_never_yield):
                 if qd.static(True):
-                    self.pcg_solver.solve(
+                    self.pcg_solver.linear_pcg.initialize(
                         self.global_linear_system,
                         self.rigid,
                         self.rigid_forest,
@@ -650,14 +661,34 @@ class SimEngine:
                         self.has_rigid,
                         self.has_rigid_forest,
                         self.has_fem,
-                        self.sim_config.max_pcg_iter[()],
                     )
+
+            while qd.graph.do_while(self.pcg_solver.linear_pcg.condition):
+                with qd.checkpoint(ContactCheckpoint.PCG_ITERATION, yield_on=self.checkpoint_never_yield):
+                    if qd.static(True):
+                        self.pcg_solver.linear_pcg.iteration(
+                            self.global_linear_system,
+                            self.rigid,
+                            self.rigid_forest,
+                            self.fem_preconditioner,
+                            self.has_rigid,
+                            self.has_rigid_forest,
+                            self.has_fem,
+                            self.pcg_solver.pcg_tol_rate[()],
+                            self.sim_config.max_pcg_iter[()],
+                        )
+
+            with qd.checkpoint(ContactCheckpoint.PCG_FINISH, yield_on=self.checkpoint_never_yield):
+                for _ in range(1):
                     self.max_pcg_iters[()] = qd.max(
                         self.max_pcg_iters[()],
                         self.pcg_solver.linear_pcg.n_iterations[()],
                     )
                     self.total_pcg_iters[()] = self.total_pcg_iters[()] + self.pcg_solver.linear_pcg.n_iterations[()]
 
+            # Keep all post-PCG qd.func calls under a flat gate as well. Otherwise an earlier capacity yield can skip
+            # direct kernel tasks but still enter one of these inlined functions.
+            with qd.checkpoint(ContactCheckpoint.SOLVE_POST, yield_on=self.checkpoint_never_yield):
                 if qd.static(self.has_rigid):
                     self.rigid.negate_dq(
                         self.global_linear_system,
@@ -826,22 +857,25 @@ class SimEngine:
                     self.ls_cond[()] = 1
                     self.ls_iter[()] = 0
 
-                while qd.graph.do_while(self.ls_cond):
-                    trial_alpha = self.alpha[()]
-                    if self.pcg_solver.linear_pcg.is_failed[()] != 0:
-                        trial_alpha = qd.f64(0.0)
+            # No line-search operation can yield to the host. Its child WHILE stays outside the explicit phase marker,
+            # while each inlined trial stage gets a flat gate for the same qd.func suffix workaround as PCG.
+            while qd.graph.do_while(self.ls_cond):
+                with qd.checkpoint(ContactCheckpoint.LINE_SEARCH_TRIAL, yield_on=self.checkpoint_never_yield):
+                    for _ in range(1):
+                        if self.pcg_solver.linear_pcg.is_failed[()] != 0:
+                            self.alpha[()] = qd.f64(0.0)
 
                     if qd.static(self.has_rigid):
-                        self.rigid.step_forward(trial_alpha)
+                        self.rigid.step_forward(self.alpha[()])
                         self.rigid.energy(self.sim_config)
                     if qd.static(self.has_rigid_forest):
                         self.rigid_forest.compute_endpoint_fk()
                     if qd.static(self.has_fem):
-                        self.fem.step_forward(trial_alpha)
+                        self.fem.step_forward(self.alpha[()])
                         self.fem.forward_global_vertices(self.global_vertex_manager)
                         self.fem.energy(self.sim_config)
                     if qd.static(self.has_rigid_contact_proxy):
-                        self.rigid_contact_proxy.step_forward(trial_alpha)
+                        self.rigid_contact_proxy.step_forward(self.alpha[()])
                         self.rigid_contact_proxy.forward_global_vertices(self.global_vertex_manager)
                         self.rigid_contact_proxy.evaluate_trial_guard()
                     if qd.static(self.has_contact):
@@ -924,7 +958,7 @@ class SimEngine:
                                 accepted = self.rigid_contact_proxy.check_line_search(
                                     self.energy_buf[0],
                                     self.energy_buf[0] + self.energy_delta[()],
-                                    trial_alpha,
+                                    self.alpha[()],
                                     self.ls_iter[()],
                                     self.sim_config.max_ls_iter[()],
                                     exhausted,
@@ -945,6 +979,8 @@ class SimEngine:
                             if self.ls_iter[()] >= self.sim_config.max_ls_iter[()]:
                                 self.ls_cond[()] = 0
 
+            # Post-acceptance qd.func calls need an explicit gate too: QUERY may have yielded before reaching them.
+            with qd.checkpoint(ContactCheckpoint.LINE_SEARCH_POST, yield_on=self.checkpoint_never_yield):
                 for _ in range(1):
                     if self.pcg_solver.linear_pcg.is_failed[()] != 0:
                         self.alpha[()] = qd.f64(0.0)

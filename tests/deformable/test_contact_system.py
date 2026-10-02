@@ -7,6 +7,7 @@ import trimesh
 import genesis as gs
 from genesis.engine.systems import ContactTabular, build_scene_engine
 from genesis.engine.systems.contact import CONTACT_CONFIG_DEFAULTS
+from genesis.engine.systems.sim_engine import ContactCheckpoint
 from genesis.utils.misc import qd_to_numpy
 
 
@@ -160,6 +161,48 @@ def test_contact_checkpoint_capacity_growth(tmp_path, show_viewer):
     assert int(qd_to_numpy(engine.global_linear_system.max_triplets)) >= int(
         qd_to_numpy(engine.global_linear_system.n_triplets)
     )
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_contact_checkpoint_yield_skips_pcg(tmp_path, show_viewer):
+    """Pin Quadrants #956's qd.func suffix workaround: a SORT yield must leave PCG completely untouched."""
+    path = tmp_path / "contact_grid.obj"
+    make_contact_grid(path, height=0.008)
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(dt=0.01),
+        show_viewer=show_viewer,
+    )
+    scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(path)),
+        material=gs.materials.FEM.QCloth(E=1e4, thickness=1e-3),
+    )
+    scene.build(compile_kernels=False)
+    engine = build_scene_engine(
+        scene,
+        contact_config={},
+        halfplanes=(
+            np.array([[0.0, 0.0, 0.0]], dtype=np.float64),
+            np.array([[0.0, 0.0, 1.0]], dtype=np.float64),
+        ),
+    )
+
+    sentinel = 123
+    engine.global_linear_system.max_triplets.from_numpy(np.array(1, dtype=np.int32))
+    engine.pcg_solver.linear_pcg.n_iterations.from_numpy(np.array(sentinel, dtype=np.int32))
+    status = engine._step_kernel(
+        engine.contact.overflow_flag,
+        engine.contact.count_overflow_flag,
+        engine.contact.contact_padding_overflow,
+        engine.global_linear_system.triplet_overflow,
+        engine.contact.friction_overflow_flag,
+        engine.contact.et_overflow_flag,
+    )
+
+    assert status.yielded
+    assert status.checkpoint == ContactCheckpoint.SORT
+    assert int(qd_to_numpy(engine.pcg_solver.linear_pcg.n_iterations)) == sentinel
 
 
 @pytest.mark.required
