@@ -6,7 +6,7 @@ from quadrants.lang import impl
 import genesis as gs
 from genesis.engine.systems import build_scene_engine
 from genesis.engine.systems.finite_element import QuadraticBending
-from genesis.utils.misc import qd_to_numpy
+from genesis.utils.misc import qd_to_numpy, tensor_to_array
 
 
 def make_grid(path, n=3, size=0.2):
@@ -94,6 +94,50 @@ def test_qcloth_graph_step(tmp_path, show_viewer):
     assert np.isfinite(final).all()
     np.testing.assert_array_equal(final[[0, 2]], initial[[0, 2]])
     assert final[4, 2] < initial[4, 2]
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
+def test_newton_coupler_scene_step_and_reset(tmp_path, show_viewer):
+    path = tmp_path / "newton_coupler_grid.obj"
+    make_grid(path)
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(dt=0.01),
+        coupler_options=gs.options.NewtonCouplerOptions(),
+        show_viewer=show_viewer,
+    )
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(path)),
+        material=gs.materials.FEM.QCloth(E=1e4, thickness=1e-3),
+    )
+    scene.build()
+    cloth.set_vertex_constraints([0, 2])
+
+    with pytest.raises(RuntimeError, match="created lazily"):
+        scene.sim.coupler.engine
+    initial = np.squeeze(tensor_to_array(cloth.get_state().pos), axis=0).copy()
+    for _ in range(3):
+        scene.step()
+    first_final = np.squeeze(tensor_to_array(cloth.get_state().pos), axis=0).copy()
+    first_engine = scene.sim.coupler.engine
+
+    assert scene.sim.cur_step_global == 3
+    assert np.isfinite(first_final).all()
+    np.testing.assert_array_equal(first_final[[0, 2]], initial[[0, 2]])
+    assert first_final[4, 2] < initial[4, 2]
+    assert int(qd_to_numpy(first_engine.frame_failed)) == 0
+
+    scene.reset()
+    assert scene.sim.cur_step_global == 0
+    reset_state = np.squeeze(tensor_to_array(cloth.get_state().pos), axis=0)
+    np.testing.assert_allclose(reset_state, initial, rtol=0.0, atol=1e-12)
+    for _ in range(3):
+        scene.step()
+    second_final = np.squeeze(tensor_to_array(cloth.get_state().pos), axis=0)
+
+    assert scene.sim.cur_step_global == 3
+    np.testing.assert_allclose(second_final, first_final, rtol=1e-10, atol=1e-12)
 
 
 @pytest.mark.required

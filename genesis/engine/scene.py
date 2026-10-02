@@ -879,7 +879,7 @@ class Scene(RBC):
             self._desc_digest = description_digest(self._desc)
             self._is_built = True
 
-        if compile_kernels:
+        if compile_kernels and not getattr(self._sim.coupler, "defer_build_warmup", False):
             with gs.logger.timer("Compiling simulation kernels..."):
                 self._sim.step()
                 self._reset()

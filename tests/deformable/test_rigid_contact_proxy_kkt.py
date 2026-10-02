@@ -888,6 +888,57 @@ def test_cloth_drapes_on_fixed_proxy_box():
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])
+def test_newton_coupler_cloth_drapes_on_fixed_proxy_box():
+    cube_top = 0.08
+    cloth_resolution = 25
+    scene = gs.Scene(
+        sim_options=gs.options.SimOptions(dt=0.01),
+        coupler_options=gs.options.NewtonCouplerOptions(
+            contact_d_hat=1e-3,
+            contact_friction_mu=0.05,
+            contact_resistance=1e4,
+        ),
+    )
+    scene.add_entity(
+        morph=gs.morphs.Box(
+            pos=(0.0, 0.0, 0.04),
+            size=(0.08, 0.08, 0.08),
+            fixed=True,
+        ),
+        vis_mode="collision",
+    )
+    cloth = scene.add_entity(
+        morph=gs.morphs.Mesh(
+            file=str(cloth_grid_asset(resolution=cloth_resolution)),
+            pos=(0.0, 0.0, 0.14),
+        ),
+        material=gs.materials.FEM.QCloth(
+            E=2e4,
+            shear_modulus=2e3,
+            rho=200.0,
+            thickness=1e-3,
+            bending_youngs_modulus=3e3,
+        ),
+    )
+    scene.build()
+
+    maximum_proxy_doublets = 0
+    for _ in range(120):
+        scene.step()
+        maximum_proxy_doublets = max(
+            maximum_proxy_doublets,
+            int(qd_to_numpy(scene.sim.coupler.engine.rigid_contact_assemble.rigid_doublet_total)),
+        )
+
+    center_vertex = cloth_resolution * cloth_resolution // 2
+    center_height = float(cloth.get_state().pos.reshape(-1, 3)[center_vertex, 2])
+    assert maximum_proxy_doublets > 0
+    assert center_height > cube_top
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
 def test_franka_forest_paths_match_P_and_PT():
     scene = gs.Scene(
         sim_options=gs.options.SimOptions(dt=0.01),
