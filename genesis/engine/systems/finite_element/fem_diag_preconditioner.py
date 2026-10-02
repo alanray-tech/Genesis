@@ -59,3 +59,28 @@ class FEMDiagPreconditioner(SimSystem):
                 for j in qd.static(range(3)):
                     value = value + self.precond_inv_diag[i_vert, i * 3 + j] * residual[global_offset + j]
                 result[global_offset + i] = value
+
+    @qd.func(requires_top_level=True)
+    def apply_masked(
+        self,
+        residual: qd.template(),
+        result: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        block_offset = self.fem.dof_offset[()] // 3
+        for i_vert in range(self.fem.n_fem_verts[()]):
+            if converged[component_labels[block_offset + i_vert]] == 0:
+                global_offset = self.fem.dof_offset[()] + i_vert * 3
+                for i in qd.static(range(3)):
+                    value = qd.f64(0.0)
+                    for j in qd.static(range(3)):
+                        value = (
+                            value
+                            + self.precond_inv_diag[
+                                i_vert,
+                                i * 3 + j,
+                            ]
+                            * residual[global_offset + j]
+                        )
+                    result[global_offset + i] = value

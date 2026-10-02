@@ -6,6 +6,7 @@ import numpy as np
 
 from genesis.engine.solvers.rigid.rigid_solver import RigidSolver
 
+from .component_partitioner import ComponentPartitioner
 from .consistent_ipc_contact import ConsistentIPCContactConstitution
 from .contact import CONTACT_CONFIG_DEFAULTS, ContactTabular
 from .contact_system import ContactSystem
@@ -22,20 +23,77 @@ from .global_linear_system import GlobalLinearSystem
 from .global_surface_manager import GlobalSurfaceManager
 from .global_vertex_manager import GlobalVertexManager
 from .lbvh_broad_phase import InfoLBVHBatchedBroadPhaseDop14, LBVHBroadPhase
+from .partition_pcg_solver import PartitionPCGSolver
 from .rigid_contact_assemble import RigidContactAssemble
 from .rigid_contact_proxy import RigidContactProxyGeometry, RigidContactProxySystem
 from .rigid_joint_forest import RigidJointForestSystem
-from .rigid_system import RigidSystem
+from .rigid_system import RigidSystem, validate_rigid_dynamics_backend
 from .sim_engine import SimEngine
 from .standard_pcg_solver import StandardPCGSolver
 
+LINEAR_SYSTEM_SOLVERS = ("linear_pcg", "partition_pcg")
 
-def build_rigid_engine(rigid_solver: RigidSolver) -> SimEngine:
-    """Build the retained Genesis Rigid adapter in the CGQ engine lifecycle."""
+
+def _resolve_system_config(config: Mapping[str, object] | None) -> dict[str, object]:
+    resolved = dict(CONTACT_CONFIG_DEFAULTS)
+    if config is not None:
+        unknown = set(config) - set(CONTACT_CONFIG_DEFAULTS)
+        if unknown:
+            raise ValueError(f"Unknown CGQ system config keys: {sorted(unknown)}")
+        resolved.update(config)
+    resolved["rigid/dynamics_backend"] = validate_rigid_dynamics_backend(resolved["rigid/dynamics_backend"])
+    joint_limit_kappa = float(resolved["rigid/joint_limit_kappa"])
+    if joint_limit_kappa < 0.0:
+        raise ValueError("rigid/joint_limit_kappa must be non-negative")
+    resolved["rigid/joint_limit_kappa"] = joint_limit_kappa
+    linear_solver = str(resolved["linear_system/solver"])
+    if linear_solver not in LINEAR_SYSTEM_SOLVERS:
+        raise ValueError(f"linear_system/solver must be one of {LINEAR_SYSTEM_SOLVERS}, got {linear_solver!r}")
+    resolved["linear_system/solver"] = linear_solver
+    partition_sv_max_iter = int(resolved["linear_system/partition_sv_max_iter"])
+    if partition_sv_max_iter <= 0:
+        raise ValueError("linear_system/partition_sv_max_iter must be positive")
+    resolved["linear_system/partition_sv_max_iter"] = partition_sv_max_iter
+    return resolved
+
+
+def _add_linear_solver(
+    engine: SimEngine,
+    resolved_config: Mapping[str, object],
+) -> None:
+    solver = str(resolved_config["linear_system/solver"])
+    if solver == "linear_pcg":
+        engine.add_system(StandardPCGSolver())
+    else:
+        engine.add_system(ComponentPartitioner())
+        engine.add_system(
+            PartitionPCGSolver(
+                max_sv_iter=int(resolved_config["linear_system/partition_sv_max_iter"]),
+            )
+        )
+
+
+def build_rigid_engine(
+    rigid_solver: RigidSolver,
+    *,
+    config: Mapping[str, object] | None = None,
+) -> SimEngine:
+    """Build a selectable Genesis or CGQ MinCoo rigid dynamics engine."""
+    resolved_config = _resolve_system_config(config)
     engine = SimEngine()
     engine.add_system(GlobalLinearSystem())
-    engine.add_system(StandardPCGSolver())
-    engine.add_system(RigidSystem(rigid_solver))
+    _add_linear_solver(engine, resolved_config)
+    rigid = RigidSystem(
+        rigid_solver,
+        dynamics_backend=str(resolved_config["rigid/dynamics_backend"]),
+        joint_limit_kappa=float(resolved_config["rigid/joint_limit_kappa"]),
+    )
+    engine.add_system(rigid)
+    if rigid.uses_cgq_mincoo:
+        rigid_forest = RigidJointForestSystem(rigid_solver)
+        rigid_forest.configure(bool(int(resolved_config["rigid_forest/fused"])))
+        rigid_forest.configure_genesis_legacy(bool(int(resolved_config["extras/rigid_forest/genesis_legacy"])))
+        engine.add_system(rigid_forest)
     engine.build_systems()
     engine.wire_solver_params(
         dt=rigid_solver._substep_dt,
@@ -60,12 +118,7 @@ def build_scene_engine(
     finite_element = FiniteElement()
     has_fem = finite_element.init(scene)
     contact_requested = contact_config is not None
-    resolved_contact_config = dict(CONTACT_CONFIG_DEFAULTS)
-    if contact_config is not None:
-        unknown = set(contact_config) - set(CONTACT_CONFIG_DEFAULTS)
-        if unknown:
-            raise ValueError(f"Unknown CGQ contact config keys: {sorted(unknown)}")
-        resolved_contact_config.update(contact_config)
+    resolved_contact_config = _resolve_system_config(contact_config)
     enable_contact = contact_requested and bool(resolved_contact_config["contact/enable"])
     if enable_contact and not has_fem:
         raise RuntimeError("The current ContactSystem milestone requires FiniteElementMethod")
@@ -85,13 +138,30 @@ def build_scene_engine(
             genesis_legacy_sort_reduce=genesis_legacy_sort_reduce,
         )
     )
-    engine.add_system(StandardPCGSolver())
+    _add_linear_solver(engine, resolved_contact_config)
+    rigid_forest = None
     if scene.rigid_solver.is_active:
-        rigid = RigidSystem(scene.rigid_solver)
-        rigid.configure_genesis_collision(
-            not enable_contact or bool(int(resolved_contact_config["extras/rigid_contact/genesis_collision"]))
+        rigid = RigidSystem(
+            scene.rigid_solver,
+            dynamics_backend=str(resolved_contact_config["rigid/dynamics_backend"]),
+            joint_limit_kappa=float(resolved_contact_config["rigid/joint_limit_kappa"]),
         )
+        if rigid.uses_cgq_mincoo:
+            rigid.configure_genesis_collision(False)
+            if bool(int(resolved_contact_config["extras/rigid_contact/genesis_collision"])):
+                raise ValueError("extras/rigid_contact/genesis_collision is incompatible with cgq_mincoo")
+        else:
+            rigid.configure_genesis_collision(
+                not enable_contact or bool(int(resolved_contact_config["extras/rigid_contact/genesis_collision"]))
+            )
         engine.add_system(rigid)
+        if rigid.uses_cgq_mincoo:
+            rigid_forest = RigidJointForestSystem(scene.rigid_solver)
+            rigid_forest.configure(bool(int(resolved_contact_config["rigid_forest/fused"])))
+            rigid_forest.configure_genesis_legacy(
+                bool(int(resolved_contact_config["extras/rigid_forest/genesis_legacy"]))
+            )
+            engine.add_system(rigid_forest)
 
     fem = None
     bdf1 = None
@@ -99,7 +169,6 @@ def build_scene_engine(
     bending = None
     fem_preconditioner = None
     rigid_contact_proxy = None
-    rigid_forest = None
     rigid_contact_assemble = None
     if has_fem:
         global_body_manager = GlobalBodyManager()
@@ -155,17 +224,17 @@ def build_scene_engine(
                 engine.add_system(system)
             if rigid_proxy_geometry is not None:
                 rigid_contact_proxy = RigidContactProxySystem()
-                rigid_forest = RigidJointForestSystem(scene.rigid_solver)
-                rigid_forest.configure(bool(int(resolved_contact_config["rigid_forest/fused"])))
-                rigid_forest.configure_genesis_legacy(
-                    bool(int(resolved_contact_config["extras/rigid_forest/genesis_legacy"]))
-                )
                 rigid_contact_assemble = RigidContactAssemble()
-                for system in (
-                    rigid_contact_proxy,
-                    rigid_forest,
-                    rigid_contact_assemble,
-                ):
+                systems = [rigid_contact_proxy]
+                if rigid_forest is None:
+                    rigid_forest = RigidJointForestSystem(scene.rigid_solver)
+                    rigid_forest.configure(bool(int(resolved_contact_config["rigid_forest/fused"])))
+                    rigid_forest.configure_genesis_legacy(
+                        bool(int(resolved_contact_config["extras/rigid_forest/genesis_legacy"]))
+                    )
+                    systems.append(rigid_forest)
+                systems.append(rigid_contact_assemble)
+                for system in systems:
                     engine.add_system(system)
 
     engine.build_systems()

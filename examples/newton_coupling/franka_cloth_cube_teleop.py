@@ -19,6 +19,7 @@ import time
 
 import numpy as np
 import quadrants as qd
+from cloth_grid_asset import cloth_grid_asset
 
 import genesis as gs
 import genesis.utils.geom as gu
@@ -26,8 +27,6 @@ from genesis.engine.systems import ContactTabular, build_scene_engine
 from genesis.ext.pyrender.overlay import ImGuiOverlayPlugin
 from genesis.utils.misc import qd_to_numpy
 from genesis.vis.keybindings import Key, KeyAction, Keybind
-
-from cloth_grid_asset import cloth_grid_asset
 
 DT = 0.01
 TARGET_TRANSLATION_STEP = 0.003
@@ -57,7 +56,11 @@ HOME_QPOS = np.array(
 )
 
 
-def build_franka_cloth_cube_scene(*, show_viewer: bool):
+def build_franka_cloth_cube_scene(
+    *,
+    show_viewer: bool,
+    rigid_backend: str = "genesis",
+):
     """Build the shared Franka/cloth scene without compiling coupling kernels."""
     scene = gs.Scene(
         sim_options=gs.options.SimOptions(dt=DT),
@@ -133,16 +136,27 @@ def build_franka_cloth_cube_scene(*, show_viewer: bool):
     )
     franka.set_dofs_kp(100.0, dofs_idx_local=finger_dofs)
     franka.set_dofs_kv(10.0, dofs_idx_local=finger_dofs)
+    if rigid_backend == "cgq_mincoo":
+        franka.set_dofs_armature(0.0)
+        franka.set_dofs_damping(0.0)
     return scene, franka, arm_dofs, finger_dofs
 
 
-def build_franka_cloth_cube_engine(scene, *, ee_query: str):
+def build_franka_cloth_cube_engine(
+    scene,
+    *,
+    ee_query: str,
+    rigid_backend: str = "genesis",
+    linear_solver: str = "partition_pcg",
+):
     """Build the coupling engine used by teleoperation and compile benchmarks."""
     contact_tabular = ContactTabular()
     contact_tabular.default_model(friction_rate=1.0, resistance=1e4)
     return build_scene_engine(
         scene,
         contact_config={
+            "rigid/dynamics_backend": rigid_backend,
+            "linear_system/solver": linear_solver,
             "contact/d_hat": 1e-3,
             "contact/init_collision_pair_capacity": 20_000,
             "contact/intersection_check": 1,
@@ -152,7 +166,7 @@ def build_franka_cloth_cube_engine(scene, *, ee_query: str):
     )
 
 
-def main() -> None:
+def main(*, rigid_backend: str = "genesis") -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--no-gui",
@@ -170,6 +184,11 @@ def main() -> None:
         "--ee-query",
         choices=("dual", "warp"),
         default="dual",
+    )
+    parser.add_argument(
+        "--linear-solver",
+        choices=("linear_pcg", "partition_pcg"),
+        default="partition_pcg",
     )
     parser.add_argument(
         "--advanced-optimization",
@@ -194,8 +213,14 @@ def main() -> None:
     )
     scene, franka, arm_dofs, finger_dofs = build_franka_cloth_cube_scene(
         show_viewer=not args.no_gui,
+        rigid_backend=rigid_backend,
     )
-    engine = build_franka_cloth_cube_engine(scene, ee_query=args.ee_query)
+    engine = build_franka_cloth_cube_engine(
+        scene,
+        ee_query=args.ee_query,
+        rigid_backend=rigid_backend,
+        linear_solver=args.linear_solver,
+    )
 
     end_effector = franka.get_link("hand")
     target_home_pos = end_effector.get_pos().cpu().numpy().reshape(3)
@@ -359,6 +384,8 @@ def main() -> None:
         )
 
     print(__doc__)
+    print(f"Rigid backend: {engine.rigid.dynamics_backend}")
+    print(f"Linear solver: {engine.linear_solver_name}")
     frame = 0
     max_newton = 0
     max_pcg = 0
@@ -384,6 +411,8 @@ def main() -> None:
             def draw_newton_performance(imgui) -> None:
                 imgui.separator()
                 imgui.text("Newton Coupling")
+                imgui.text(f"Rigid backend: {engine.rigid.dynamics_backend}")
+                imgui.text(f"Linear solver: {engine.linear_solver_name}")
                 imgui.text(f"Step: {performance['step_ms']:.2f} ms  EMA: {performance['step_ms_ema']:.2f} ms")
                 simulation_fps = 1000.0 / performance["step_ms_ema"] if performance["step_ms_ema"] > 0.0 else 0.0
                 imgui.text(f"Simulation FPS: {simulation_fps:.1f}")

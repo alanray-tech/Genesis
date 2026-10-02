@@ -9,6 +9,7 @@ import quadrants as qd
 import genesis as gs
 from genesis.utils.misc import qd_to_numpy
 
+from .component_partitioner import ComponentPartitioner
 from .contact import CONTACT_CONFIG_DEFAULTS
 from .contact_system import ContactSystem
 from .finite_element import FEMDiagPreconditioner, FiniteElementMethod
@@ -20,6 +21,7 @@ from .global_body_manager import GlobalBodyManager
 from .global_linear_system import GlobalLinearSystem
 from .global_surface_manager import GlobalSurfaceManager
 from .global_vertex_manager import GlobalVertexManager
+from .partition_pcg_solver import PartitionPCGSolver
 from .rigid_contact_assemble import RigidContactAssemble
 from .rigid_contact_proxy import RigidContactProxySystem
 from .rigid_joint_forest import RigidJointForestSystem
@@ -125,7 +127,17 @@ class SimEngine:
         self.rigid_contact_assemble = self.find(RigidContactAssemble)
         self.rigid_forest = self.find(RigidJointForestSystem)
         self.global_linear_system = self.require(GlobalLinearSystem)
-        self.pcg_solver = self.require(StandardPCGSolver)
+        self.component_partitioner = self.find(ComponentPartitioner)
+        standard_pcg_solver = self.find(StandardPCGSolver)
+        partition_pcg_solver = self.find(PartitionPCGSolver)
+        if (standard_pcg_solver is None) == (partition_pcg_solver is None):
+            raise RuntimeError("SimEngine requires exactly one of StandardPCGSolver or PartitionPCGSolver")
+        self.pcg_solver = standard_pcg_solver if standard_pcg_solver is not None else partition_pcg_solver
+        self.linear_solver_name = "linear_pcg" if standard_pcg_solver is not None else "partition_pcg"
+        if partition_pcg_solver is not None and self.component_partitioner is None:
+            raise RuntimeError("PartitionPCGSolver requires ComponentPartitioner")
+        if standard_pcg_solver is not None and self.component_partitioner is not None:
+            raise RuntimeError("ComponentPartitioner must not be registered with StandardPCGSolver")
         self.fem_preconditioner = self.find(FEMDiagPreconditioner)
         if self.fem is not None and self.fem_preconditioner is None:
             raise RuntimeError("FiniteElementMethod requires FEMDiagPreconditioner")
@@ -142,9 +154,14 @@ class SimEngine:
         self.has_rigid_contact_proxy = self.rigid_contact_proxy is not None
         self.has_rigid_contact_assemble = self.rigid_contact_assemble is not None
         self.has_rigid_forest = self.rigid_forest is not None
+        self.has_cgq_mincoo_rigid = self.rigid is not None and self.rigid.uses_cgq_mincoo
         self.has_et_check = self.contact is not None and self.contact.intersection_check_host
-        if self.has_rigid_contact_proxy != self.has_rigid_forest:
-            raise RuntimeError("RigidContactProxySystem and RigidJointForestSystem must be registered together")
+        if self.has_rigid_contact_proxy and not self.has_rigid_forest:
+            raise RuntimeError("RigidContactProxySystem requires RigidJointForestSystem")
+        if self.has_rigid_forest and not self.has_rigid_contact_proxy and not self.has_cgq_mincoo_rigid:
+            raise RuntimeError("A proxy-free RigidJointForestSystem requires cgq_mincoo rigid dynamics")
+        if self.has_cgq_mincoo_rigid and not self.has_rigid_forest:
+            raise RuntimeError("cgq_mincoo rigid dynamics requires RigidJointForestSystem")
         if self.has_rigid_contact_proxy != self.has_rigid_contact_assemble:
             raise RuntimeError("RigidContactProxySystem and RigidContactAssemble must be registered together")
         if self.has_contact and not self.has_fem:
@@ -173,6 +190,130 @@ class SimEngine:
         self.pcg_tol_rate_host = pcg_tol_rate
         self.energy_buf = qd.ndarray(qd.f64, shape=(max_ls_iter + 1,))
         self.params_wired_host = True
+
+    def _build_static_component_edges(
+        self,
+        proxy_dof_offset: int,
+        n_block_rows: int,
+    ) -> np.ndarray:
+        edges: set[tuple[int, int]] = set()
+
+        def add_edge(left: int, right: int) -> None:
+            left = int(left)
+            right = int(right)
+            if left == right:
+                return
+            if not (0 <= left < n_block_rows and 0 <= right < n_block_rows):
+                raise ValueError(f"Static component edge ({left}, {right}) is outside " f"[0, {n_block_rows})")
+            edges.add((min(left, right), max(left, right)))
+
+        def add_group(rows) -> int | None:
+            unique_rows = sorted({int(row) for row in rows})
+            for left, right in zip(unique_rows, unique_rows[1:], strict=False):
+                add_edge(left, right)
+            return unique_rows[0] if unique_rows else None
+
+        if self.fem is not None:
+            fem_block_offset = int(qd_to_numpy(self.fem.dof_offset)) // 3
+            triangles = np.asarray(
+                qd_to_numpy(self.fem.tri_indices),
+                dtype=np.int32,
+            )[: int(qd_to_numpy(self.fem.n_tris))]
+            for triangle in triangles:
+                rows = fem_block_offset + triangle
+                add_edge(int(rows[0]), int(rows[1]))
+                add_edge(int(rows[1]), int(rows[2]))
+
+            if self.fem.has_quadratic_bending:
+                bending = self.fem.quadratic_bending
+                hinges = np.asarray(
+                    qd_to_numpy(bending.hinge_indices),
+                    dtype=np.int32,
+                )[: bending.n_hinges_host]
+                for hinge in hinges:
+                    add_group(fem_block_offset + hinge)
+
+        tree_representatives: dict[int, int] = {}
+        environment_representatives: dict[int, int] = {}
+        tree_ids = None
+        if self.rigid_forest is not None:
+            n_mechanism_bodies = self.rigid_forest.n_links_host * self.rigid_forest.n_instances_host
+            tree_ids = np.asarray(
+                qd_to_numpy(self.rigid_forest.tree_id),
+                dtype=np.int32,
+            )[:n_mechanism_bodies]
+        if self.rigid is not None:
+            rigid_dof_offset = int(qd_to_numpy(self.rigid.dof_offset))
+            if self.rigid.dynamics_backend == "genesis":
+                for environment in range(self.rigid.n_instances_host):
+                    begin = rigid_dof_offset + environment * self.rigid.n_dofs_per_instance_host
+                    end = begin + self.rigid.n_dofs_per_instance_host
+                    representative = add_group(dof // 3 for dof in range(begin, end))
+                    if representative is not None:
+                        environment_representatives[environment] = representative
+                if tree_ids is not None:
+                    for body, tree in enumerate(tree_ids):
+                        environment = body // self.rigid_forest.n_links_host
+                        representative = environment_representatives.get(environment)
+                        if representative is not None:
+                            tree_representatives.setdefault(
+                                int(tree),
+                                representative,
+                            )
+            elif self.rigid_forest is not None:
+                forest = self.rigid_forest
+                parent_edges = np.asarray(
+                    qd_to_numpy(forest.parent_edge),
+                    dtype=np.int32,
+                )[:n_mechanism_bodies]
+                root_dofs = np.asarray(
+                    qd_to_numpy(forest.root_dof_index),
+                    dtype=np.int32,
+                )[:n_mechanism_bodies]
+                edge_dofs = np.asarray(
+                    qd_to_numpy(forest.edge_dof_index),
+                    dtype=np.int32,
+                )[: int(qd_to_numpy(forest.n_edges))]
+                tree_rows: dict[int, set[int]] = {}
+                for body, tree in enumerate(tree_ids):
+                    rows = tree_rows.setdefault(int(tree), set())
+                    root_dof = int(root_dofs[body])
+                    if root_dof >= 0:
+                        rows.update((rigid_dof_offset + root_dof + axis) // 3 for axis in range(6))
+                    parent_edge = int(parent_edges[body])
+                    if parent_edge >= 0:
+                        rows.add((rigid_dof_offset + int(edge_dofs[parent_edge])) // 3)
+                for tree, rows in tree_rows.items():
+                    representative = add_group(rows)
+                    if representative is not None:
+                        tree_representatives[tree] = representative
+
+        if self.rigid_contact_proxy is not None:
+            proxy_block_offset = proxy_dof_offset // 3
+            mechanisms = np.asarray(
+                qd_to_numpy(self.rigid_contact_proxy.mechanism_body),
+                dtype=np.int32,
+            )[: self.rigid_contact_proxy.n_pairs_host]
+            for pair, mechanism in enumerate(mechanisms):
+                first_proxy_row = proxy_block_offset + pair * 2
+                add_edge(first_proxy_row, first_proxy_row + 1)
+                representative = None
+                if self.rigid.dynamics_backend == "genesis":
+                    environment = int(mechanism) // self.rigid_contact_proxy.n_links_host
+                    representative = environment_representatives.get(environment)
+                elif tree_ids is not None:
+                    representative = tree_representatives.get(int(tree_ids[int(mechanism)]))
+                if representative is not None:
+                    add_edge(representative, first_proxy_row)
+
+        if self.rigid_forest is not None:
+            self.rigid_forest.set_component_block_rows(
+                tree_representatives,
+            )
+
+        if not edges:
+            return np.empty((0, 2), dtype=np.int32)
+        return np.asarray(sorted(edges), dtype=np.int32).reshape(-1, 2)
 
     def init(self) -> None:
         if self.is_initialized_host:
@@ -209,18 +350,40 @@ class SimEngine:
             dof_block_base,
             self.pcg_tol_rate_host,
         )
-        self.pcg_solver.init(dof_offset, n_block_rows, self.pcg_tol_rate_host)
         if self.rigid_forest is not None:
-            self.rigid_contact_proxy.ensure_merit_gradient_capacity(dof_offset)
+            n_rigid_bodies = self.rigid_forest.n_links_host * self.rigid_forest.n_instances_host
+            if self.rigid_contact_proxy is not None:
+                self.rigid_contact_proxy.ensure_merit_gradient_capacity(dof_offset)
+                n_rigid_bodies = self.rigid_contact_proxy.n_bodies_host
             self.rigid_forest.init(
                 dof_offset,
-                self.rigid_contact_proxy.n_bodies_host,
+                n_rigid_bodies,
                 proxy_dof_offset,
             )
-            self.rigid_contact_assemble.init()
+            if self.rigid_contact_assemble is not None:
+                self.rigid_contact_assemble.init()
         if self.fem_preconditioner is not None:
             self.fem_preconditioner.init()
+        if self.component_partitioner is not None:
+            static_edges = self._build_static_component_edges(
+                proxy_dof_offset,
+                n_block_rows,
+            )
+            self.pcg_solver.init(
+                dof_offset,
+                n_block_rows,
+                self.pcg_tol_rate_host,
+                static_edges,
+            )
+        else:
+            self.pcg_solver.init(
+                dof_offset,
+                n_block_rows,
+                self.pcg_tol_rate_host,
+            )
         self._initialize_global_resources()
+        if self.component_partitioner is not None:
+            self._initialize_component_partition()
         if self.contact is not None:
             self._initialize_contact()
         self.is_initialized_host = True
@@ -230,10 +393,17 @@ class SimEngine:
         if qd.static(self.has_fem):
             self.fem.initialize_global_vertices(self.global_vertex_manager)
             self.global_body_manager.compute_vertex_offsets(self.fem)
+        if qd.static(self.has_cgq_mincoo_rigid):
+            self.rigid_forest.compute_endpoint_fk()
+            self.rigid.initialize_cgq_state()
         if qd.static(self.has_rigid_contact_proxy):
             self.rigid_contact_proxy.initialize_proxy_state()
             self.rigid_contact_proxy.prepare_metric()
             self.rigid_contact_proxy.initialize_global_vertices(self.global_vertex_manager)
+
+    @qd.kernel(graph=True, fastcache=True)
+    def _initialize_component_partition(self):
+        self.component_partitioner.compute_static_labels()
 
     @qd.kernel(graph=True, checkpoints=True, fastcache=True)
     def _init_contact_kernel(
@@ -444,6 +614,8 @@ class SimEngine:
             if qd.static(self.has_contact):
                 self.contact.adaptive_kappa_update()
                 self.contact.reset_frame_ccd()
+            if qd.static(self.has_cgq_mincoo_rigid):
+                self.rigid_forest.compute_endpoint_fk()
             if qd.static(self.has_rigid):
                 self.rigid.predict()
                 self.rigid.assemble_candidate_rows()
@@ -766,7 +938,7 @@ class SimEngine:
                     if qd.static(self.has_rigid_contact_proxy):
                         baseline = baseline + self.rigid_contact_proxy.restoration_energy[()]
                     self.energy_buf[0] = baseline
-                if qd.static(self.has_rigid_forest):
+                if qd.static(self.has_rigid_contact_proxy):
                     self.rigid_forest.compute_merit_directional_derivative(self.global_linear_system)
                     self.rigid_contact_proxy.initialize_merit()
 
@@ -833,9 +1005,10 @@ class SimEngine:
 
                     if qd.static(self.has_rigid):
                         self.rigid.step_forward(trial_alpha)
-                        self.rigid.energy(self.sim_config)
                     if qd.static(self.has_rigid_forest):
                         self.rigid_forest.compute_endpoint_fk()
+                    if qd.static(self.has_rigid):
+                        self.rigid.energy(self.sim_config)
                     if qd.static(self.has_fem):
                         self.fem.step_forward(trial_alpha)
                         self.fem.forward_global_vertices(self.global_vertex_manager)

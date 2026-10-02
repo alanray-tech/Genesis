@@ -24,6 +24,11 @@ _FUSED_MAX_TREE_SIZE = 64
 _FUSED_MAX_TREES = 8
 
 
+@qd.func
+def _wrap_revolute(value):
+    return value - qd.floor(value / 6.283185307179586 + 0.5) * 6.283185307179586
+
+
 @qd.data_oriented
 class RigidJointForestSystem(SimSystem):
     """Genesis minimal-coordinate link/proxy prolongation and restriction."""
@@ -40,6 +45,8 @@ class RigidJointForestSystem(SimSystem):
         depth = []
         edge_child = []
         edge_dof_index = []
+        edge_q_index = []
+        edge_is_revolute = []
         root_dof_index = []
         for link in rigid_solver.links:
             parent_link.append(link.parent_idx)
@@ -53,7 +60,7 @@ class RigidJointForestSystem(SimSystem):
                         or moving_joints[0].type != gs.JOINT_TYPE.FREE
                         or moving_joints[0].n_dofs != 6
                     ):
-                        raise RuntimeError("RigidJointForestSystem requires a fixed or six-DOF " "free Genesis root")
+                        raise RuntimeError("RigidJointForestSystem requires a fixed or six-DOF free Genesis root")
                     root_dof = moving_joints[0].dof_start
                 root_dof_index.append(root_dof)
             else:
@@ -69,14 +76,18 @@ class RigidJointForestSystem(SimSystem):
                         )
                     ):
                         raise RuntimeError(
-                            "RigidJointForestSystem requires scalar revolute or " "prismatic Genesis forest edges"
+                            "RigidJointForestSystem requires scalar revolute or prismatic Genesis forest edges"
                         )
                     edge_child.append(link.idx)
                     edge_dof_index.append(moving_joints[0].dof_start)
+                    edge_q_index.append(moving_joints[0].q_start)
+                    edge_is_revolute.append(int(moving_joints[0].type == gs.JOINT_TYPE.REVOLUTE))
         self.parent_link_host = tuple(parent_link)
         self.depth_host = tuple(depth)
         self.edge_child_host = tuple(edge_child)
         self.edge_dof_index_host = tuple(edge_dof_index)
+        self.edge_q_index_host = tuple(edge_q_index)
+        self.edge_is_revolute_host = tuple(edge_is_revolute)
         self.root_dof_index_host = tuple(root_dof_index)
         self.n_edges_per_instance_host = len(edge_child)
         self.has_contact_proxy = False
@@ -175,14 +186,18 @@ class RigidJointForestSystem(SimSystem):
         edge_parent = np.zeros(max(n_edges, 1), dtype=np.int32)
         edge_child = np.zeros(max(n_edges, 1), dtype=np.int32)
         edge_dof_index = np.zeros(max(n_edges, 1), dtype=np.int32)
+        edge_q_index = np.zeros(max(n_edges, 1), dtype=np.int32)
+        edge_is_revolute = np.zeros(max(n_edges, 1), dtype=np.int32)
         root_dof_index = np.full(n_mechanism_bodies, -1, dtype=np.int32)
         edge = 0
         for environment in range(n_instances):
             body_offset = environment * n_links
             dof_offset = environment * self.rigid.n_dofs_per_instance_host
-            for child, dof in zip(
+            for child, dof, q_index, is_revolute in zip(
                 self.edge_child_host,
                 self.edge_dof_index_host,
+                self.edge_q_index_host,
+                self.edge_is_revolute_host,
                 strict=True,
             ):
                 body = body_offset + child
@@ -190,6 +205,8 @@ class RigidJointForestSystem(SimSystem):
                 edge_parent[edge] = parents[body]
                 edge_child[edge] = body
                 edge_dof_index[edge] = dof_offset + dof
+                edge_q_index[edge] = q_index
+                edge_is_revolute[edge] = is_revolute
                 edge += 1
             for link, dof in enumerate(self.root_dof_index_host):
                 if dof >= 0:
@@ -218,9 +235,12 @@ class RigidJointForestSystem(SimSystem):
         self.tree_body_start = qd.ndarray(qd.i32, shape=(tree_capacity + 1,))
         self.tree_body_list = qd.ndarray(qd.i32, shape=(mechanism_capacity,))
         self.tree_local_index = qd.ndarray(qd.i32, shape=(capacity,))
+        self.component_block_row = qd.ndarray(qd.i32, shape=(tree_capacity,))
         self.edge_parent = qd.ndarray(qd.i32, shape=(edge_capacity,))
         self.edge_child = qd.ndarray(qd.i32, shape=(edge_capacity,))
         self.edge_dof_index = qd.ndarray(qd.i32, shape=(edge_capacity,))
+        self.edge_q_index = qd.ndarray(qd.i32, shape=(edge_capacity,))
+        self.edge_is_revolute = qd.ndarray(qd.i32, shape=(edge_capacity,))
         self.root_dof_index = qd.ndarray(qd.i32, shape=(capacity,))
         self.body_twist = qd.ndarray(qd.f64, shape=(capacity, 6))
         self.body_wrench = qd.ndarray(qd.f64, shape=(capacity, 6))
@@ -340,9 +360,12 @@ class RigidJointForestSystem(SimSystem):
             )
         )
         self.tree_local_index.from_numpy(tree_local_index)
+        self.component_block_row.from_numpy(np.full(tree_capacity, -1, dtype=np.int32))
         self.edge_parent.from_numpy(edge_parent)
         self.edge_child.from_numpy(edge_child)
         self.edge_dof_index.from_numpy(edge_dof_index)
+        self.edge_q_index.from_numpy(edge_q_index)
+        self.edge_is_revolute.from_numpy(edge_is_revolute)
         self.root_dof_index.from_numpy(
             np.pad(
                 root_dof_index,
@@ -397,7 +420,36 @@ class RigidJointForestSystem(SimSystem):
         self.kkt_proxy_diagonal.from_numpy(np.zeros((capacity, 6, 6), dtype=np.float64))
 
         self.n_entities_host = self.rigid.dyn_info.entities.link_start.shape[0]
+        self.n_trees_host = n_trees
         self.is_initialized_host = True
+
+    def set_component_block_rows(
+        self,
+        tree_representatives: dict[int, int],
+    ) -> None:
+        if not self.is_initialized_host:
+            raise RuntimeError("RigidJointForestSystem must be initialized before component rows are set")
+        rows = np.full(max(self.n_trees_host, 1), -1, dtype=np.int32)
+        for tree, row in tree_representatives.items():
+            if tree < 0 or tree >= self.n_trees_host:
+                raise ValueError(f"RigidJointForestSystem component tree {tree} is out of range")
+            if row < 0:
+                raise ValueError("RigidJointForestSystem component block rows must be non-negative")
+            rows[tree] = row
+        self.component_block_row.from_numpy(rows)
+
+    @qd.func
+    def _tree_is_active(
+        self,
+        tree,
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        block_row = self.component_block_row[tree]
+        is_active = False
+        if block_row >= 0:
+            is_active = converged[component_labels[block_row]] == 0
+        return is_active
 
     @qd.func
     def _body_point_twist(self, link, environment, joint, dof):
@@ -434,6 +486,8 @@ class RigidJointForestSystem(SimSystem):
     @qd.func(requires_top_level=True)
     def compute_endpoint_fk(self):
         h = self.rigid.h
+        if qd.static(self.rigid.uses_cgq_mincoo):
+            h = qd.f64(0.0)
         for q, environment in qd.ndrange(
             self.endpoint_qpos.shape[0],
             self.n_instances_host,
@@ -719,6 +773,28 @@ class RigidJointForestSystem(SimSystem):
                     self.forest_expand_body_p(reduced, body)
 
     @qd.func(requires_top_level=True)
+    def genesis_legacy_expand_reduced_direction_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        for level in qd.static(range(self.n_links_host)):
+            qd.loop_config(name="genesis_legacy_expand_level_masked")
+            for body in range(self.n_mechanism_bodies[()]):
+                tree = self.tree_id[body]
+                if (
+                    level < self.n_levels[()]
+                    and self.depth[body] == level
+                    and self._tree_is_active(
+                        tree,
+                        component_labels,
+                        converged,
+                    )
+                ):
+                    self.forest_expand_body_p(reduced, body)
+
+    @qd.func(requires_top_level=True)
     def forest_expand_level_p(self, reduced: qd.template()):
         for level in qd.static(range(self.n_links_host)):
             qd.loop_config(name="forest_expand_level_p")
@@ -732,10 +808,56 @@ class RigidJointForestSystem(SimSystem):
                 )
 
     @qd.func(requires_top_level=True)
+    def forest_expand_level_p_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        for level in qd.static(range(self.n_links_host)):
+            qd.loop_config(name="forest_expand_level_p_masked")
+            for order_index in range(
+                self.depth_start[level],
+                self.depth_start[level + 1],
+            ):
+                body = self.depth_order[order_index]
+                if self._tree_is_active(
+                    self.tree_id[body],
+                    component_labels,
+                    converged,
+                ):
+                    self.forest_expand_body_p_cached(
+                        reduced,
+                        body,
+                    )
+
+    @qd.func(requires_top_level=True)
     def forest_expand_tree_p(self, reduced: qd.template()):
         qd.loop_config(name="forest_expand_tree_p", block_dim=128)
         for tree in range(8):
             if tree < self.n_trees[()]:
+                begin = self.tree_body_start[tree]
+                end = self.tree_body_start[tree + 1]
+                for order_index in range(begin, end):
+                    self.forest_expand_body_p_cached(
+                        reduced,
+                        self.tree_body_list[order_index],
+                    )
+
+    @qd.func(requires_top_level=True)
+    def forest_expand_tree_p_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        qd.loop_config(name="forest_expand_tree_p_masked", block_dim=128)
+        for tree in range(8):
+            if tree < self.n_trees[()] and self._tree_is_active(
+                tree,
+                component_labels,
+                converged,
+            ):
                 begin = self.tree_body_start[tree]
                 end = self.tree_body_start[tree + 1]
                 for order_index in range(begin, end):
@@ -759,6 +881,32 @@ class RigidJointForestSystem(SimSystem):
             self.forest_expand_tree_p(reduced)
         else:
             self.forest_expand_level_p(reduced)
+
+    @qd.func(requires_top_level=True)
+    def expand_mechanism_direction_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        if qd.static(self.genesis_legacy_enabled):
+            self.genesis_legacy_expand_reduced_direction_masked(
+                reduced,
+                component_labels,
+                converged,
+            )
+        elif qd.static(self.use_fused_tree_path):
+            self.forest_expand_tree_p_masked(
+                reduced,
+                component_labels,
+                converged,
+            )
+        else:
+            self.forest_expand_level_p_masked(
+                reduced,
+                component_labels,
+                converged,
+            )
 
     @qd.func(requires_top_level=True)
     def expand_reduced_direction_from_zero(self, reduced: qd.template()):
@@ -934,6 +1082,29 @@ class RigidJointForestSystem(SimSystem):
                     self.forest_project_body_Ap(reduced, body, True)
 
     @qd.func(requires_top_level=True)
+    def genesis_legacy_restrict_body_wrenches_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        for reverse_level in qd.static(range(self.n_links_host)):
+            level = self.max_depth[()] - reverse_level
+            qd.loop_config(name="genesis_legacy_project_level_masked")
+            for body in range(self.n_mechanism_bodies[()]):
+                tree = self.tree_id[body]
+                if (
+                    reverse_level < self.n_levels[()]
+                    and self.depth[body] == level
+                    and self._tree_is_active(
+                        tree,
+                        component_labels,
+                        converged,
+                    )
+                ):
+                    self.forest_project_body_Ap(reduced, body, True)
+
+    @qd.func(requires_top_level=True)
     def forest_project_level_Ap(self, reduced: qd.template()):
         for reverse_level in qd.static(range(self.n_links_host)):
             level = self.n_links_host - reverse_level - 1
@@ -949,10 +1120,60 @@ class RigidJointForestSystem(SimSystem):
                 )
 
     @qd.func(requires_top_level=True)
+    def forest_project_level_Ap_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        for reverse_level in qd.static(range(self.n_links_host)):
+            level = self.n_links_host - reverse_level - 1
+            qd.loop_config(name="forest_project_level_Ap_masked")
+            for order_index in range(
+                self.depth_start[level],
+                self.depth_start[level + 1],
+            ):
+                body = self.depth_order[order_index]
+                if self._tree_is_active(
+                    self.tree_id[body],
+                    component_labels,
+                    converged,
+                ):
+                    self.forest_project_body_Ap_cached(
+                        reduced,
+                        body,
+                        True,
+                    )
+
+    @qd.func(requires_top_level=True)
     def forest_project_tree_Ap(self, reduced: qd.template()):
         qd.loop_config(name="forest_project_tree_Ap", block_dim=128)
         for tree in range(8):
             if tree < self.n_trees[()]:
+                begin = self.tree_body_start[tree]
+                end = self.tree_body_start[tree + 1]
+                for reverse_index in range(end - begin):
+                    order_index = end - reverse_index - 1
+                    self.forest_project_body_Ap_cached(
+                        reduced,
+                        self.tree_body_list[order_index],
+                        False,
+                    )
+
+    @qd.func(requires_top_level=True)
+    def forest_project_tree_Ap_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        qd.loop_config(name="forest_project_tree_Ap_masked", block_dim=128)
+        for tree in range(8):
+            if tree < self.n_trees[()] and self._tree_is_active(
+                tree,
+                component_labels,
+                converged,
+            ):
                 begin = self.tree_body_start[tree]
                 end = self.tree_body_start[tree + 1]
                 for reverse_index in range(end - begin):
@@ -971,6 +1192,32 @@ class RigidJointForestSystem(SimSystem):
             self.forest_project_tree_Ap(reduced)
         else:
             self.forest_project_level_Ap(reduced)
+
+    @qd.func(requires_top_level=True)
+    def restrict_body_wrenches_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        if qd.static(self.genesis_legacy_enabled):
+            self.genesis_legacy_restrict_body_wrenches_masked(
+                reduced,
+                component_labels,
+                converged,
+            )
+        elif qd.static(self.use_fused_tree_path):
+            self.forest_project_tree_Ap_masked(
+                reduced,
+                component_labels,
+                converged,
+            )
+        else:
+            self.forest_project_level_Ap_masked(
+                reduced,
+                component_labels,
+                converged,
+            )
 
     @qd.func(requires_top_level=True)
     def prepare_particular(self):
@@ -1063,6 +1310,58 @@ class RigidJointForestSystem(SimSystem):
                     self.physical_p[offset + component] = value[component]
 
     @qd.func(requires_top_level=True)
+    def prepare_physical_direction_masked(
+        self,
+        reduced: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        for dof in range(self.total_dof[()]):
+            block_row = dof // 3
+            self.physical_p[dof] = qd.f64(0.0)
+            if converged[component_labels[block_row]] == 0:
+                self.physical_p[dof] = reduced[dof]
+        for body in range(self.n_bodies[()]):
+            for component in qd.static(range(6)):
+                self.body_twist[body, component] = 0.0
+        self.expand_mechanism_direction_masked(
+            reduced,
+            component_labels,
+            converged,
+        )
+        if qd.static(self.has_contact_proxy):
+            for pair in range(self.contact_proxy.n_pairs[()]):
+                offset = self.proxy_dof_offset[()] + pair * 6
+                if converged[component_labels[offset // 3]] == 0:
+                    mechanism = self.contact_proxy.mechanism_body[pair]
+                    proxy = self.contact_proxy.proxy_body[pair]
+                    tangent = qd.Matrix.zero(qd.f64, 6, 6)
+                    normal = qd.Matrix.zero(qd.f64, 6, 6)
+                    mechanism_twist = qd.Vector.zero(qd.f64, 6)
+                    slack = qd.Vector.zero(qd.f64, 6)
+                    for row in qd.static(range(6)):
+                        mechanism_twist[row] = self.body_twist[mechanism, row]
+                        slack[row] = reduced[offset + row]
+                        for column in qd.static(range(6)):
+                            tangent[row, column] = self.contact_proxy.tangent_map[
+                                pair,
+                                row,
+                                column,
+                            ]
+                            normal[row, column] = self.contact_proxy.normal_map[
+                                pair,
+                                row,
+                                column,
+                            ]
+                    value = expand_proxy_twist(tangent, mechanism_twist)
+                    for component in qd.static(range(6)):
+                        self.body_twist[proxy, component] = value[component]
+                    if self.contact_proxy.restoration_active[()] != 0:
+                        value = value + expand_slack_twist(normal, slack)
+                    for component in qd.static(range(6)):
+                        self.physical_p[offset + component] = value[component]
+
+    @qd.func(requires_top_level=True)
     def finish_reduced_spmv(
         self,
         reduced: qd.template(),
@@ -1112,12 +1411,99 @@ class RigidJointForestSystem(SimSystem):
         self.restrict_body_wrenches(result)
 
     @qd.func(requires_top_level=True)
+    def finish_reduced_spmv_masked(
+        self,
+        reduced: qd.template(),
+        result: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        for dof in range(self.proxy_dof_offset[()]):
+            if converged[component_labels[dof // 3]] == 0:
+                result[dof] = result[dof] + self.physical_Ap[dof]
+
+        # RigidSystem contributes Genesis native curvature. This projection
+        # adds only the physical BCOO/contact wrench to generalized rows.
+        self.clear_body_wrench()
+        if qd.static(self.has_contact_proxy):
+            for pair in range(self.contact_proxy.n_pairs[()]):
+                offset = self.proxy_dof_offset[()] + pair * 6
+                if converged[component_labels[offset // 3]] == 0:
+                    mechanism = self.contact_proxy.mechanism_body[pair]
+                    proxy = self.contact_proxy.proxy_body[pair]
+                    proxy_wrench = qd.Vector.zero(qd.f64, 6)
+                    tangent = qd.Matrix.zero(qd.f64, 6, 6)
+                    normal = qd.Matrix.zero(qd.f64, 6, 6)
+                    metric = qd.Matrix.zero(qd.f64, 6, 6)
+                    slack = qd.Vector.zero(qd.f64, 6)
+                    for row in qd.static(range(6)):
+                        proxy_wrench[row] = self.physical_Ap[offset + row]
+                        self.body_wrench[proxy, row] = proxy_wrench[row]
+                        slack[row] = reduced[offset + row]
+                        for column in qd.static(range(6)):
+                            tangent[row, column] = self.contact_proxy.tangent_map[
+                                pair,
+                                row,
+                                column,
+                            ]
+                            normal[row, column] = self.contact_proxy.normal_map[
+                                pair,
+                                row,
+                                column,
+                            ]
+                            metric[row, column] = self.contact_proxy.metric[
+                                pair,
+                                row,
+                                column,
+                            ]
+                    mapped = restrict_proxy_wrench(tangent, proxy_wrench)
+                    for component in qd.static(range(6)):
+                        qd.atomic_add(
+                            self.body_wrench[mechanism, component],
+                            mapped[component],
+                        )
+                    if self.contact_proxy.restoration_active[()] != 0:
+                        slack_result = restrict_slack_wrench(normal, proxy_wrench) + metric @ slack
+                        for component in qd.static(range(6)):
+                            result[offset + component] = result[offset + component] + slack_result[component]
+                    else:
+                        for component in qd.static(range(6)):
+                            result[offset + component] = result[offset + component] + reduced[offset + component]
+        self.restrict_body_wrenches_masked(
+            result,
+            component_labels,
+            converged,
+        )
+
+    @qd.func(requires_top_level=True)
     def forest_inertia_wrench(self):
         qd.loop_config(name="forest_inertia_wrench")
         for body in range(self.n_bodies[()]):
             for row in qd.static(range(6)):
                 value = qd.f64(0.0)
                 if body < self.n_mechanism_bodies[()]:
+                    for column in qd.static(range(6)):
+                        value = value + self.body_inertia[body, row, column] * self.body_twist[body, column]
+                self.body_wrench[body, row] = value
+
+    @qd.func(requires_top_level=True)
+    def forest_inertia_wrench_masked(
+        self,
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        qd.loop_config(name="forest_inertia_wrench_masked")
+        for body in range(self.n_bodies[()]):
+            is_active = False
+            if body < self.n_mechanism_bodies[()]:
+                is_active = self._tree_is_active(
+                    self.tree_id[body],
+                    component_labels,
+                    converged,
+                )
+            for row in qd.static(range(6)):
+                value = qd.f64(0.0)
+                if is_active:
                     for column in qd.static(range(6)):
                         value = value + self.body_inertia[body, row, column] * self.body_twist[body, column]
                 self.body_wrench[body, row] = value
@@ -1142,6 +1528,163 @@ class RigidJointForestSystem(SimSystem):
                 augmentation = augmentation - self.rigid.dyn_info.dofs.act_bias[dof_index][2] * self.rigid.h
             reduced_index = self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
             result[reduced_index] = result[reduced_index] + augmentation * reduced[reduced_index]
+
+    @qd.func
+    def _cgq_current_position(self, edge, environment):
+        q_index = self.edge_q_index[edge]
+        return self.rigid.rigid_info.qpos[q_index, environment] - self.rigid.rigid_info.qpos0[q_index, environment]
+
+    @qd.func
+    def _cgq_previous_position(self, edge, environment):
+        q_index = self.edge_q_index[edge]
+        return self.rigid.cgq_qpos_prev[q_index, environment] - self.rigid.rigid_info.qpos0[q_index, environment]
+
+    @qd.func
+    def _cgq_control_force(self, edge, dof, environment):
+        dof_index = [dof, environment] if qd.static(self.rigid.rigid_config.batch_dofs_info) else dof
+        previous = self._cgq_previous_position(edge, environment)
+        mode = self.rigid.dyn_state.dofs.ctrl_mode[dof, environment]
+        kp = qd.f64(0.0)
+        target = previous
+        control_force = qd.f64(0.0)
+        if mode == gs.CTRL_MODE.FORCE:
+            control_force = self.rigid.dyn_state.dofs.ctrl_force[dof, environment]
+        elif mode == gs.CTRL_MODE.POSITION:
+            kp = self.rigid.dyn_info.dofs.act_gain[dof_index]
+            target = self.rigid.dyn_state.dofs.ctrl_pos[dof, environment]
+
+        # CGQ evaluates the commanded force once against the frame-start
+        # joint state. The candidate coordinate remains live only in the
+        # damping and limit potentials during Newton and line search.
+        error = target - previous
+        if self.edge_is_revolute[edge] != 0:
+            error = _wrap_revolute(error)
+        force = qd.math.clamp(
+            kp * error + control_force,
+            self.rigid.dyn_info.dofs.force_range[dof_index][0],
+            self.rigid.dyn_info.dofs.force_range[dof_index][1],
+        )
+
+        return force
+
+    @qd.func
+    def _cgq_control_kv(self, dof, environment):
+        dof_index = [dof, environment] if qd.static(self.rigid.rigid_config.batch_dofs_info) else dof
+        mode = self.rigid.dyn_state.dofs.ctrl_mode[dof, environment]
+        kv = qd.f64(0.0)
+        if mode == gs.CTRL_MODE.VELOCITY or mode == gs.CTRL_MODE.POSITION:
+            kv = -self.rigid.dyn_info.dofs.act_bias[dof_index][2]
+        return kv
+
+    @qd.func
+    def _cgq_damping_residual(self, edge, dof, environment):
+        target_velocity = qd.f64(0.0)
+        mode = self.rigid.dyn_state.dofs.ctrl_mode[dof, environment]
+        if mode == gs.CTRL_MODE.VELOCITY or mode == gs.CTRL_MODE.POSITION:
+            target_velocity = self.rigid.dyn_state.dofs.ctrl_vel[dof, environment]
+        residual = (
+            self._cgq_current_position(edge, environment)
+            - self._cgq_previous_position(edge, environment)
+            - self.rigid.h * target_velocity
+        )
+        if self.edge_is_revolute[edge] != 0:
+            residual = _wrap_revolute(residual)
+        return residual
+
+    @qd.func
+    def _cgq_limit_violation(self, edge, dof, environment):
+        dof_index = [dof, environment] if qd.static(self.rigid.rigid_config.batch_dofs_info) else dof
+        q_index = self.edge_q_index[edge]
+        current = self.rigid.rigid_info.qpos[q_index, environment]
+        limit = self.rigid.dyn_info.dofs.limit[dof_index]
+        violation = qd.f64(0.0)
+        if limit[0] < limit[1]:
+            if current < limit[0]:
+                violation = current - limit[0]
+            elif current > limit[1]:
+                violation = current - limit[1]
+        return violation
+
+    @qd.func(requires_top_level=True)
+    def cgq_control_gradient(self, result: qd.template()):
+        for edge in range(self.n_edges[()]):
+            child = self.edge_child[edge]
+            environment = child // self.rigid.n_links[()]
+            dof = self.edge_dof_index[edge] - environment * self.rigid.n_dofs_per_instance[()]
+            force = self._cgq_control_force(edge, dof, environment)
+            kv = self._cgq_control_kv(dof, environment)
+            residual = self._cgq_damping_residual(edge, dof, environment)
+            violation = self._cgq_limit_violation(edge, dof, environment)
+            gradient = (
+                -self.rigid.h * self.rigid.h * force
+                + self.rigid.h * kv * residual
+                + self.rigid.h * self.rigid.h * self.rigid.cgq_joint_limit_kappa * violation
+            )
+            reduced_index = self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
+            result[reduced_index] = result[reduced_index] + gradient
+            self.rigid.dyn_state.dofs.qf_applied[dof, environment] = force
+            self.rigid.dyn_state.dofs.qf_actuator[dof, environment] = force
+
+    @qd.func(requires_top_level=True)
+    def cgq_control_matvec(
+        self,
+        reduced: qd.template(),
+        result: qd.template(),
+    ):
+        for edge in range(self.n_edges[()]):
+            child = self.edge_child[edge]
+            environment = child // self.rigid.n_links[()]
+            dof = self.edge_dof_index[edge] - environment * self.rigid.n_dofs_per_instance[()]
+            kv = self._cgq_control_kv(dof, environment)
+            violation = self._cgq_limit_violation(edge, dof, environment)
+            hessian = self.rigid.h * kv
+            if violation != 0.0:
+                hessian = hessian + self.rigid.h * self.rigid.h * self.rigid.cgq_joint_limit_kappa
+            reduced_index = self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
+            result[reduced_index] = result[reduced_index] + hessian * reduced[reduced_index]
+
+    @qd.func(requires_top_level=True)
+    def cgq_control_matvec_masked(
+        self,
+        reduced: qd.template(),
+        result: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        for edge in range(self.n_edges[()]):
+            child = self.edge_child[edge]
+            environment = child // self.rigid.n_links[()]
+            dof = self.edge_dof_index[edge] - environment * self.rigid.n_dofs_per_instance[()]
+            reduced_index = self.rigid.dof_offset[()] + environment * self.rigid.n_dofs_per_instance[()] + dof
+            if converged[component_labels[reduced_index // 3]] == 0:
+                kv = self._cgq_control_kv(dof, environment)
+                violation = self._cgq_limit_violation(
+                    edge,
+                    dof,
+                    environment,
+                )
+                hessian = self.rigid.h * kv
+                if violation != 0.0:
+                    hessian = hessian + self.rigid.h * self.rigid.h * self.rigid.cgq_joint_limit_kappa
+                result[reduced_index] = result[reduced_index] + hessian * reduced[reduced_index]
+
+    @qd.func(requires_top_level=True)
+    def cgq_control_energy(self, result: qd.template()):
+        for edge in range(self.n_edges[()]):
+            child = self.edge_child[edge]
+            environment = child // self.rigid.n_links[()]
+            dof = self.edge_dof_index[edge] - environment * self.rigid.n_dofs_per_instance[()]
+            current = self._cgq_current_position(edge, environment)
+            force = self._cgq_control_force(edge, dof, environment)
+            kv = self._cgq_control_kv(dof, environment)
+            residual = self._cgq_damping_residual(edge, dof, environment)
+            violation = self._cgq_limit_violation(edge, dof, environment)
+            value = (
+                -self.rigid.h * self.rigid.h * force * current
+                + 0.5 * self.rigid.h * kv * residual * residual
+                + 0.5 * self.rigid.h * self.rigid.h * self.rigid.cgq_joint_limit_kappa * violation * violation
+            )
+            qd.atomic_add(result[()], value)
 
     @qd.func(requires_top_level=True)
     def expand_solution(self, solution: qd.template()):
@@ -1302,12 +1845,15 @@ class RigidJointForestSystem(SimSystem):
             for row in qd.static(range(6)):
                 for column in qd.static(range(6)):
                     value = qd.f64(0.0)
-                    if qd.static(row < 3 and column < 3 and row == column):
-                        value = mass
-                    elif qd.static(row >= 3 and column >= 3):
-                        value = world_inertia[row - 3, column - 3]
+                    if qd.static(self.rigid.uses_cgq_mincoo):
+                        value = self.body_inertia[body, row, column]
+                    else:
+                        if qd.static(row < 3 and column < 3 and row == column):
+                            value = mass
+                        elif qd.static(row >= 3 and column >= 3):
+                            value = world_inertia[row - 3, column - 3]
+                        self.body_inertia[body, row, column] = value
                     self.articulated_inertia[body, row, column] = value
-                    self.body_inertia[body, row, column] = value
                     self.root_inverse[body, row, column] = 0.0
 
         for body in range(self.n_bodies[()]):
@@ -1484,20 +2030,30 @@ class RigidJointForestSystem(SimSystem):
                         environment = body // self.rigid.n_links[()]
                         dof = self.edge_dof_index[edge] - environment * self.rigid.n_dofs_per_instance[()]
                         dof_index = [dof, environment] if qd.static(self.rigid.rigid_config.batch_dofs_info) else dof
-                        actuator_damping = qd.f64(0.0)
-                        if (
-                            self.rigid.dyn_state.dofs.ctrl_mode[
-                                dof,
-                                environment,
-                            ]
-                            <= gs.CTRL_MODE.VELOCITY
-                        ):
-                            actuator_damping = -self.rigid.dyn_info.dofs.act_bias[dof_index][2] * self.rigid.h
+                        augmentation = qd.f64(0.0)
+                        if qd.static(self.rigid.uses_cgq_mincoo):
+                            augmentation = self.rigid.h * self._cgq_control_kv(dof, environment)
+                            if self._cgq_limit_violation(edge, dof, environment) != 0.0:
+                                augmentation = (
+                                    augmentation + self.rigid.h * self.rigid.h * self.rigid.cgq_joint_limit_kappa
+                                )
+                        else:
+                            actuator_damping = qd.f64(0.0)
+                            if (
+                                self.rigid.dyn_state.dofs.ctrl_mode[
+                                    dof,
+                                    environment,
+                                ]
+                                <= gs.CTRL_MODE.VELOCITY
+                            ):
+                                actuator_damping = -self.rigid.dyn_info.dofs.act_bias[dof_index][2] * self.rigid.h
+                            augmentation = (
+                                self.rigid.dyn_info.dofs.armature[dof_index]
+                                + self.rigid.h * self.rigid.dyn_info.dofs.damping[dof_index]
+                                + actuator_damping
+                            )
                         pivot = qd.max(
-                            basis.dot(articulated @ basis)
-                            + self.rigid.dyn_info.dofs.armature[dof_index]
-                            + self.rigid.h * self.rigid.dyn_info.dofs.damping[dof_index]
-                            + actuator_damping,
+                            basis.dot(articulated @ basis) + augmentation,
                             qd.f64(1.0e-12),
                         )
                         edge_motion = edge_hessian @ motion
@@ -1527,26 +2083,27 @@ class RigidJointForestSystem(SimSystem):
                 environment = body // self.rigid.n_links[()]
                 first_dof = self.root_dof_index[body] - environment * self.rigid.n_dofs_per_instance[()]
                 for dof in qd.static(range(6)):
-                    dof_index = (
-                        [first_dof + dof, environment]
-                        if qd.static(self.rigid.rigid_config.batch_dofs_info)
-                        else first_dof + dof
-                    )
-                    actuator_damping = qd.f64(0.0)
-                    if (
-                        self.rigid.dyn_state.dofs.ctrl_mode[
-                            first_dof + dof,
-                            environment,
-                        ]
-                        <= gs.CTRL_MODE.VELOCITY
-                    ):
-                        actuator_damping = -self.rigid.dyn_info.dofs.act_bias[dof_index][2] * self.rigid.h
-                    root_hessian[dof, dof] = (
-                        root_hessian[dof, dof]
-                        + self.rigid.dyn_info.dofs.armature[dof_index]
-                        + self.rigid.h * self.rigid.dyn_info.dofs.damping[dof_index]
-                        + actuator_damping
-                    )
+                    if qd.static(not self.rigid.uses_cgq_mincoo):
+                        dof_index = (
+                            [first_dof + dof, environment]
+                            if qd.static(self.rigid.rigid_config.batch_dofs_info)
+                            else first_dof + dof
+                        )
+                        actuator_damping = qd.f64(0.0)
+                        if (
+                            self.rigid.dyn_state.dofs.ctrl_mode[
+                                first_dof + dof,
+                                environment,
+                            ]
+                            <= gs.CTRL_MODE.VELOCITY
+                        ):
+                            actuator_damping = -self.rigid.dyn_info.dofs.act_bias[dof_index][2] * self.rigid.h
+                        root_hessian[dof, dof] = (
+                            root_hessian[dof, dof]
+                            + self.rigid.dyn_info.dofs.armature[dof_index]
+                            + self.rigid.h * self.rigid.dyn_info.dofs.damping[dof_index]
+                            + actuator_damping
+                        )
                 inverse = root_hessian.inverse()
                 for row in qd.static(range(6)):
                     for column in qd.static(range(6)):
@@ -1589,10 +2146,13 @@ class RigidJointForestSystem(SimSystem):
                             ] = inverse[row, column]
 
     @qd.func(requires_top_level=True)
-    def forest_precond_apply_tree_shared(
+    def _forest_precond_apply_tree_shared_impl(
         self,
         residual: qd.template(),
         result: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+        masked: qd.template(),
     ):
         qd.loop_config(name="forest_precond_apply_tree_shared", block_dim=32)
         for task in range(self.n_trees[()] * 32):
@@ -1604,7 +2164,15 @@ class RigidJointForestSystem(SimSystem):
             root_solution = qd.simt.block.SharedArray((6,), qd.f64)
             scalar = qd.simt.block.SharedArray((1,), qd.f64)
 
-            if tree < self.n_trees[()]:
+            tree_active = tree < self.n_trees[()]
+            if qd.static(masked):
+                if tree_active:
+                    tree_active = self._tree_is_active(
+                        tree,
+                        component_labels,
+                        converged,
+                    )
+            if tree_active:
                 begin = self.tree_body_start[tree]
                 size = self.tree_body_start[tree + 1] - begin
                 flat = lane
@@ -1748,22 +2316,59 @@ class RigidJointForestSystem(SimSystem):
                     flat = flat + 32
 
     @qd.func(requires_top_level=True)
-    def forest_precond_apply_level(
+    def forest_precond_apply_tree_shared(
         self,
         residual: qd.template(),
         result: qd.template(),
     ):
+        self._forest_precond_apply_tree_shared_impl(
+            residual,
+            result,
+            residual,
+            residual,
+            False,
+        )
+
+    @qd.func(requires_top_level=True)
+    def _forest_precond_apply_level_impl(
+        self,
+        residual: qd.template(),
+        result: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+        masked: qd.template(),
+    ):
         for dof in range(self.rigid.n_storage_dofs[()]):
-            result[self.rigid.dof_offset[()] + dof] = 0.0
+            global_dof = self.rigid.dof_offset[()] + dof
+            is_active = True
+            if qd.static(masked):
+                is_active = converged[component_labels[global_dof // 3]] == 0
+            if is_active:
+                result[global_dof] = 0.0
         for body in range(self.n_mechanism_bodies[()]):
-            for component in qd.static(range(6)):
-                self.precond_force[body, component] = 0.0
-                self.precond_velocity[body, component] = 0.0
+            is_active = True
+            if qd.static(masked):
+                is_active = self._tree_is_active(
+                    self.tree_id[body],
+                    component_labels,
+                    converged,
+                )
+            if is_active:
+                for component in qd.static(range(6)):
+                    self.precond_force[body, component] = 0.0
+                    self.precond_velocity[body, component] = 0.0
 
         for reverse_level in qd.static(range(self.n_links_host)):
             level = self.max_depth[()] - reverse_level
             for body in range(self.n_mechanism_bodies[()]):
-                if reverse_level < self.max_depth[()] and self.depth[body] == level:
+                is_active = True
+                if qd.static(masked):
+                    is_active = self._tree_is_active(
+                        self.tree_id[body],
+                        component_labels,
+                        converged,
+                    )
+                if is_active and reverse_level < self.max_depth[()] and self.depth[body] == level:
                     parent = self.parent_body[body]
                     force = qd.Vector.zero(qd.f64, 6)
                     for component in qd.static(range(6)):
@@ -1790,7 +2395,14 @@ class RigidJointForestSystem(SimSystem):
 
         for body in range(self.n_mechanism_bodies[()]):
             root_dof = self.root_dof_index[body]
-            if self.parent_body[body] < 0 and root_dof >= 0:
+            is_active = True
+            if qd.static(masked):
+                is_active = self._tree_is_active(
+                    self.tree_id[body],
+                    component_labels,
+                    converged,
+                )
+            if is_active and self.parent_body[body] < 0 and root_dof >= 0:
                 basis = self._root_basis(body)
                 inverse = qd.Matrix.zero(qd.f64, 6, 6)
                 force = qd.Vector.zero(qd.f64, 6)
@@ -1813,7 +2425,14 @@ class RigidJointForestSystem(SimSystem):
         for level_slot in qd.static(range(self.n_links_host)):
             level = level_slot + 1
             for body in range(self.n_mechanism_bodies[()]):
-                if level_slot < self.max_depth[()] and self.depth[body] == level:
+                is_active = True
+                if qd.static(masked):
+                    is_active = self._tree_is_active(
+                        self.tree_id[body],
+                        component_labels,
+                        converged,
+                    )
+                if is_active and level_slot < self.max_depth[()] and self.depth[body] == level:
                     parent = self.parent_body[body]
                     parent_velocity = qd.Vector.zero(qd.f64, 6)
                     for component in qd.static(range(6)):
@@ -1838,48 +2457,19 @@ class RigidJointForestSystem(SimSystem):
             self.rigid.n_storage_dofs[()],
         ):
             offset = self.rigid.dof_offset[()] + dof
-            result[offset] = residual[offset]
+            is_active = True
+            if qd.static(masked):
+                is_active = converged[component_labels[offset // 3]] == 0
+            if is_active:
+                result[offset] = residual[offset]
 
         if qd.static(self.has_contact_proxy):
             for pair in range(self.contact_proxy.n_pairs[()]):
                 offset = self.proxy_dof_offset[()] + pair * 6
-                if self.contact_proxy.restoration_active[()] == 0:
-                    for component in qd.static(range(6)):
-                        result[offset + component] = residual[offset + component]
-                else:
-                    proxy = self.contact_proxy.proxy_body[pair]
-                    inverse = qd.Matrix.zero(qd.f64, 6, 6)
-                    rhs = qd.Vector.zero(qd.f64, 6)
-                    for row in qd.static(range(6)):
-                        rhs[row] = residual[offset + row]
-                        for column in qd.static(range(6)):
-                            inverse[row, column] = self.kkt_proxy_diagonal[
-                                proxy,
-                                row,
-                                column,
-                            ]
-                    value = inverse @ rhs
-                    for component in qd.static(range(6)):
-                        result[offset + component] = value[component]
-
-    @qd.func(requires_top_level=True)
-    def apply_preconditioner(
-        self,
-        residual: qd.template(),
-        result: qd.template(),
-    ):
-        if qd.static(self.use_fused_tree_path):
-            self.forest_precond_apply_tree_shared(residual, result)
-            for dof in range(
-                self.rigid.n_dofs[()],
-                self.rigid.n_storage_dofs[()],
-            ):
-                offset = self.rigid.dof_offset[()] + dof
-                result[offset] = residual[offset]
-
-            if qd.static(self.has_contact_proxy):
-                for pair in range(self.contact_proxy.n_pairs[()]):
-                    offset = self.proxy_dof_offset[()] + pair * 6
+                is_active = True
+                if qd.static(masked):
+                    is_active = converged[component_labels[offset // 3]] == 0
+                if is_active:
                     if self.contact_proxy.restoration_active[()] == 0:
                         for component in qd.static(range(6)):
                             result[offset + component] = residual[offset + component]
@@ -1898,8 +2488,112 @@ class RigidJointForestSystem(SimSystem):
                         value = inverse @ rhs
                         for component in qd.static(range(6)):
                             result[offset + component] = value[component]
+
+    @qd.func(requires_top_level=True)
+    def forest_precond_apply_level(
+        self,
+        residual: qd.template(),
+        result: qd.template(),
+    ):
+        self._forest_precond_apply_level_impl(
+            residual,
+            result,
+            residual,
+            residual,
+            False,
+        )
+
+    @qd.func(requires_top_level=True)
+    def _apply_preconditioner_impl(
+        self,
+        residual: qd.template(),
+        result: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+        masked: qd.template(),
+    ):
+        if qd.static(self.use_fused_tree_path):
+            self._forest_precond_apply_tree_shared_impl(
+                residual,
+                result,
+                component_labels,
+                converged,
+                masked,
+            )
+            for dof in range(
+                self.rigid.n_dofs[()],
+                self.rigid.n_storage_dofs[()],
+            ):
+                offset = self.rigid.dof_offset[()] + dof
+                is_active = True
+                if qd.static(masked):
+                    is_active = converged[component_labels[offset // 3]] == 0
+                if is_active:
+                    result[offset] = residual[offset]
+
+            if qd.static(self.has_contact_proxy):
+                for pair in range(self.contact_proxy.n_pairs[()]):
+                    offset = self.proxy_dof_offset[()] + pair * 6
+                    is_active = True
+                    if qd.static(masked):
+                        is_active = converged[component_labels[offset // 3]] == 0
+                    if is_active:
+                        if self.contact_proxy.restoration_active[()] == 0:
+                            for component in qd.static(range(6)):
+                                result[offset + component] = residual[offset + component]
+                        else:
+                            proxy = self.contact_proxy.proxy_body[pair]
+                            inverse = qd.Matrix.zero(qd.f64, 6, 6)
+                            rhs = qd.Vector.zero(qd.f64, 6)
+                            for row in qd.static(range(6)):
+                                rhs[row] = residual[offset + row]
+                                for column in qd.static(range(6)):
+                                    inverse[row, column] = self.kkt_proxy_diagonal[
+                                        proxy,
+                                        row,
+                                        column,
+                                    ]
+                            value = inverse @ rhs
+                            for component in qd.static(range(6)):
+                                result[offset + component] = value[component]
         else:
-            self.forest_precond_apply_level(residual, result)
+            self._forest_precond_apply_level_impl(
+                residual,
+                result,
+                component_labels,
+                converged,
+                masked,
+            )
+
+    @qd.func(requires_top_level=True)
+    def apply_preconditioner(
+        self,
+        residual: qd.template(),
+        result: qd.template(),
+    ):
+        self._apply_preconditioner_impl(
+            residual,
+            result,
+            residual,
+            residual,
+            False,
+        )
+
+    @qd.func(requires_top_level=True)
+    def apply_preconditioner_masked(
+        self,
+        residual: qd.template(),
+        result: qd.template(),
+        component_labels: qd.template(),
+        converged: qd.template(),
+    ):
+        self._apply_preconditioner_impl(
+            residual,
+            result,
+            component_labels,
+            converged,
+            True,
+        )
 
     @qd.func(requires_top_level=True)
     def compute_merit_directional_derivative(
