@@ -1,13 +1,13 @@
-"""Generate the QIPC coupling performance report assets.
+"""Generate the coupling performance report assets.
 
 The source measurements are transcribed from:
 
 - dev-docs/contact-performance-debt.md
-- https://github.com/Genesis-Embodied-AI/quadrants/issues/945
+- Quadrants issue #945
 
-Run from the Genesis repository root:
+Run from the repository root:
 
-    .venv/Scripts/python.exe dev-docs/performance-report/generate_performance_report.py
+    python dev-docs/performance-report/generate_performance_report.py
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 REPORT_DIR = Path(__file__).resolve().parent
-REPORT_PATH = REPORT_DIR / "qipc-coupling-performance-report.md"
-DATA_PATH = REPORT_DIR / "qipc-coupling-performance-data.json"
-PLOT_PATH = REPORT_DIR / "qipc-performance-optimization-summary.png"
-BUNDLE_PATH = REPORT_DIR / "genesis-qipc-performance-report-2026-09-30.zip"
+REPORT_PATH = REPORT_DIR / "coupling-performance-report.md"
+DATA_PATH = REPORT_DIR / "coupling-performance-data.json"
+PLOT_PATH = REPORT_DIR / "coupling-performance-summary.png"
+BUNDLE_PATH = REPORT_DIR / "coupling-performance-report-2026-09-30.zip"
 
 
 def metric(
@@ -515,21 +515,19 @@ VALIDATION_CASES = [
 
 
 REPORT_DATA = {
-    "title": "Genesis World QIPC Coupling Performance Optimization Report",
+    "title": "Coupling Performance Optimization Report",
     "generated": "2026-09-30",
     "hardware": "NVIDIA GeForce RTX 5090",
-    "genesis_commit": "7f8850d4",
-    "cgq_ground_truth": "42e7d4cbbad08739107ad830a17918f5f0f209ff",
-    "quadrants_commits": {
+    "runtime_commit": "7f8850d4",
+    "native_reference_commit": "42e7d4cbbad08739107ad830a17918f5f0f209ff",
+    "compiler_commits": {
         "compile_time": "e5811c2dd",
         "checkpoint_parallel": "3b0f9c2ad",
         "resident_grid": "12119f03e",
         "range_bound_inlining": "bf3a00645",
     },
-    "quadrants_publication": {
-        "repository": "https://github.com/alanray-tech/quadrants",
-        "branch": "dev/compile-time-opt",
-        "upstream_status": ("Not merged into upstream Quadrants; only the compile-time subset " "has open fork PR #2."),
+    "compiler_publication": {
+        "upstream_status": "Not merged; only the compile-time subset has an open synchronization PR.",
     },
     "artifact_limitations": [
         ("JSON/CSV summaries and benchmark scripts are retained, but not " "every original Nsight SQLite capture."),
@@ -685,7 +683,7 @@ def write_plot() -> None:
     plot_end_to_end(figure.add_subplot(grid[0, 1]))
     plot_compile_time(figure.add_subplot(grid[1, :]))
     figure.suptitle(
-        "Genesis World QIPC coupling: measured optimization impact",
+        "Coupling runtime: measured optimization impact",
         fontsize=18,
         fontweight="bold",
     )
@@ -737,7 +735,7 @@ def write_bundle() -> None:
         raise FileNotFoundError(f"Cannot package missing report assets: {missing}")
     with zipfile.ZipFile(BUNDLE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in required:
-            archive.write(path, arcname=f"genesis-qipc-performance-report/{path.name}")
+            archive.write(path, arcname=f"coupling-performance-report/{path.name}")
 
 
 def main() -> None:

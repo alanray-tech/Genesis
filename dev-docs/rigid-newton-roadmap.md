@@ -1,6 +1,6 @@
 # Rigid Newton Framework Roadmap
 
-Status: authoritative roadmap for branch `newton/rigid-only-baseline`.
+Status: authoritative roadmap for the current checkout.
 
 Read [rigid-newton-development.md](rigid-newton-development.md) before editing code.
 
@@ -9,7 +9,9 @@ Read [rigid-newton-development.md](rigid-newton-development.md) before editing c
 - Requirements marked **Accepted** are user decisions and must be preserved.
 - Items marked **Open** must not be decided by an agent. Present evidence and trade-offs, then wait for user approval.
 - Do not infer architecture from the current Genesis couplers. Legacy, SAP, and IPC coupling are counterexamples for this work.
-- Do not introduce a workaround for an upstream limitation or an early simplified scene.
+- Do not introduce an undocumented workaround for an upstream limitation. A
+  temporary workaround requires an upstream issue, a regression test, measured
+  cost, and explicit approval.
 - Do not create an implementation that must be replaced when Cloth or cross-system contact is added.
 - Keep formulas and numerical behavior traceable to one implementation. Native wrappers and the graph path must call the
   same numerical functions.
@@ -27,30 +29,36 @@ The eventual application is tabletop Cloth manipulation:
 
 - Preserve the Genesis articulated minimal-coordinate Rigid representation.
 - Preserve the result and performance of pure Genesis Rigid behavior.
-- Keep Rigid-Rigid and Rigid-world contact in the Genesis native contact implementation.
-- Use the QIPC/CGQ system model: systems, global layout, explicit BCOO plus matrix-free operators, PCG, and one nonlinear
-  lifecycle.
-- Treat `qipc` and `cuda-graph-qipc` as references only. Future code is not based on either repository.
-- Use the local Quadrants checkpoint implementation rooted at commit
-  `459a3eb57a36781e3abcd6272232c074a98f87a7` and `double` only. Update the
-  release pin when that checkpoint support is released; do not implement a
-  fallback. `float` is outside the PoC.
+- Keep native Rigid collision code unchanged. The coupled first version disables
+  that collision pass to avoid duplicate work and supports Rigid surfaces only
+  as Cloth-contact proxies; Rigid-Rigid and Rigid-world contact are not part of
+  the public coupled support matrix.
+- Use one graph-native system model: systems, global layout, explicit BCOO
+  plus matrix-free operators, LinearPCG, and one nonlinear lifecycle.
+- External numerical implementations are optional references only, with no
+  assumed checkout name or location.
+- Use the Quadrants version pinned by `pyproject.toml` and `double` only.
+  `float` is outside the first version.
 - Environments are hard coupling boundaries. Connectivity is global inside each environment and never crosses
   environments.
-- Use one numerical advance unit, called a timestep with duration `h`. The new framework has no Genesis
-  `step/substep` hierarchy.
-- Reuse only the Genesis Rigid numerical kernels/functions and the typed data they require. Do not inherit the existing
-  Scene, Simulator, or coupler runtime lifecycle.
-- A Genesis scene may be an authoring/build-time data source. It does not schedule the new Newton solver.
-- Prohibit workarounds and one-off minimal implementations.
+- Use one numerical advance unit with duration `h`. The first version requires
+  one numerical advance per `Scene.step()`.
+- Reuse only the existing Rigid numerical kernels/functions and typed data.
+  Keep the Rigid implementation independent of the graph runtime.
+- Integrate through `NewtonCoupler`, preserving the standard Scene and
+  Simulator callbacks, recorders, sensors, clocks, and visualization.
+- Prohibit undocumented workarounds and scene-specific one-off implementations.
 
-## Completed Rigid milestone
+## Completed Rigid-only extraction milestone
 
-Complete the Genesis RigidSolver QIPC frameworkization as one end-to-end vertical slice.
+Complete the RigidSolver graph-native frameworkization as one end-to-end
+vertical slice.
 
-The real milestone scene is `examples/newton_coupling/franka_cube.py`. It must complete the Franka hold, grasp, and
-lift sequence through the new runtime in double precision while preserving native Rigid contact, friction, controllers,
-and actuators. The original `examples/rigid/franka_cube.py` remains the native behavior and performance reference.
+The extraction milestone used `examples/newton_coupling/franka_cube.py` to
+complete a Franka hold, grasp, and lift sequence through the graph runtime in
+double precision while preserving native Rigid contact, friction, controllers,
+and actuators. `examples/rigid/franka_cube.py` remains the native behavior and
+performance reference.
 
 The first executable implementation must be graph-native:
 
@@ -101,22 +109,24 @@ Matrix-free and direct-factor comparisons remain required unit tests inside the 
   depend on the new framework.
 - New numerical systems use `@qd.data_oriented` objects with rebindable buffers.
 - Existing Genesis Rigid typed dataclasses remain the Rigid participant's internal numerical payload.
-- A built `RigidSolver` publishes its numerical data to the new runtime once. The runtime never calls the old
-  Simulator or coupler lifecycle.
+- A built `RigidSolver` publishes its numerical data to `RigidSystem` once.
+  `NewtonCoupler` invokes `SimEngine` from the standard Simulator step without
+  running the native solver/coupler substep loop.
 - The global PCG is a new graph-native composable implementation supporting BCOO, matrix-free participant operators,
   and participant preconditioners from its first version.
 - Every framework component derives from `SimSystem`. Numerical participants register only the engine stages they
   implement; `SimSystem` inheritance alone does not imply the whole Newton interface.
-- `SimEngine.initialize()` lowers timestep lifecycle functions directly onto the engine. `LinearPCG` independently
+- `SimEngine.init()` lowers timestep lifecycle functions directly onto the engine. `LinearPCG` independently
   lowers matrix-free operator and preconditioner contributions onto itself; there is no intermediate solve-plan object.
-- Genesis scalar generalized DOFs use the CGQ scalar packing contract: three scalar DOFs per 3x3 block, one valid DOF
+- Scalar generalized DOFs use the reference packing contract: three scalar DOFs per 3x3 block, one valid DOF
   count, and identity diagonal with zero gradient in the tail lanes. No padding mask is used.
 - All built instances occupy one flattened global unknown space. Disconnected instances are ordinary block-diagonal
   components of the same linear system.
-- There is one `SimSystem` architecture. When only Genesis Rigid is active, build-time static function selection emits
-  the pure-Rigid specialization directly.
-- Pure-Rigid behavior is not a second engine or lifecycle. The old `Scene.step() -> Simulator -> RigidSolver` path is
-  retained only as a regression and performance oracle while the specialization reaches parity.
+- There is one `SimSystem` architecture. The first public coupling path
+  requires QCloth; the lower-level Rigid-only builder remains a development
+  and parity surface.
+- Scenes not selecting `NewtonCouplerOptions` retain their existing
+  `Scene.step() -> Simulator -> solver/coupler` behavior unchanged.
 
 ## Rigid participant requirements
 
@@ -142,7 +152,8 @@ The initial Rigid graph path must retain:
 - pyramidal friction;
 - elliptic friction and its coupled cone Hessian;
 - joint-specific integration and retraction;
-- batched environments.
+- the existing scalar generalized-coordinate layout for one unbatched
+  environment. Batched execution is deferred beyond the first version.
 
 ## Linear solve requirements
 
@@ -213,8 +224,8 @@ path and satisfies all of the following:
 
 - CUDA graph is built with no non-graph fallback.
 - Newton, PCG, and line search all run in device graph loops.
-- CPU and GPU pass in `double`.
-- Single and batched environments pass.
+- GPU passes in `double`; unsupported CPU execution is rejected at build.
+- One unbatched environment passes; unsupported batching is rejected at build.
 - Every required native constraint/contact mode remains available.
 - Matrix-free apply matches the assembled native Hessian.
 - Native Cholesky apply matches the direct native solve.
@@ -226,8 +237,17 @@ Only after the Rigid frameworkization is complete:
 
 1. Add Cloth inertia and elasticity to the same framework, without self-contact. **Complete.**
 2. Add the complete Cloth IPC self-contact and CCD pipeline. **Complete.**
-3. Migrate the complete reduced-KKT rigid contact-proxy stack from pinned CGQ. **Current milestone.**
-4. Validate Rigid-Cloth coupling conformance against the pinned CGQ scenes.
+3. Migrate the complete reduced-KKT rigid contact-proxy stack from the pinned reference. **Complete.**
+4. Integrate the graph runtime through `NewtonCouplerOptions` and standard
+   `Scene.step()`, with scripted Franka-Cloth grasp and Cloth-stack examples.
+   **Complete.**
+5. Finish full pinned-reference conformance and remove explicitly accepted
+   temporary performance debt. **Current milestone.**
+
+The first-version public examples are
+`examples/newton_coupling/franka_cloth_grasp.py` and
+`examples/newton_coupling/cloth_stack.py`. Both use `NewtonCouplerOptions` and
+advance exclusively through `Scene.step()`.
 
 The completed contact acceptance scene contains one analytical ground halfplane
 and two free-falling vertical cloth sheets. One sheet spans XZ and the other
@@ -246,27 +266,27 @@ The completed contact milestone includes:
 - checkpoint/yield/resume for pair, assembly, and global-triplet capacity.
 
 All parameter names, units, defaults, and growth rules are fixed by
-[cgq-contact-parameter-manifest.md](cgq-contact-parameter-manifest.md).
+[contact-parameter-manifest.md](contact-parameter-manifest.md).
 
 ### Contact performance acceptance
 
 Numerical success in the crossed-cloth scene is necessary but not sufficient.
 During the current migration stage, every scene-scale contact phase must use a
 load-balanced GPU implementation and the most efficient applicable
-warp/subgroup-level algorithm. Exact CGQ launch topology is optional only when
+warp/subgroup-level algorithm. Exact reference launch topology is optional only when
 the alternative preserves semantics and evidence shows that it matches or
-exceeds the applicable CGQ production path. A merely reasonable temporary
+exceeds the applicable pinned-reference production path. A merely reasonable temporary
 runtime implementation is not admissible.
 
 No non-load-balanced implementation may enter the milestone runtime. For
 irregular traversal, candidate compaction, output emission, reductions, and
 sparse assembly, the implementation must use the most efficient applicable
 warp/subgroup-level algorithm. A scalar or thread-local algorithm is rejected
-when CGQ provides a warp-frontier, warp-DFS, warp-batched, or warp-segmented
+when the reference provides a warp-frontier, warp-DFS, warp-batched, or warp-segmented
 production path.
 
 The production objective is stricter: match or exceed the highest-performance
-CGQ path on representative contact workloads. Current-stage acceptance of a
+pinned-reference path on representative contact workloads. Current-stage acceptance of a
 different parallel decomposition does not approve it as the final architecture.
 Performance debt must remain explicit until it is eliminated.
 
@@ -287,7 +307,7 @@ Acceptance requires:
   applicable;
 - parallel contact filter, assembly, sort/reduce, CCD, and BCOO distribution;
 - no brute-force production path or host fallback;
-- compile/runtime profiles and size-scaling data against the pinned CGQ
+- compile/runtime profiles and size-scaling data against the pinned reference
   reference.
 
 The serialized `LBVH.query_ee_dual` prototype has been removed. Milestone
@@ -298,16 +318,16 @@ close the gate.
 
 ### Reduced-KKT proxy migration
 
-Ground truth is `cuda-graph-qipc`
-`main@42e7d4cbbad08739107ad830a17918f5f0f209ff`. Genesis performs no algorithm
-experiments and introduces no staged substitute. The production path includes:
+The reduced-KKT formulas and ordering are traced to a pinned native numerical
+reference. The runtime performs no scene-specific algorithm experiment and
+introduces no staged substitute. The production path includes:
 
 - one explicit massless contact proxy for every delegated Genesis mechanism
   link;
 - independent accepted/trial proxy SE(3) state and ordinary proxy screw
   trajectories;
 - `constraint`, `tangent_map`, `normal_map`, `particular`, `slack`,
-  `reaction`, path-limit, filter, merit, and restoration state with CGQ names
+  `reaction`, path-limit, filter, merit, and restoration state with reference names
   and defaults;
 - hard reduction `d = d_p + P y` and
   `P^T H P y = -P^T (gradient + H d_p)`;
@@ -320,19 +340,19 @@ experiments and introduces no staged substitute. The production path includes:
   stiffness, state-level FK substitution, post-line-search snap, or
   articulated CCD.
 
-CGQ appends proxies to its growable maximal `RigidBodyDynamics`. Genesis native
+The native reference appends proxies to its growable maximal `RigidBodyDynamics`. Native
 `RigidSolver` link storage cannot grow after scene build, so
 `RigidContactProxySystem` owns the independent proxy SE(3) state while
-preserving the CGQ public field names and publishes that state to the global
+preserving the reference field names and publishes that state to the global
 contact managers. This storage-owner adaptation must not change the KKT maps,
 pipeline order, contact routes, or proxy screw contract.
 
 Contact ownership is fixed:
 
-- Rigid-Rigid and Rigid-world: Genesis native contact unless a pair is
-  explicitly delegated to a proxy route.
-- Cloth-Cloth: IPC.
-- Rigid-Cloth: IPC through the explicit proxy surface.
+- Rigid-Rigid and Rigid-world: unchanged native contact outside the coupled
+  runtime; unsupported by the public coupled first version.
+- Cloth-Cloth: Consistent IPC.
+- Rigid-Cloth: Consistent IPC through the explicit proxy surface.
 
 Matrix representation is fixed:
 
@@ -346,20 +366,34 @@ Matrix representation is fixed:
 
 - Explicit codimensional rod/particle PE/PP broad phase.
 - Adhesion, variational adhesion, bonds, and contact topology mutation.
-- Existing Genesis Scene/Simulator/coupler runtime integration.
-- `float`.
+- MinCoo, MaskedPCG, and component-partitioned solving.
+- CPU, `float`, differentiation, batched environments, and multiple substeps.
+- FEM materials other than `FEM.QCloth` and active solvers other than Rigid
+  plus FEM.
 
 ## Checkpoint requirement
 
-[Quadrants #750](https://github.com/Genesis-Embodied-AI/quadrants/issues/750)
-tracked support for a checkpoint region containing child `qd.graph.do_while`
-nodes. The local Quadrants commit pinned above contains that support and is now
-required by dynamic contact-capacity handling.
+Quadrants issue #750
+tracks the general case of a checkpoint region containing child
+`qd.graph.do_while` nodes. The Genesis pipeline does not require that graph
+shape: capacity checks yield before iterative consumers, the explicit `SOLVE`
+checkpoint ends after idempotent post-growth assembly, and PCG and line search
+run as checkpoint-external child loops. Every inlined `qd.func` stage around
+those loops is nevertheless enclosed by its own flat, no-yield checkpoint.
+This is a correctness workaround: checkpoint auto-wrapping skips direct
+kernel-AST tasks, but currently fails to propagate the resume gate across a
+top-level inlined `qd.func`, allowing that function to execute once after an
+earlier yield. `test_contact_checkpoint_yield_skips_pcg` pins the bug by
+forcing a `SORT` yield and proving that a PCG iteration-count sentinel remains
+untouched; the compiler defect is tracked by Quadrants issue #956.
+Quadrants PR #944
+implements the generic checkpoint-containing-child-loop shape, but is not a
+Genesis runtime dependency.
 
 The contact graph must yield only on a real capacity overflow, reallocate the
 owning buffers, clear the triggering device scalar, and resume from the exact
-CGQ phase. Do not add fixed-capacity failure behavior or flatten nested graph
-loops as a fallback.
+reference phase. Do not add fixed-capacity failure behavior or move an overflow
+check after work that consumes the capacity it protects.
 
 ## Open decisions
 

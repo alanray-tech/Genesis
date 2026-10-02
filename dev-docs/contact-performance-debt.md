@@ -2,8 +2,8 @@
 
 Status: authoritative rewrite queue.
 
-Ground truth is `cuda-graph-qipc`
-`main@42e7d4cbbad08739107ad830a17918f5f0f209ff`.
+Algorithm and performance comparisons use one pinned native numerical
+reference. No checkout name or directory layout is assumed.
 
 This register covers implementations that preserve useful numerical or candidate
 semantics but do not yet represent the highest-performance target. Passing the
@@ -18,7 +18,7 @@ the production implementation is replaced and benchmarked.
 - Irregular traversal, frontier expansion, compaction, reduction, segmented
   reduction, candidate emission, and sparse assembly must use the most
   efficient applicable warp/subgroup-level algorithm.
-- Production must match or exceed the fastest applicable CGQ path. A different
+- Production must match or exceed the fastest applicable pinned-reference path. A different
   decomposition is admissible only after evidence shows equivalent or better
   lane utilization, atomic traffic, memory traffic, occupancy, and scaling.
 - Serialized scene-scale traversal, unbounded work assigned to one lane,
@@ -827,6 +827,32 @@ Rewrite:
   required graph predicate, or an equally efficient static alternative with
   measured zero-work overhead.
 - Do not serialize the DOF reduction inside the scalar line-search decision.
+
+### PERF-P08: Explicit checkpoint gates around inlined solver stages
+
+Current:
+
+- Quadrants issue #956 allows a top-level inlined `qd.func` following a
+  yielding checkpoint to execute once.
+- `SimEngine` places flat no-yield checkpoints around PCG initialization,
+  each PCG iteration, PCG finalization, line-search trial work, and
+  line-search post work. A sentinel regression proves that a `SORT` yield
+  leaves PCG untouched.
+- On the matched stable Franka-Cloth window, the workaround increases median
+  wall time by 5.8% and wall time per PCG work by 5.2% versus the
+  nested-checkpoint baseline.
+
+Target:
+
+- Fix issue #956 in the compiler, remove redundant flat gates, and recover the
+  measured overhead without changing Newton, PCG, line-search, or resume
+  sequences.
+
+Status:
+
+- Temporarily accepted on 2026-10-02 as a correctness-first first-version
+  deferral. It remains open until the compiler fix lands and the matched
+  benchmark is repeated.
 
 ## Rigid and future coupling debt
 

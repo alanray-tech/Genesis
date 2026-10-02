@@ -1,50 +1,48 @@
 # Rigid Newton Framework Development Guide
 
-This document is the implementation handoff for agents working in `Genesis-RigidOnly`.
+This document is the implementation handoff for the graph-native Newton
+coupling runtime in the current checkout.
 
 Read [rigid-newton-roadmap.md](rigid-newton-roadmap.md) first. The roadmap owns requirements and milestone order.
 This guide records the current workspace, relevant source code, development procedure, and verification commands.
-Read [qipc-simulation-system-design.md](qipc-simulation-system-design.md) for the SimSystem, SimEngine, lifecycle,
-data-scope, and Manager + Reporter contracts.
+Read
+[graph-native-simulation-system-design.md](graph-native-simulation-system-design.md)
+for the SimSystem, SimEngine, lifecycle, data-scope, and Manager + Reporter
+contracts.
 
-## Repository state
+## Supported baseline
 
-- Worktree: `C:\Users\81946\Projects\GenesisWorldCouplingSystem\Genesis-RigidOnly`
-- Branch: `newton/rigid-only-baseline`
-- Genesis base: `09a8b65ab353369a2df778c20eaedee1c9b8a47c`
-- Quadrants dependency: `1.3.1`
-- Numerical precision: `double`
+- Repository root: the checkout containing this document.
+- Quadrants dependency: the version pinned by `pyproject.toml`.
+- Numerical precision: `double`.
+- Runtime: GPU with the ndarray backend.
 
-Reference checkouts beside this worktree:
-
-- `..\quadrants`: local Quadrants checkpoint implementation rooted at
-  `459a3eb57a36781e3abcd6272232c074a98f87a7`
-- `..\qipc`: QIPC Quadrants migration, commit `b17773cf`
-- `..\cuda-graph-qipc`: CGQ ground truth, commit
-  `42e7d4cbbad08739107ad830a17918f5f0f209ff`
-
-The QIPC and CGQ repositories are read-only references for this project. Do not add either as a dependency and do not
-develop the new framework inside them.
+Optional Python, native, and compiler reference implementations may be checked
+out anywhere. The runtime does not discover them, import them, or require a
+particular directory layout. Treat all external implementations as read-only
+references rather than package dependencies.
 
 ## Agent collaboration protocol
 
-1. Work only in `Genesis-RigidOnly`. Keep the original `Genesis` checkout unchanged.
+1. Make changes only in the current checkout. Treat comparison checkouts as read-only.
 2. Read both Rigid Newton documents before changing code.
 3. Check `git status --short` before editing. Preserve user changes.
 4. Do not decide an item marked **Open** in the roadmap.
-5. Do not use the existing Legacy/SAP/IPC coupler lifecycle as an integration surface.
+5. Keep the graph runtime behind `NewtonCoupler`; do not route it through the
+   Legacy/SAP/IPC coupling implementations.
 6. Do not create an eager or host-loop implementation.
-7. Use checkpoint only for CGQ contact-capacity overflow and exact phase resume.
+7. Use checkpoint only for contact-capacity overflow and exact phase resume.
 8. Do not create a participant-private PCG.
 9. Do not copy numerical formulas into a second implementation. Refactor shared `qd.func` entry points instead.
-10. Run the relevant RTX 5090 tests before handoff; CPU execution must be
+10. Run the relevant GPU tests before handoff; record the device and software
+    versions for every performance claim. Unsupported CPU execution must be
     rejected.
 11. Reject every non-load-balanced scene-scale GPU implementation. This is a
     hard code-admission rule, not an optimization suggestion.
 12. Traversal, compaction, reduction, segmented reduction, candidate emission,
     sparse assembly, and other irregular work must use the most efficient
     applicable warp/subgroup-level algorithm. Reject scalar or thread-local
-    code when CGQ provides a warp-frontier, warp-DFS, warp-batched, or
+    code when the pinned reference provides a warp-frontier, warp-DFS, warp-batched, or
     warp-segmented production path.
 13. Do not admit one-task whole-scene traversal, unbounded per-lane work,
     per-item global reservation when warp batching applies, or scalar global
@@ -54,33 +52,21 @@ develop the new framework inside them.
     reachable from a production or milestone runtime.
 15. Numerical parity, a passing example, or a temporary-performance-debt entry
     never waives rules 11--14. Production work must match or exceed the
-    highest-performance applicable CGQ path.
+    highest-performance applicable pinned-reference path.
 
 ## Local environment
 
-The worktree has a local `.venv` using Python 3.13.
+Commands below use a repository-local `.venv` for illustration. Any Python
+environment satisfying `pyproject.toml` is valid.
 
-Required versions:
+Use the dependency versions declared by `pyproject.toml`. Select a
+double-precision GPU backend supported by those dependencies. No specific GPU
+model, workspace path, or sibling checkout is required.
 
-```text
-Quadrants local checkpoint build / 459a3eb57
-PyTorch 2.11.0+cu128
-CUDA 12.8
-RTX 5090 / SM 12.0
-```
-
-The default PyPI PyTorch wheel is CPU-only. Install the CUDA wheel explicitly:
+Verify the active environment:
 
 ```powershell
-uv pip install --python .venv\Scripts\python.exe `
-  --index-url https://download.pytorch.org/whl/cu128 `
-  --reinstall torch==2.11.0
-```
-
-Verify:
-
-```powershell
-.venv\Scripts\python.exe -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))"
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))"
 ```
 
 Set UTF-8 for test runs so Genesis logging renders correctly:
@@ -89,31 +75,22 @@ Set UTF-8 for test runs so Genesis logging renders correctly:
 $env:PYTHONUTF8='1'
 ```
 
-## Current changes in the worktree
+## Current architecture
 
-`genesis/engine/solvers/rigid/rigid_solver.py`
+The existing `RigidSolver` remains the owner of minimal-coordinate state and
+the native numerical implementation. `RigidSystem` references its buffers and
+shared `qd.func` stages; the dependency remains one-way from the graph runtime
+to the Rigid numerical core. The first-version integration intentionally keeps
+`genesis/engine/solvers/rigid/` unchanged.
 
-- removes Legacy/SAP/IPC type checks from the native numerical path;
-- removes SAP split-step and IPC deferred-step branches;
-- defines `step_rigid_core`, a direct native numerical entry;
-- keeps `RigidSolver.substep` as a wrapper around `step_rigid_core`.
+Users select the graph runtime with `NewtonCouplerOptions` and advance it
+through ordinary `Scene.step()` calls. `NewtonCoupler` validates the supported
+configuration and constructs `SimEngine` lazily on the first step, after
+post-build qpos, controller, and QCloth-constraint setup. Scene callbacks,
+recorders, sensors, clocks, and visualization remain on the standard Scene
+lifecycle.
 
-`genesis/engine/solvers/rigid/collider/collider.py`
-
-- removes IPC-delegated collision-pair filtering from the native collider.
-
-`tests/rigid/test_dynamics.py`
-
-- compares `scene.step()` and direct `step_rigid_core` execution from the same initial state.
-
-`pyproject.toml`
-
-- pins `quadrants==1.3.1`.
-
-The direct entry still uses a built `RigidSolver` as the container for typed state. It is a parity boundary for
-mechanical extraction, not the final framework API.
-
-The independent graph runtime is implemented under `genesis/engine/systems`:
+The graph runtime is implemented under `genesis/engine/systems`:
 
 - `sim_system.py`: system registration and dependency lookup;
 - `sim_engine.py`: direct build-time lowering of registered timestep lifecycle functions;
@@ -124,15 +101,40 @@ The independent graph runtime is implemented under `genesis/engine/systems`:
 - `rigid_contact_proxy_kkt.py`: shared `A^-1`, `P`, `P^T`, slack, and FK-defect algebra;
 - `rigid_joint_forest.py`: Genesis minimal-coordinate link expansion/restriction and reduced operator hooks;
 - `rigid_contact_assemble.py`: proxy-proxy and proxy-FEM physical contact routes;
-- `sim_engine.py`: the graph-native timestep driver and static pipeline.
 
-Read [reduced-kkt-migration.md](reduced-kkt-migration.md) before changing any
+Read
+[reduced-kkt-contact-proxy.md](reduced-kkt-contact-proxy.md)
+before changing any
 of the proxy, forest, contact-route, PCG, CCD, globalization, or commit-gate
-code. These files are under active migration and are not selected by
-`build_scene_engine` until the complete pinned-CGQ production path is wired.
+code. `NewtonCoupler` selects this path for supported QCloth scenes; the
+lower-level builder remains an internal composition and testing surface.
 
-The existing Rigid kernels expose shared `qd.func` stages for the graph path while retaining their native kernel
-wrappers. The dependency remains one-way from the new framework to the Rigid numerical core.
+## First-version support matrix
+
+Supported:
+
+- GPU, double precision, and the ndarray backend;
+- one unbatched environment and `SimOptions.substeps=1`;
+- at least one `FEM.QCloth` entity, with optional Rigid entities;
+- native Newton Rigid constraints without differentiation, no-slip
+  post-processing, or hibernation;
+- Consistent IPC contact, graph-parallel BVH/contact phases, global BCOO plus
+  matrix-free Rigid terms, and `StandardPCGSolver`/`LinearPCG`;
+- hard fixed QCloth vertex constraints;
+- standard `Scene.step()` and full-scene `Scene.reset()`.
+
+Unsupported:
+
+- CPU, single precision, differentiation, batching, and multiple substeps;
+- other active solvers or FEM materials;
+- Rigid-Rigid and Rigid-world collision inside the coupled runtime;
+- MinCoo, MaskedPCG, component-partitioned solving, alternative contact
+  constitutions, adhesion, or topology mutation;
+- partial-environment reset.
+
+The engine is constructed lazily on the first step. A full reset discards the
+adapter and rebuilds it lazily from authoritative solver state; it does not
+reuse the previous engine instance.
 
 ## Genesis Rigid numerical source map
 
@@ -179,8 +181,9 @@ kernel_step_1
   -> FK / velocity refresh
 ```
 
-Scene, Simulator, couplers, viewer, recorder, checkpointing, and public entity accessors are not the new runtime
-architecture.
+Scene and Simulator provide the public lifecycle shell. `NewtonCoupler` bridges
+that shell to `SimEngine`; viewer, recorder, sensor, clock, and public entity
+APIs continue to observe solver state through their existing interfaces.
 
 ## Graph-native implementation contract
 
@@ -375,95 +378,82 @@ function names.
 
 ## Reference implementation map
 
-Use the references for concepts and tests, not as dependencies.
+External references are optional and may be located anywhere. Use these file
+suffixes to locate the corresponding concepts inside whichever pinned
+reference checkout is available.
 
-QIPC Quadrants migration:
+Python numerical reference:
 
-- `..\qipc\qipc\_src\solver\sim_engine.py`
-- `..\qipc\qipc\_src\solver\linear_pcg.py`
-- `..\qipc\qipc\_src\solver\global_linear_system.py`
-- `..\qipc\qipc\_src\solver\sim_system.py`
+- `_src/solver/sim_engine.py`
+- `_src/solver/linear_pcg.py`
+- `_src/solver/global_linear_system.py`
+- `_src/solver/sim_system.py`
 
-CGQ:
+Native numerical reference:
 
-- `..\cuda-graph-qipc\qipc\_src\native\solver\sim_system.h`
-- `..\cuda-graph-qipc\qipc\_src\native\solver\global_linear_system.h`
-- `..\cuda-graph-qipc\qipc\_src\native\solver\sim_engine_pipeline.cu`
-- `..\cuda-graph-qipc\qipc\_src\native\solver\subgraph\linear_pcg.h`
+- `_src/native/solver/sim_system.h`
+- `_src/native/solver/global_linear_system.h`
+- `_src/native/solver/sim_engine_pipeline.cu`
+- `_src/native/solver/subgraph/linear_pcg.h`
 
-Quadrants:
+Compiler documentation:
 
-- `..\quadrants\docs\source\user_guide\graph.md`
-- `..\quadrants\docs\source\user_guide\tensor.md`
+- `docs/source/user_guide/graph.md`
+- `docs/source/user_guide/tensor.md`
 
 ## Checkpoint status
 
-[Quadrants #750](https://github.com/Genesis-Embodied-AI/quadrants/issues/750)
-tracked checkpoint regions containing child graph loops. The pinned local
-Quadrants build supports that structure and is required for the contact
-pipeline.
+Quadrants issue #750
+tracks checkpoint regions containing child graph loops. Genesis keeps PCG and
+line-search `qd.graph.do_while` loops outside explicit checkpoint bodies:
+capacity checks yield before those consumers. Direct kernel-AST suffix tasks
+are skipped correctly, but a top-level inlined `qd.func` after a yielding
+checkpoint currently escapes the implicit resume gate and executes once.
+`SimEngine` therefore wraps PCG initialization, each PCG iteration, PCG
+finalization, line-search trial work, and line-search post work in separate
+flat no-yield checkpoints. This keeps child loops outside checkpoint bodies
+without trusting the broken implicit `qd.func` gating tracked by Quadrants
+issue #956. The
+contact pipeline requires checkpoint/yield/resume support, but not the
+nested-checkpoint graph shape implemented by Quadrants PR #944.
 
-Every yielded launch must identify one CGQ phase. The host may only grow the
+Every yielded launch must identify one reference phase. The host may only grow the
 owner's buffers, clear the corresponding overflow scalar, and resume from that
-phase. A flat-checkpoint or fixed-capacity workaround is prohibited.
+phase. A fixed-capacity workaround or a capacity check after its consumer is
+prohibited.
+
+Temporary performance deferral (accepted 2026-10-02): the explicit flat gates
+required by Quadrants #956 increase the stable Franka-cloth median by 5.8% and
+wall time per PCG work by 5.2% versus the nested-checkpoint baseline. Correct
+yield semantics take priority for this first version. Once #956 is fixed,
+remove the redundant flat gates and repeat the matched benchmark before
+claiming the recovered performance.
 
 ## Verification
 
-Run lint and syntax checks:
+Run format, lint, and syntax checks with tools from the active environment.
+Then run the targeted GPU suite:
 
-```powershell
-uvx ruff check genesis\engine\solvers\rigid\rigid_solver.py `
-  genesis\engine\solvers\rigid\collider\collider.py `
-  tests\rigid\test_dynamics.py
-
-uvx ruff format --check genesis\engine\solvers\rigid\rigid_solver.py `
-  genesis\engine\solvers\rigid\collider\collider.py `
-  tests\rigid\test_dynamics.py
+```text
+python -m pytest \
+  tests/deformable/test_contact_system.py \
+  tests/deformable/test_qcloth_newton.py \
+  tests/deformable/test_rigid_contact_proxy_kkt.py \
+  tests/rigid/test_dynamics.py \
+  --backend gpu -n 0
 ```
 
-Run direct-core parity on CPU:
+Run the public examples through the repository's example harness:
 
-```powershell
-$env:PYTHONUTF8='1'
-.venv\Scripts\python.exe -m pytest `
-  tests/rigid/test_dynamics.py::test_rigid_core_step_matches_scene_step `
-  -n 0 -s --backend cpu --dev --logical -p no:cacheprovider
+```text
+python -m pytest tests/test_examples.py -m examples \
+  -k "cloth_stack or franka_cloth_grasp" -n 0
 ```
 
-Run direct-core parity and native contact on RTX 5090:
-
-```powershell
-$env:PYTHONUTF8='1'
-.venv\Scripts\python.exe -m pytest `
-  tests/rigid/test_dynamics.py::test_rigid_core_step_matches_scene_step `
-  tests/rigid/test_collision.py::test_contact_forces `
-  -n 0 --backend gpu --dev --logical -p no:cacheprovider
-```
-
-Current verified results:
-
-- CPU direct-core parity: passed.
-- CPU gravity, all-fixed, and plane-convex contact: passed.
-- RTX 5090 direct-core parity: passed.
-- RTX 5090 native contact force: passed.
-- CPU and RTX 5090 graph-native sphere-plane contact: passed in double precision.
-- CPU and RTX 5090 multi-participant solve: Rigid plus an independently registered quadratic physics system converged
-  in the same PCG and shared line search.
-- RTX 5090 elliptic contact with sliding, torsional, and rolling friction: passed; the last timestep used 11 Newton
-  iterations and one PCG iteration per Newton solve.
-- The RTX 5090 step used a CUDA graph with 118 nodes and no non-graph fallback.
-- Rigid-only contact converged with one PCG iteration using the exact native Cholesky preconditioner.
-- `examples/newton_coupling/franka_cube.py --runtime newton` completed hold, grasp, and lift on CPU and RTX 5090. The
-  cube reached `z=0.1800`, matching the native example result to the displayed precision.
-- On the RTX 5090 Franka example, synchronized steady-state timestep latency after multi-participant generalization
-  measured 3.148 ms, versus 3.062 ms immediately before the generalization and 2.949 ms for the native path. Before
-  optimization the graph path was 3.987 ms. Nsight Systems GPU-kernel time before generalization fell from 2.482 to
-  2.003 ms/timestep; native is 1.836 ms/timestep.
-- The optimization restores the native GPU cooperative contact-pruning gate and factors the accepted Hessian only
-  when another Newton iteration will consume it. The accepted-state factor cost fell from 0.534 to 0.035 ms/timestep.
-- The post-generalization initial graph-building step measured 99.67 s, versus 91.07 s immediately before
-  generalization and 1.24 s for the already-compiled native path. Compilation remains the largest unresolved first-run
-  cost.
+Performance reports must state the exact compiler commit, GPU, driver,
+precision, timestep, warmup window, measurement window, Newton/PCG work, and
+whether offline cache was enabled. Do not encode one developer's environment
+or latest measurements as a permanent requirement in this guide.
 
 ## Handoff checklist
 

@@ -1,8 +1,8 @@
 # Genesis Development Guidelines
 
-## Rigid Newton framework worktree
+## Rigid Newton framework
 
-On branch `newton/rigid-only-baseline`, read these documents before changing Rigid/Newton code:
+Read these documents before changing Rigid/Newton code:
 
 - [Rigid Newton Framework Roadmap](dev-docs/rigid-newton-roadmap.md)
 - [Rigid Newton Framework Development Guide](dev-docs/rigid-newton-development.md)
@@ -20,7 +20,7 @@ implementation.
 * Local imports in functions are prohibited, unless strictly necessary to avoid circular dependencies.
 * No commented-out prints. Convert them to logging debug traces.
 * No code duplication.
-* Variable naming follows the Rigid engine conventions. See also the description of PR#1053 (https://github.com/Genesis-Embodied-AI/Genesis/pull/1053).
+* Variable naming follows the Rigid engine conventions already present in this checkout.
 * Domain objects are only 'entity', 'link', or 'geom'. Never invent a new noun ('body', 'object', 'piece') when one of these fits. This is also a correctness cue: the rigid-body unit is the link, so group geoms per link (iterate entity.links then link.geoms), not per entity.
 * Never add a cast - float() / int() / .astype() / np.asarray() / dtype= - unless strictly necessary. numpy scalars index, compare, and do arithmetic fine; cast only where an external interface forces the dtype (igl float64/int64, native Python for kernel args), and never re-cast what a later step already casts.
 * Use the helpers defined in genesis/utils/misc.py and genesis/utils/geom.py. 'detach().cpu().numpy()' is prohibited; use 'tensor_to_array'.

@@ -1,19 +1,17 @@
 {
-  "title": "Genesis World QIPC Coupling Performance Optimization Report",
+  "title": "Coupling Performance Optimization Report",
   "generated": "2026-09-30",
   "hardware": "NVIDIA GeForce RTX 5090",
-  "genesis_commit": "7f8850d4",
-  "cgq_ground_truth": "42e7d4cbbad08739107ad830a17918f5f0f209ff",
-  "quadrants_commits": {
+  "runtime_commit": "7f8850d4",
+  "native_reference_commit": "42e7d4cbbad08739107ad830a17918f5f0f209ff",
+  "compiler_commits": {
     "compile_time": "e5811c2dd",
     "checkpoint_parallel": "3b0f9c2ad",
     "resident_grid": "12119f03e",
     "range_bound_inlining": "bf3a00645"
   },
-  "quadrants_publication": {
-    "repository": "https://github.com/alanray-tech/quadrants",
-    "branch": "dev/compile-time-opt",
-    "upstream_status": "Not merged into upstream Quadrants; only the compile-time subset has open fork PR #2."
+  "compiler_publication": {
+    "upstream_status": "Not merged; only the compile-time subset has an open synchronization PR."
   },
   "artifact_limitations": [
     "JSON/CSV summaries and benchmark scripts are retained, but not every original Nsight SQLite capture.",

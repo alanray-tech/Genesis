@@ -1,19 +1,19 @@
-# CGQ Contact Parameter Manifest
+# Contact Parameter Manifest
 
-Status: authoritative migration manifest.
+Status: internal runtime manifest.
 
-Ground truth is `cuda-graph-qipc` `main@42e7d4cbbad08739107ad830a17918f5f0f209ff`.
-Genesis must copy these names, units, defaults, validation rules, and update
-cadence. Values in this file are not tuning suggestions.
+These names, units, defaults, validation rules, and update cadence define the
+internal composition interface. Values in this file are not tuning
+suggestions. `NewtonCouplerOptions` exposes only the supported first-version
+physical parameters; the remaining keys are internal or diagnostic.
 
 Primary sources:
 
-- `qipc/scene/config.py`
-- `qipc/contact.py`
-- `qipc/solver/solver.py::_wire_contact`
-- `qipc/_src/native/solver/contact_system.cu`
-- `docs/contact.md`
-- `docs/simulation_pipeline.md`
+- `genesis/engine/systems/contact.py`
+- `genesis/engine/systems/builders.py`
+- `genesis/engine/systems/contact_system.py`
+- `genesis/engine/systems/consistent_ipc_contact.py`
+- `genesis/engine/systems/sim_engine.py`
 
 ## Scene contact configuration
 
@@ -34,7 +34,7 @@ Primary sources:
 - `contact/ccd_partition_sv_max_iter`: integer, default `64`, minimum `1`.
 - `contact/intersection_check`: integer boolean, default `0`.
 - `contact/intersection_check_capacity`: integer, default `1024`, minimum `1`.
-- `contact/constitution`: string, default `"auto"`. The accepted CGQ values are
+- `contact/constitution`: string, default `"auto"`. The accepted manifest values are
   `"auto"`, `"consistent_ipc"`, `"gipc"`, `"adhesive_ipc"`, and
   `"variational_adhesive_ipc"`. This milestone resolves `"auto"` to
   `ConsistentIPCContactConstitution`; the other constitutions are not implemented.
@@ -43,6 +43,7 @@ Primary sources:
 - `extras/capacity_shrink_threshold`: float64, default `0.8`, range `(0, 1]`.
 - `topo/grow_factor`: float64, default `1.5`, minimum `1.0`.
 - `bvh/type`: string, default `"info_lbvh_batched_dop14"`.
+- `bvh/pt_query`: string, default `"warp"`.
 - `bvh/ee_query`: string, default `"dual"`.
 - `bvh/dual/frontier_levels`: integer, default `0`, range `[0, 18]`; zero selects auto depth.
 - `bvh/dual/target_waves`: float64, default `24.0`.
@@ -53,15 +54,27 @@ Primary sources:
   non-production diagnostic control.
 - `rigid_proxy/test_merit_energy_bias`: float64, default `0.0`, finite and
   non-negative; nonzero is test-only fault injection.
-- `rigid_forest/fused`: integer boolean, default `1`; zero selects CGQ's
+- `rigid_forest/fused`: integer boolean, default `1`; zero selects the
   compact level-order debug fallback.
-- `extras/rigid_forest/genesis_legacy`: Genesis-only integer boolean, default
+- `extras/rigid_forest/genesis_legacy`: diagnostic integer boolean, default
   `0`; one forces the original scan-all level implementation as a
   non-production performance baseline and overrides `rigid_forest/fused`.
-- `extras/pipeline/genesis_serial`: Genesis-only integer boolean, default `0`;
+- `extras/pipeline/genesis_serial`: diagnostic integer boolean, default `0`;
   one retains the pre-overlap serial ordering of independent contact/BVH/CCD
   branches as a non-production A/B baseline. It changes scheduling only, not
   contact formulas, live extents, or solver selection.
+- `extras/rigid_contact/genesis_collision`: diagnostic integer boolean,
+  default `0`; one retains native collision alongside graph contact for A/B
+  comparison.
+- `extras/sort_reduce/genesis_legacy`: diagnostic integer boolean, default
+  `0`.
+- `extras/bvh/genesis_legacy_fp64_bounds`: diagnostic integer boolean, default
+  `0`.
+- `extras/bvh/genesis_legacy_refit`: diagnostic integer boolean, default `0`.
+
+`contact/ccd_partition` and `contact/ccd_partition_sv_max_iter` are reserved
+manifest values; the first version uses one global screw-CCD alpha and does
+not consume them.
 
 ## Contact table
 
@@ -101,14 +114,10 @@ silently accepted.
   reallocates, clears only its overflow flag, and resumes from the exact checkpoint.
 - Normal frames perform no host readback inside the graph.
 
-## Milestone scene authoring
+## Example authoring
 
-Only geometry and initial pose are example-specific:
-
-- one analytical ground halfplane;
-- one vertical XZ cloth;
-- one vertical YZ cloth;
-- collision-free staggered heights so frame 0 has no cloth-cloth intersection and
-  all vertices begin outside the halfplane thickness shell.
-
-Solver/contact values in the example use this manifest unchanged.
+Cloth-only scenes derive one analytical ground halfplane from
+`FEMOptions.floor_height`. Mixed Rigid-QCloth scenes author fixed Rigid support
+geometry instead, preventing the analytical plane from also intersecting the
+robot. Every scene must start collision-free and outside all contact-thickness
+shells.

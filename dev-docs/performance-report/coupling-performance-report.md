@@ -1,19 +1,19 @@
-# Genesis World QIPC Coupling Performance Optimization Report
+# Coupling Performance Optimization Report
 
-Date: 2026-09-30  
-Hardware: NVIDIA GeForce RTX 5090  
-Genesis snapshot: `7f8850d4`  
-CGQ ground truth: `42e7d4cbbad08739107ad830a17918f5f0f209ff`  
-Quadrants performance snapshots: `e5811c2dd`, `3b0f9c2ad`, `12119f03e`,
-`bf3a00645`
+Status: historical measurement snapshot. Current runtime requirements live in
+the roadmap and development guide.
+
+- Date: 2026-09-30
+- Hardware: NVIDIA GeForce RTX 5090
+- Runtime snapshot: `7f8850d4`
+- Native-reference snapshot: `42e7d4cbbad08739107ad830a17918f5f0f209ff`
+- Compiler snapshots: `e5811c2dd`, `3b0f9c2ad`, `12119f03e`, `bf3a00645`
 
 This report consolidates the performance work completed while faithfully
 migrating the CGQ cloth, IPC contact, reduced-KKT, and GPU graph pipeline into
 Genesis World. It covers the new coupling framework and the directly supporting
 Quadrants changes; it does not claim to summarize unrelated optimizations in the
 upstream Genesis rigid solver.
-
-![Measured optimization impact](qipc-performance-optimization-summary.png)
 
 ## Executive conclusions
 
@@ -65,7 +65,7 @@ The report uses four evidence classes:
 
 All percentages use `(before - after) / before`. All speedups use
 `before / after`. The machine-readable ledger is
-`qipc-coupling-performance-data.json`.
+`coupling-performance-data.json`.
 
 The retained repository artifacts include JSON/CSV summaries and the benchmark
 scripts, but not every original Nsight SQLite database. Named-kernel figures
@@ -366,7 +366,7 @@ kernel implementations.
 The compiler investigation used Windows 11 build 26200, RTX 5090, Python 3.13,
 LLVM 22.1, CUDA FP64, and the mixed Franka plus 32x25-cloth graph. Cold
 measurements set `QD_OFFLINE_CACHE=0`. The complete evidence is preserved in
-[Quadrants issue 945](https://github.com/Genesis-Embodied-AI/quadrants/issues/945).
+Quadrants issue #945.
 
 ### Development configuration
 
@@ -450,11 +450,9 @@ measurements set `QD_OFFLINE_CACHE=0`. The complete evidence is preserved in
 - These totals span revisions and are context, not strict per-patch A/B.
 - Quadrants commit containing the compiler prototypes:
   `e5811c2dd`.
-- At release time, all four referenced performance commits are available on
-  `alanray-tech/quadrants:dev/compile-time-opt`. Only the compile-time subset
-  has an open upstream synchronization PR
-  ([alanray-tech/quadrants#2](https://github.com/alanray-tech/quadrants/pull/2));
-  none should be described as merged into upstream Quadrants.
+- At release time, all four referenced commits are available in the tested
+  performance fork. Only the compile-time subset has an upstream
+  synchronization PR; none should be described as merged until that PR lands.
 
 ## Final multi-case runtime validation
 
@@ -549,12 +547,12 @@ trajectories.
 
 ## Reproduction
 
-Run from the Genesis repository root on the pinned repositories.
+Run from the repository root.
 
 Generate one 250-frame Genesis result:
 
 ```powershell
-.\.venv\Scripts\python.exe `
+python `
   .\examples\newton_coupling\multilayer_cloth_benchmark.py `
   --backend genesis `
   --case pinned_drape `
@@ -564,10 +562,11 @@ Generate one 250-frame Genesis result:
   --state-output .\output\cloth_cases\pinned_drape_genesis_w20_f250.npz
 ```
 
-Generate the matching CGQ result using CGQ's environment:
+Generate the matching reference result by setting
+`REFERENCE_PYTHON` to that environment's Python executable:
 
 ```powershell
-..\cuda-graph-qipc\.venv\Scripts\python.exe `
+& $env:REFERENCE_PYTHON `
   .\examples\newton_coupling\multilayer_cloth_benchmark.py `
   --backend cgq `
   --case pinned_drape `
@@ -583,7 +582,7 @@ Available cases are `pinned_drape`, `inclined_drop`, `crossed_drop`, and
 Regenerate this report's plot, JSON ledger, and release bundle:
 
 ```powershell
-.\.venv\Scripts\python.exe `
+python `
   .\dev-docs\performance-report\generate_performance_report.py
 ```
 
@@ -595,12 +594,10 @@ Regenerate this report's plot, JSON ledger, and release bundle:
   `examples/newton_coupling/multilayer_cloth_benchmark.py`
 - Multi-case local result summary:
   `output/cloth_cases/summary_w20_f250.json`
-- Compile-time investigation:
-  [Quadrants issue 945](https://github.com/Genesis-Embodied-AI/quadrants/issues/945)
-- Published Quadrants fork branch:
-  `alanray-tech/quadrants:dev/compile-time-opt`
+- Compile-time investigation: Quadrants issue #945.
+- The tested compiler fork commit is recorded in the machine-readable ledger.
 - Machine-readable report ledger:
-  `dev-docs/performance-report/qipc-coupling-performance-data.json`
+  `dev-docs/performance-report/coupling-performance-data.json`
 - Plot generator:
   `dev-docs/performance-report/generate_performance_report.py`
 - Profile limitation: the summarized Nsight measurements remain authoritative,

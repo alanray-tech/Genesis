@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This worktree develops the graph-native Rigid Newton framework on branch `newton/rigid-only-baseline`.
+This checkout develops the graph-native Rigid Newton coupling runtime.
 
 Before editing code, read:
 
@@ -8,6 +8,8 @@ Before editing code, read:
 2. [Rigid Newton roadmap](dev-docs/rigid-newton-roadmap.md)
 3. [Rigid Newton development guide](dev-docs/rigid-newton-development.md)
 
-The roadmap is authoritative for requirements and milestone order. Do not decide an item marked **Open** without user
-approval. Do not reuse the existing Genesis coupler lifecycle, add an eager solver path, introduce checkpoint in the
-current milestone, or create a workaround for an upstream limitation.
+The roadmap is authoritative for requirements and milestone order. Do not
+decide an item marked **Open** without user approval. Keep integration behind
+`NewtonCoupler`, do not add an eager solver path, and document every upstream
+workaround with an issue, regression test, measured cost, and explicit
+approval.

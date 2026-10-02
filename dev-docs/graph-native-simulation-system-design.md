@@ -1,6 +1,6 @@
-# QIPC Simulation System Design
+# Graph-Native Simulation System Design
 
-Status: local development contract.
+Status: architecture contract for the current implementation.
 
 This document contains architecture contracts and real source anchors only. Human-oriented examples live in the
 [Notion article](https://app.notion.com/p/3e90c06194e18165b859dbbaaa64ed56).
@@ -75,18 +75,17 @@ Capacity growth rebinds the owner system's buffer explicitly. The contact milest
 checkpoint protocol: the graph yields at the owning phase, the host grows that owner's buffers, and execution resumes
 from the exact checkpoint with the rebound ndarrays. Normal frames do not leave the graph.
 
-### SimSystemCollection
+### SimEngine registry
 
-`SimSystemCollection` is the host-side typed registry owned by `SimEngine`.
-
-Required API:
+`SimEngine` stores systems in a host-side `dict[type, SimSystem]` and exposes
+the registry through explicit methods:
 
 ```python
-class SimSystemCollection:
+class SimEngine:
     def add(self, system: SimSystem) -> None: ...
     def find(self, system_type: type[T]) -> T | None: ...
     def require(self, system_type: type[T]) -> T: ...
-    def values(self) -> tuple[SimSystem, ...]: ...
+    def build_systems(self) -> None: ...
 ```
 
 Required behavior:
@@ -97,13 +96,11 @@ Required behavior:
 - exclude invalid systems from lookup;
 - perform no runtime lookup inside a graph kernel.
 
-The current Python prototypes use a host `dict[type, SimSystem]` for this role.
-
 ### SimEngine
 
 `SimEngine` owns:
 
-- `SimSystemCollection`;
+- the typed system dictionary;
 - timestep-wide runtime state;
 - lifecycle collection;
 - static function lowering;
@@ -123,14 +120,6 @@ A Manager owns one shared resource or index space:
 - indexing invariants;
 - stable scoped accessors.
 
-### Reporter
-
-A Reporter is a provider-side declaration consumed by a Manager.
-
-The Reporter protocol uses explicit method names. A Manager iterates Reporters and calls those methods through ordinary
-Python dispatch. No overload emulation, descriptor rewriting, hidden parent call, or scoped forwarding mechanism is
-part of this contract.
-
 ## 2. Dependency API
 
 `SimSystem` forwards typed lookup to its engine collection:
@@ -141,10 +130,10 @@ class SimSystem:
     def engine(self) -> SimEngine: ...
 
     def find(self, system_type: type[T]) -> T | None:
-        return self.engine.systems.find(system_type)
+        return self.engine.find(system_type)
 
     def require(self, system_type: type[T]) -> T:
-        return self.engine.systems.require(system_type)
+        return self.engine.require(system_type)
 
     def do_build(self) -> None:
         pass
@@ -159,33 +148,43 @@ Rules:
 - do not retrieve systems by string name;
 - do not access the collection from device code.
 
-## 3. Basic lifecycle
+## 3. Public integration boundary
+
+`NewtonCouplerOptions` selects the runtime through the ordinary Scene API.
+`Simulator` owns `NewtonCoupler`, which validates the first-version support
+matrix and constructs `SimEngine` lazily on the first `Scene.step()`. This
+allows post-build qpos, controller, and fixed-vertex setup before staging.
+
+`build_scene_engine` and the systems package are internal composition and
+testing surfaces. Users do not call `engine.step()` directly. Rigid state stays
+owned by the existing `RigidSolver`; `RigidSystem` only references its buffers
+and numerical functions.
+
+## 4. Basic lifecycle
 
 The lifecycle shared by every system is:
 
 ```text
 construct
--> add to SimSystemCollection
--> bind to SimEngine
+-> SimEngine.add_system and bind engine
 -> build_systems / do_build dependency resolution
 -> wire_data host ingress
 -> init global offsets and buffers
 -> compile/capture graph pipeline
--> execute timesteps
--> invalidate/destroy
+-> Scene.step / NewtonCoupler.step / SimEngine.step
+-> reset by discarding and lazily rebuilding the adapter
 ```
 
 `do_build()` has one responsibility: establish `require/find` dependencies. Allocation, reporting, numerical phases,
 diagnostics, and event behavior belong to their own lifecycle functions or actions.
 
-The implementation uses the CGQ names `build_systems()`, `do_build()`, `wire_data()`, and `init()`.
+The implementation uses the lifecycle names `build_systems()`, `do_build()`,
+`wire_data()`, and `init()`.
 
-## 4. Additional lifecycle
+## 5. Additional lifecycle
 
-Additional lifecycle can be provided by:
-
-1. a named method contract implemented by the relevant `SimSystem` objects;
-2. a registered `SimAction` with a declared action type and function names.
+Additional lifecycle is provided by named method contracts implemented by the
+relevant `SimSystem` objects and called explicitly by `SimEngine`.
 
 There is no second system category for numerical participants. Every framework component is a `SimSystem`, and
 `SimEngine` selects a system only for lifecycle stages whose named functions that system implements. Deriving from
@@ -195,7 +194,6 @@ The Newton engine currently needs named operations including:
 
 ```text
 predict
-derive_solve_scope
 report_extent
 assemble
 energy
@@ -207,12 +205,12 @@ update_velocity
 copy_x_prev
 ```
 
-`SimEngine` explicitly owns the known CGQ systems and calls them in pipeline order. `FiniteElementMethod` owns
+`SimEngine` explicitly owns the registered systems and calls them in pipeline order. `FiniteElementMethod` owns
 `FEMBDF1` plus its registered `FEMConstitution` systems. `StandardPCGSolver` owns `LinearPCG`. There is no
 method-name discovery, bound-function-list lowering, virtual call, registry traversal, or dynamic function pointer
 inside the graph.
 
-## 5. GraphMode scheduling
+## 6. GraphMode scheduling
 
 The timestep pipeline is owned by `SimEngine`.
 
@@ -233,8 +231,8 @@ Current source anchors:
 - `genesis/engine/systems/global_linear_system.py`
 - `genesis/engine/systems/finite_element/finite_element_method.py`
 
-The new framework is GPU-only and rejects CPU before graph construction. These files are the implementation references
-for local development.
+The runtime is GPU-only and rejects CPU before graph construction. These files
+are the authoritative implementation anchors for this contract.
 
 ### Host lowering sequence
 
@@ -244,13 +242,13 @@ The host completes all composition before the first timestep:
 add concrete systems
 -> bind engine references
 -> resolve require/find dependencies
--> collect Reporters and finalize Manager ranges
+-> wire concrete data and finalize global Manager ranges
 -> allocate global buffers
 -> compile/capture the graph kernel
 ```
 
 The graph receives concrete system objects, finalized offsets, fixed capacities, and device-resident live extents.
-Python dependency lookup and Reporter calls never occur inside the graph.
+Python dependency lookup and host range assignment never occur inside the graph.
 
 ### GPU timestep call sequence
 
@@ -288,7 +286,7 @@ FiniteElementMethod.update_velocity()
 FiniteElementMethod.copy_x_prev()
 ```
 
-The contact specialization inserts the CGQ contact phases without changing the
+The contact specialization inserts the reference contact phases without changing the
 participant lifecycle:
 
 ```text
@@ -297,18 +295,29 @@ frame CP0:
     predict and forward_global_vertices
 
 Newton graph_do_while:
-    CP_count: count_active; yield on assembly demand overflow
-    CP1a-filter: filter_assemble
-    CP1a-sort: report_extent; contact sort_reduce; yield on triplet overflow
-    CP1b: derive_solve_scope; elastic assemble; contact distribute
-          body_sort_reduce; PCG; clamp; publish_trajectory_end_positions; BVH build
-    CP1: trajectory_query; yield on pair overflow
-    CP2: CCD
-    CP3: contact-aware line-search graph_do_while
+    COUNT: count active contact; yield on assembly-demand overflow
+    FILTER: filter/assemble contact; yield on padding overflow
+    SORT: sort/reduce, classify, derive extents; yield on triplet overflow
+    SOLVE: zero and assemble Rigid/FEM/contact terms; build preconditioners
+    PCG_INIT
+    PCG graph_do_while:
+        PCG_ITERATION
+    PCG_FINISH
+    SOLVE_POST: directions, convergence, baseline energy, BVH build
+    QUERY: trajectory query; yield on pair overflow
+    CCD
+    LINE_SEARCH: initialize alpha
+    line-search graph_do_while:
+        LINE_SEARCH_TRIAL
+    LINE_SEARCH_POST: accept state and update Newton condition
 ```
 
+The PCG and line-search child loops remain outside explicit checkpoint bodies.
+Their inlined stages use flat no-yield checkpoints because of the compiler
+gating defect tracked by Quadrants issue #956.
+
 The precise numerical parameters are fixed by
-[cgq-contact-parameter-manifest.md](cgq-contact-parameter-manifest.md).
+[contact-parameter-manifest.md](contact-parameter-manifest.md).
 
 `StandardPCGSolver` owns `LinearPCG`; the engine explicitly supplies the Rigid matrix-free contribution and FEM
 preconditioner. Every participating range must write its preconditioned residual.
@@ -340,12 +349,12 @@ applicable warp/subgroup-level organization. Code that leaves substantial GPU
 lanes idle, assigns an unbounded workload to one lane, or uses per-item global
 atomics where warp batching is applicable is forbidden.
 
-During the current migration stage, faithful migration does not require
-byte-for-byte reproduction of CGQ's launch topology. A different Quadrants
-implementation is acceptable only when it is load-balanced and evidence shows
-that its warp utilization, atomic traffic, memory traffic, occupancy, and
-scaling match or exceed the applicable pinned-CGQ production path. Migration
-status is not a waiver for a merely "reasonable" decomposition.
+Faithful migration does not require byte-for-byte reproduction of a reference
+launch topology. A different implementation is acceptable only when it is
+load-balanced and evidence shows that its warp utilization, atomic traffic,
+memory traffic, occupancy, and scaling match or exceed the applicable pinned
+native-reference path. Migration status is not a waiver for a merely
+"reasonable" decomposition.
 
 A simpler implementation may establish correctness only in an isolated test or
 offline oracle. It cannot be connected to the builder, example, or runtime and
@@ -361,12 +370,14 @@ Required properties:
   workload;
 - no host traversal, CPU fallback, or per-frame synchronization substitutes for
   missing GPU scheduling;
-- asymptotic work and memory growth must not regress from the referenced CGQ
+- asymptotic work and memory growth must not regress from the referenced
+  production
   algorithm without prior approval;
 - profiling must demonstrate scaling and useful GPU occupancy on representative
   cloth scenes before the implementation is accepted.
-- every scheduling difference from CGQ must be recorded together with evidence
-  that it meets or exceeds the applicable CGQ production path.
+- every scheduling difference from the pinned reference must be recorded
+  together with evidence that it meets or exceeds the applicable production
+  path.
 
 The following are explicitly forbidden from any builder-selected or runtime
 production path:
@@ -375,14 +386,14 @@ production path:
   traversal;
 - a single global DFS stack for all EE node pairs;
 - thread-per-query irregular traversal when a warp-frontier or warp-local DFS
-  is the applicable CGQ production algorithm;
+  is the applicable production algorithm;
 - pair-by-pair global output reservation when warp ballot/prefix compaction can
   reserve one batch;
 - scalar global reductions when warp/block partial reductions are applicable;
 - brute-force all-pairs contact used as a production broad phase;
 - scene-specific capacities, thresholds, or branches added only to make the
   milestone example pass;
-- retaining a reduced implementation while naming it after a more capable CGQ
+- retaining a reduced implementation while naming it after a more capable
   backend.
 
 Temporary diagnostic code may use a simpler algorithm only in isolated tests or
@@ -442,7 +453,7 @@ overflow checkpoint. The owner replaces the ndarray, clears only its overflow
 flag, and resumes from the checkpoint whose graph launch context reads the new
 pointer.
 
-## 6. Data scope
+## 7. Data scope
 
 Every system is the scope of the data it owns.
 
@@ -470,36 +481,22 @@ Callers must not:
 - infer offsets owned by a Manager;
 - depend on whether storage currently uses `qd.field`, `qd.ndarray`, `qd.Tensor`, or an external buffer.
 
-## 7. Manager + Reporter contract
+## 8. Global range ownership
 
-The generic Reporter API is:
+There is no generic `Reporter` registry. Concrete systems expose
+domain-specific `report_*_extent()` and `receive_*_range()` methods, and the
+composition root calls them explicitly before initialization.
 
-```python
-class Reporter:
-    def report_extent(self) -> int: ...
-    def receive_range(self, offset: int, count: int) -> None: ...
-```
-
-The generic Manager API is:
-
-```python
-class Manager:
-    def add(self, reporter: Reporter) -> None: ...
-    def build(self) -> None: ...
-```
-
-Manager build semantics:
+Build semantics:
 
 ```text
 offset = 0
-for each Reporter:
-    count = Reporter.report_extent()
-    Reporter.receive_range(offset, count)
+for each participating system:
+    count = system.report_extent()
+    system.receive_range(offset, count)
     offset += count
 allocate shared resource for total offset
 ```
-
-The method names may be domain-specific, but the dispatch must remain explicit and readable.
 
 This pattern applies to:
 
@@ -510,33 +507,35 @@ This pattern applies to:
 - contact capacities;
 - diagnostic channels.
 
-Reporting is host/build-time work. Graph kernels consume only finalized offsets, counts, and buffers.
+Range assignment is host/build-time work. Device-side `report_extent` methods
+used for dynamic BCOO demand are a separate numerical phase. Graph kernels
+consume finalized static offsets and device-resident live counts.
 
-## 8. Extension properties
+## 9. Extension properties
 
 This organization supports extension because:
 
 - a new system resolves typed dependencies instead of editing existing systems;
 - function-name dispatch makes lifecycle calls visible;
-- Managers derive global resources from Reporters;
+- global managers receive ranges from explicit composition code;
 - data ownership remains explicit;
 - missing mandatory dependencies fail during build;
 - selected functions are lowered before graph compilation;
 - no runtime provider switch or generic mega-kernel is required;
 - systems remain independently testable through their real APIs and GPU kernels.
 
-## 9. Current source mapping
+## 10. Current source mapping
 
-QIPC migration:
+Optional Python-reference file suffixes:
 
-- `../qipc/qipc/_src/solver/sim_system.py`
-- `../qipc/qipc/_src/solver/sim_engine.py`
-- `../qipc/qipc/_src/solver/global_vertex_manager.py`
-- `../qipc/qipc/_src/solver/global_surface_manager.py`
-- `../qipc/qipc/_src/solver/global_linear_system.py`
-- `../qipc/qipc/_src/solver/linear_pcg.py`
+- `_src/solver/sim_system.py`
+- `_src/solver/sim_engine.py`
+- `_src/solver/global_vertex_manager.py`
+- `_src/solver/global_surface_manager.py`
+- `_src/solver/global_linear_system.py`
+- `_src/solver/linear_pcg.py`
 
-Genesis Rigid Newton prototype:
+Current implementation:
 
 - `genesis/engine/systems/sim_system.py`
 - `genesis/engine/systems/sim_engine.py`
@@ -558,11 +557,11 @@ Genesis Rigid Newton prototype:
 - `genesis/engine/systems/finite_element/strain_limit_baraff_witkin_shell_2d.py`
 - `genesis/engine/systems/finite_element/quadratic_bending.py`
 
-CGQ source:
+Optional native-reference file suffixes:
 
-- pinned migration reference: `main@42e7d4cbbad08739107ad830a17918f5f0f209ff`;
-- `../cuda-graph-qipc/qipc/_src/native/solver/sim_system.h`
-- `../cuda-graph-qipc/qipc/_src/native/solver/sim_engine.h`
-- `../cuda-graph-qipc/qipc/_src/native/solver/sim_engine_pipeline.cu`
+- `_src/native/solver/sim_system.h`
+- `_src/native/solver/sim_engine.h`
+- `_src/native/solver/sim_engine_pipeline.cu`
 
-The QIPC and CGQ repositories are references, not dependencies or development bases.
+External reference implementations are not dependencies or development bases,
+and no checkout location is assumed.

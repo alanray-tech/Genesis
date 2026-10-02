@@ -1,32 +1,32 @@
-# Reduced-KKT Contact Proxy Migration Contract
+# Reduced-KKT Contact Proxy Contract
 
 Status: current implementation contract.
 
-Ground truth is `cuda-graph-qipc`
-`main@42e7d4cbbad08739107ad830a17918f5f0f209ff`.
+Formulas, names, defaults, graph order, failure behavior, and accepted or
+rejected production paths are traced to one pinned native numerical reference.
+The runtime performs no scene-specific reduced-KKT algorithm experiments.
 
-Genesis World performs no reduced-KKT algorithm experiments. Formulas, names,
-defaults, graph order, failure behavior, and accepted/rejected production
-paths are migrated from that revision.
+## Optional reference source suffixes
 
-## Authoritative CGQ sources
+The following paths are relative to an optional reference root, not this
+checkout:
 
-- `docs/rigid_contact_proxy_kkt.md`
-- `qipc/_src/native/solver/rigid_contact_proxy_context.h`
-- `qipc/_src/native/solver/rigid_contact_proxy.h`
-- `qipc/_src/native/solver/rigid_contact_proxy.cu`
-- `qipc/_src/native/solver/rigid_contact_proxy_kkt.h`
-- `qipc/_src/native/solver/rigid_contact_assemble.h`
-- `qipc/_src/native/solver/rigid_contact_assemble.cu`
-- `qipc/_src/native/solver/rigid_joint_forest_context.h`
-- `qipc/_src/native/solver/rigid_joint_forest.h`
-- `qipc/_src/native/solver/rigid_joint_forest.cu`
-- `qipc/_src/native/solver/sim_engine_pipeline.cu`
-- `tests/rigid_proxy_kkt_reference.py`
-- `tests/test_rigid_contact_proxy.py`
-- `tests/test_rigid_contact_proxy_kkt.py`
-- `examples/rigid_proxy_kkt_restoration.py`
-- `examples/minimal_wrecking_ball_ground.py`
+- `<reference-root>/docs/rigid_contact_proxy_kkt.md`
+- `<reference-root>/_src/native/solver/rigid_contact_proxy_context.h`
+- `<reference-root>/_src/native/solver/rigid_contact_proxy.h`
+- `<reference-root>/_src/native/solver/rigid_contact_proxy.cu`
+- `<reference-root>/_src/native/solver/rigid_contact_proxy_kkt.h`
+- `<reference-root>/_src/native/solver/rigid_contact_assemble.h`
+- `<reference-root>/_src/native/solver/rigid_contact_assemble.cu`
+- `<reference-root>/_src/native/solver/rigid_joint_forest_context.h`
+- `<reference-root>/_src/native/solver/rigid_joint_forest.h`
+- `<reference-root>/_src/native/solver/rigid_joint_forest.cu`
+- `<reference-root>/_src/native/solver/sim_engine_pipeline.cu`
+- `<reference-root>/tests/rigid_proxy_kkt_reference.py`
+- `<reference-root>/tests/test_rigid_contact_proxy.py`
+- `<reference-root>/tests/test_rigid_contact_proxy_kkt.py`
+- `<reference-root>/examples/rigid_proxy_kkt_restoration.py`
+- `<reference-root>/examples/minimal_wrecking_ball_ground.py`
 
 ## Production model
 
@@ -79,7 +79,7 @@ publication, and CCD consume only proxy geometry and proxy screw paths.
 
 ## Storage-owner adaptation
 
-CGQ appends mechanism and proxy bodies to one growable
+The native reference appends mechanism and proxy bodies to one growable
 `RigidBodyDynamics`. Genesis native `RigidSolver` link arrays are immutable
 after scene build and cannot accept appended proxy bodies.
 
@@ -97,7 +97,7 @@ Therefore:
   sources before the first native predict/FK pass;
 - proxy vertices and surfaces are published by
   `RigidContactProxySystem` into the existing global managers;
-- this ownership difference must not change any CGQ KKT field name, map,
+- this ownership difference must not change any reference KKT field name, map,
   tolerance, contact route, or graph dependency.
 
 No host object map is permitted. Host geometry extraction is build-time
@@ -106,7 +106,7 @@ state are zero-dimensional device scalars accessed with `[()]`.
 Mechanism/environment decoding reads `RigidSystem.n_links[()]`; the host link
 count is allocation capacity only and must never specialize runtime indexing.
 
-Genesis currently solves for native trial acceleration, whereas CGQ's forest
+The current runtime solves for native trial acceleration, whereas the reference forest
 direction is already a configuration-space body twist. For ordinary
 semi-implicit joint integration the tangent factor is `dt^2`; the forest
 applies that factor symmetrically in expansion and restriction. Every
@@ -114,15 +114,15 @@ proxy-owned mechanism link is marked in native `links.is_constrained` after
 native candidate assembly. This disables Genesis's unconstrained free-root
 midpoint override, so delegated roots and articulated joints use the standard
 constraint integration map whose position tangent is `dt^2`. Integrator
-conformance tests must verify this gate before `build_scene_engine` selects
+conformance tests must verify this gate before `NewtonCoupler` selects
 the proxy path; an integrator with a different constrained tangent must provide
 its exact map or be rejected explicitly.
 
-Genesis retains authored fixed MJCF links that CGQ's minimal forest does not
+The current runtime retains authored fixed MJCF links that the reference minimal forest does not
 represent as scalar joint edges. The mapped articulated preconditioner
 therefore:
 
-- stores the CGQ scalar `edge_*` state only for one-DOF revolute/prismatic
+- stores the reference scalar `edge_*` state only for one-DOF revolute/prismatic
   edges;
 - transports a fixed child's complete spatial block into its parent without a
   scalar Schur elimination;
@@ -131,31 +131,31 @@ therefore:
   matrix-free and is not duplicated in physical BCOO;
 - adds Genesis's authored armature and timestep-scaled joint damping to the
   matching scalar/root pivots, preserving the native mass augmentation;
-- uses the mandatory CGQ names `articulated_inertia`, `edge_u`,
+- uses the mandatory reference names `articulated_inertia`, `edge_u`,
   `edge_hessian`, `edge_basis`, `edge_arm`, `edge_d`, `root_inverse`,
   `precond_force`, `precond_a`, `precond_velocity`, and
   `kkt_proxy_diagonal`.
 
 This is a storage/source adaptation, not a different preconditioner: reverse
 factorization, root solve, forward substitution, proxy tangent pullback, and
-restoration slack block remain the CGQ operations. Unsupported multi-DOF
+restoration slack block remain the reference operations. Unsupported multi-DOF
 non-root joints and non-free moving roots are rejected at build time rather
 than entering an approximate path.
 
-Four Python/Genesis-only names are explicit exceptions to the CGQ field
+Four Python-specific names are explicit exceptions to the reference field
 manifest:
 `root_dof_index` maps each native six-DOF free root into Genesis's compact
-generalized rows, and `body_twist` stores expanded link twists that CGQ stores
+generalized rows, and `body_twist` stores expanded link twists that the reference stores
 in growable `RigidBodyDynamics::dq`; `body_inertia` retains the unfactored
-physical 6x6 blocks that CGQ stores in global BCOO because
+physical 6x6 blocks that the reference stores in global BCOO because
 `articulated_inertia` is mutated during factorization; `lambda_` is the Python
-spelling of CGQ's `lambda` because `lambda` is a Python keyword. The first
+spelling of the reference's `lambda` because `lambda` is a Python keyword. The first
 three exist only because Genesis's native generalized/link storage cannot be
 expanded or relaid out.
 
 ## RigidContactProxySystem state
 
-The following CGQ names are mandatory:
+The following reference names are mandatory:
 
 - mappings: `mechanism_body`, `proxy_body`, `pair_of_body`,
   `surface_radius`;
@@ -188,7 +188,7 @@ Production config is fixed:
 
 `"watchdog"`, restoration-off, and nonzero test bias are diagnostic controls,
 not production alternatives.
-`extras/ls_forensics/test_energy_bias` is the pinned CGQ one-shot
+`extras/ls_forensics/test_energy_bias` is the pinned-reference one-shot
 line-search-exhaustion test control; production fixes it to zero.
 
 ## Constraint maps
@@ -215,7 +215,7 @@ normal_map  = A^-1
 particular  = -A^-1 c
 ```
 
-For matching world-frame link/proxy charts, CGQ simplifies these to:
+For matching world-frame link/proxy charts, the reference simplifies these to:
 
 ```text
 tangent_map.rotation = J_l(phi) J_r(phi)^-1
@@ -305,7 +305,7 @@ Before commit:
 - no hard probe is pending;
 - `frame_failed == 0`.
 
-Physical convergence follows CGQ's world-displacement criterion. FEM and
+Physical convergence follows the reference world-displacement criterion. FEM and
 proxy screw directions contribute to one device maximum compared against
 `velocity_tol * dt`; the native rigid gradient norm is diagnostic only on the
 Reduced-KKT path.
@@ -315,15 +315,14 @@ silently snapped to FK.
 
 ## Contact ownership and geometry
 
-- Native Rigid-Rigid and Rigid-world routes remain enabled unless explicitly
-  delegated.
-- Cloth-Cloth uses ordinary IPC.
-- Rigid-Cloth uses proxy-Cloth IPC.
-- Delegated rigid geometry is removed from the matching native pair route.
-- Every geometry pair has exactly one owner.
+- `NewtonCoupler` disables the native collision pass; Rigid-Rigid and
+  Rigid-world contact are outside the public coupled first version.
+- Cloth-Cloth uses Consistent IPC.
+- Rigid-Cloth uses proxy-Cloth Consistent IPC.
+- Every supported geometry pair has exactly one owner.
 - When `RigidContactAssemble` owns mixed proxy/FEM routes, it still scatters
   every FEM contact doublet; only the rigid endpoint is replaced.
-- Optional penetration validation uses CGQ's exact edge-triangle predicate
+- Optional penetration validation uses the reference exact edge-triangle predicate
   over the triangle BVH at initialization and before every frame commit. It
   applies same-body self-collision, body-contact-ignorance, and contact-table
   suppression before reporting.
@@ -347,7 +346,7 @@ epsilon_path  = 0.1 * contact.d_hat
 epsilon_solve = min(sim.abs_tol, 0.01 * contact.d_hat)
 ```
 
-The FK-defect limiter uses the CGQ cancellation-safe positive-root branches
+The FK-defect limiter uses the reference cancellation-safe positive-root branches
 for
 
 ```text
@@ -357,7 +356,7 @@ h(alpha) <= h0 + (h_slack - h0) alpha + 0.5 L alpha^2.
 The exact trial guard is a device invariant. It is not ordinary line-search
 rejection.
 
-## Migration order
+## Dependency order
 
 This order is dependency order, not a sequence of reduced algorithms:
 
@@ -367,18 +366,17 @@ This order is dependency order, not a sequence of reduced algorithms:
 4. Add particular-step SpMV and reduced RHS.
 5. Add matrix-free expansion/restriction around physical SpMV.
 6. Add the source-agnostic mapped-tree preconditioner.
-7. Add forced forest/proxy component edges, component CCD, and masked PCG.
-8. Add proxy screw trajectory publication, FK-defect clamp, and exact guard.
-9. Add lazy merit, filter, frame-local restoration, hard probe, and failure
+7. Add proxy screw trajectory publication, FK-defect clamp, and exact guard.
+8. Add lazy merit, filter, frame-local restoration, hard probe, and failure
    checkpoint.
-10. Port the pinned CGQ conformance tests and examples.
+9. Port the pinned-reference conformance tests and examples.
 
 No intermediate item may be registered by `builders.py` as a production
 runtime until all dependencies required by its selected path are complete.
 
 ## Acceptance
 
-Port the pinned CGQ gates rather than designing new experiments:
+Use the pinned-reference gates rather than designing scene-specific experiments:
 
 - finite-difference pose constraint Jacobians;
 - `C P = 0` and `C d_p = -c`;
@@ -389,13 +387,11 @@ Port the pinned CGQ gates rather than designing new experiments:
 - feasible-anchor and perturbed-proxy integration;
 - massless proxy/no-contact inertia behavior;
 - contact ownership and proxy geometry ownership;
-- coherent component labels, PCG masks, and CCD alpha across every mechanism,
-  forest edge, and proxy;
 - table press and Cloth grasp;
 - restoration then hard-probe verification;
 - Newton-budget failure without commit;
 - singleton minimal-coordinate scale;
 - dump/recover with no persistent restoration dual.
 
-The original Genesis native runtime remains the behavior and performance
-oracle whenever the new engine is not selected.
+The existing native runtime remains the behavior and performance oracle
+whenever `NewtonCouplerOptions` is not selected.
