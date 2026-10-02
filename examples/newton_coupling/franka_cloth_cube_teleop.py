@@ -1,4 +1,4 @@
-"""Teleoperate Franka over a tabletop, cloth, and support cube.
+"""Teleoperate the Franka gripper center over a tabletop, cloth, and support cube.
 
 Controls:
   Arrow keys    move the target in X/Y
@@ -28,6 +28,7 @@ from genesis.utils.misc import qd_to_numpy
 from genesis.vis.keybindings import Key, KeyAction, Keybind
 
 from cloth_grid_asset import cloth_grid_asset
+from franka_gripper import gripper_center_from_hand_pose, hand_pose_from_gripper_center
 
 DT = 0.01
 TARGET_TRANSLATION_STEP = 0.003
@@ -174,8 +175,10 @@ def main() -> None:
     )
 
     end_effector = franka.get_link("hand")
-    target_home_pos = end_effector.get_pos().cpu().numpy().reshape(3)
-    target_home_quat = end_effector.get_quat().cpu().numpy().reshape(4)
+    target_home_pos, target_home_quat = gripper_center_from_hand_pose(
+        end_effector.get_pos().cpu().numpy().reshape(3),
+        end_effector.get_quat().cpu().numpy().reshape(4),
+    )
     target_pos = target_home_pos.copy()
     target_quat = target_home_quat.copy()
     press_target = target_home_pos.copy()
@@ -384,10 +387,11 @@ def main() -> None:
                     (gu.trans_quat_to_T(target_pos, target_quat),),
                 )
 
+            hand_target_pos, hand_target_quat = hand_pose_from_gripper_center(target_pos, target_quat)
             target_qpos = franka.inverse_kinematics(
                 link=end_effector,
-                pos=target_pos,
-                quat=target_quat,
+                pos=hand_target_pos,
+                quat=hand_target_quat,
                 init_qpos=franka.get_qpos(),
                 max_samples=8 if args.press_depth > 0.0 else 1,
                 max_solver_iters=8,
@@ -448,9 +452,14 @@ def main() -> None:
             f"min_ccd_alpha={min_ccd_alpha:.9g}",
         )
         hand_position = end_effector.get_pos().cpu().numpy().reshape(3)
+        gripper_position, _ = gripper_center_from_hand_pose(
+            hand_position,
+            end_effector.get_quat().cpu().numpy().reshape(4),
+        )
         print(
             f"target_pos={target_pos.tolist()}, "
             f"hand_pos={hand_position.tolist()}, "
+            f"gripper_pos={gripper_position.tolist()}, "
             f"target_qpos={last_target_qpos.tolist()}"
         )
         if engine.contact.broad_phase.use_dual_ee:
