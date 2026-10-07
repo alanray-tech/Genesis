@@ -1,3 +1,9 @@
+"""Consistent IPC contact kernels and their stateless SimSystem provider.
+
+Review order: pair helpers, friction snapshot/filtering, active-set counting,
+barrier/friction assembly, energy evaluation, then Action publication.
+"""
+
 from __future__ import annotations
 
 import quadrants as qd
@@ -67,6 +73,9 @@ from .contact_function.halfplane_contact import (
     halfplane_signed_distance,
 )
 from .contact_function.pair_d_hat import pair_d_hat_ee, pair_d_hat_ph, pair_d_hat_pt
+
+
+# ---- Pair-local helpers --------------------------------------------------------
 
 
 @qd.func
@@ -325,6 +334,9 @@ def _scale_pair(
         gradient[component] = gradient[component] * scale
     for component in range(144):
         hessian[component] = hessian[component] * scale
+
+
+# ---- Friction-pair filtering and snapshot assembly ----------------------------
 
 
 @qd.func(requires_top_level=True)
@@ -870,6 +882,9 @@ def cipc_friction_energy_ee_kernel(
         qd.atomic_add(contact.friction_energy[()], energy * scale)
 
 
+# ---- Active-set counting -------------------------------------------------------
+
+
 @qd.func(requires_top_level=True)
 def cipc_count_active_pt_kernel(
     contact: qd.template(),  # ContactSystem.Data
@@ -1005,6 +1020,9 @@ def cipc_count_active_ph_kernel(
         if distance > xi and distance < d_hat + xi and _ph_enabled(contact, vertex_id):
             qd.atomic_add(contact.n_counted_doublets[()], 1)
             qd.atomic_add(contact.n_counted_triplets[()], 1)
+
+
+# ---- Barrier and friction assembly --------------------------------------------
 
 
 @qd.func(requires_top_level=True)
@@ -1570,6 +1588,9 @@ def cipc_halfplane_friction_energy_kernel(
         qd.atomic_add(contact.friction_energy[()], energy * scale)
 
 
+# ---- Contact energy evaluation ------------------------------------------------
+
+
 @qd.func(requires_top_level=True)
 def cipc_filter_energy_pt_kernel(
     contact: qd.template(),  # ContactSystem.Data
@@ -2028,6 +2049,9 @@ def contact_energy(
         filter_energy_ph(contact, surface, vertex)
         if qd.static(contact.has_friction):
             friction_energy_ph(contact, surface, vertex)
+
+
+# ---- Stateless Action provider ------------------------------------------------
 
 
 @qd.data_oriented  # WORKAROUND: Quadrants bound @qd.func self must be data-oriented.

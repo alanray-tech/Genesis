@@ -1,3 +1,9 @@
+"""Contact System ownership, storage lifecycle, and graph phases.
+
+Review order: ContactSystem contract, host-only storage allocation/growth,
+then device-side contact bookkeeping, CCD, and sort/reduce phases.
+"""
+
 from __future__ import annotations
 
 import math
@@ -45,6 +51,9 @@ _CCD_ETA = 0.2
 
 def _padded64(value: int) -> int:
     return max(((value + 63) // 64) * 64, 64)
+
+
+# ---- SimSystem contract --------------------------------------------------------
 
 
 @qd.data_oriented  # WORKAROUND: Quadrants bound @qd.func self must be data-oriented.
@@ -724,6 +733,9 @@ class ContactSystem(SimSystem):
         realloc_contact_friction_pair_buffers(self.data, required)
 
 
+# ---- Host-only Data initialization --------------------------------------------
+
+
 def _wire_contact_params(
     data,
     *,
@@ -1226,6 +1238,9 @@ def realloc_contact_friction_pair_buffers(data, required: dict[str, int]) -> Non
         setattr(data, f"friction_pairs_{channel}", qd.ndarray(qd.i32, shape=(capacity, 2)))
         setattr(data, f"friction_flags_{channel}", qd.ndarray(qd.i32, shape=(capacity,)))
         getattr(data, f"max_friction_pairs_{channel}").from_numpy(np.array(capacity, dtype=np.int32))
+
+
+# ---- Device-side runtime phases ------------------------------------------------
 
 
 @qd.func(requires_top_level=True)

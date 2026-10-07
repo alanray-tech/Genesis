@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 import inspect
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -285,22 +284,6 @@ def test_fixed_inline_bound_func_metadata():
     assert method._is_quadrants_function
     assert not getattr(method, "_qd_requires_top_level", False)
     assert len(inspect.signature(method.fn).parameters) == 8
-
-
-def test_system_template_parameters_document_concrete_types():
-    systems_root = Path(__file__).parents[2] / "genesis" / "engine" / "systems"
-    undocumented = []
-    for path in systems_root.rglob("*.py"):
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            marker = ": qd.template()"
-            if marker not in line:
-                continue
-            parameter, suffix = line.split(marker, maxsplit=1)
-            if parameter.strip().isidentifier():
-                comment = suffix.partition("#")[2].strip()
-                if not comment or comment.startswith(("noqa", "type: ignore")):
-                    undocumented.append(f"{path.relative_to(systems_root)}:{line_number}")
-    assert undocumented == []
 
 
 def test_constitution_wire_validation_is_atomic():

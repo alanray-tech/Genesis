@@ -6,6 +6,9 @@ kernel sharing across instances with different sizes.  Build and query methods
 are ``@qd.func(requires_top_level=True)`` for use inside graph kernels.
 
 Faithfully ports the pinned reference's ``BVHContext`` + ``lbvh_kernels.cu`` + ``bvh_subgraph.h``.
+
+Review order: overlap/reduction helpers, LBVH storage initialization, tree
+build phases, correctness-oracle queries, then production warp queries.
 """
 
 # ruff: noqa: SIM102
@@ -416,6 +419,9 @@ def _aabb_reduce_phase2_f32(
                 aabbs[0, comp] = aggregate
 
 
+# ---- LBVH storage --------------------------------------------------------------
+
+
 class LBVH:
     @qd.data_oriented
     class Data:
@@ -570,6 +576,9 @@ def initialize_lbvh_data(
     data.ee_warp_stack_overflow.from_numpy(np.array(0, dtype=np.int32))
     data.srt_n.from_numpy(np.array(padded, dtype=np.int32))
     data.n_reduce_blocks.from_numpy(np.array(n_blocks, dtype=np.int32))
+
+
+# ---- Tree build phases ---------------------------------------------------------
 
 
 @qd.func(requires_top_level=True)
@@ -1085,6 +1094,9 @@ def calc_leaf_aabb_edge_toy(
         )
 
 
+# ---- Correctness-oracle queries ------------------------------------------------
+
+
 @qd.func(requires_top_level=True)
 def query_pt_toy(
     data,
@@ -1337,6 +1349,9 @@ def query_ee_toy(
                             if cp_idx2 < max_pairs_val:
                                 pairs[cp_idx2, 0] = qd.i32(self_eid)
                                 pairs[cp_idx2, 1] = qd.i32(obj_idx2)
+
+
+# ---- Production build wrappers and warp queries -------------------------------
 
 
 @qd.func(requires_top_level=True)

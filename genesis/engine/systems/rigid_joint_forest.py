@@ -1,3 +1,9 @@
+"""Reduced-coordinate rigid forest topology and operator implementation.
+
+Review order: SimSystem contract, host topology construction, endpoint FK,
+P/P-transpose transforms, reduced operator, and articulated preconditioner.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -29,6 +35,9 @@ if TYPE_CHECKING:
     from genesis.engine.solvers.rigid.rigid_solver import RigidSolver
 
     from .rigid_contact_proxy import RigidContactProxySystem
+
+
+# ---- SimSystem contract --------------------------------------------------------
 
 
 @qd.data_oriented  # WORKAROUND: Quadrants bound @qd.func self must be data-oriented.
@@ -224,6 +233,9 @@ class RigidJointForestSystem(SimSystem):
             self.contact_proxy.data,
             self.linear_system_system.data,
         )
+
+
+# ---- Host topology and workspace initialization -------------------------------
 
 
 def _populate_rigid_joint_forest_data(
@@ -563,6 +575,9 @@ def _populate_rigid_joint_forest_data(
     data.kkt_proxy_diagonal.from_numpy(np.zeros((capacity, 6, 6), dtype=np.float64))
 
 
+# ---- Endpoint kinematics and screw bases --------------------------------------
+
+
 @qd.func
 def _body_point_twist(
     data: qd.template(),  # RigidJointForestSystem.Data
@@ -791,6 +806,9 @@ def compute_endpoint_fk(
             data.edge_basis[edge, component] = basis[component]
         for axis in qd.static(range(3)):
             data.edge_arm[edge, axis] = arm[axis]
+
+
+# ---- Reduced-to-body expansion (P) --------------------------------------------
 
 
 @qd.func
@@ -1041,6 +1059,9 @@ def expand_reduced_direction_from_zero(
         proxy_twist = expand_proxy_twist(tangent, mechanism_twist)
         for component in qd.static(range(6)):
             data.body_twist[proxy, component] = proxy_twist[component]
+
+
+# ---- Body-wrench restriction (P transpose) ------------------------------------
 
 
 @qd.func(requires_top_level=True)
@@ -1559,6 +1580,9 @@ def forest_control_matvec(
         result[reduced_index] = result[reduced_index] + augmentation * reduced[reduced_index]
 
 
+# ---- Reduced solution expansion and FK defect bounds --------------------------
+
+
 @qd.func(requires_top_level=True)
 def expand_solution(
     system: qd.template(),  # RigidJointForestSystem
@@ -1731,6 +1755,9 @@ def _root_basis(
         for row in qd.static(range(6)):
             basis_matrix[row, column] = value[row]
     return basis_matrix
+
+
+# ---- Articulated preconditioner construction and application ------------------
 
 
 @qd.func(requires_top_level=True)

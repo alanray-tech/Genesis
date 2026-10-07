@@ -43,12 +43,6 @@ def test_qcloth_zero_hinge_capacity():
     )
     bending.init()
     data = bending.data
-    bending.wire_data(
-        hinge_indices=np.empty((0, 4), dtype=np.int32),
-        bending_stiffness=np.empty(0, dtype=np.float64),
-        Q0=np.empty((0, 4, 4), dtype=np.float64),
-        vert_bend_k=np.zeros(3, dtype=np.float64),
-    )
 
     assert bending.data is data
     np.testing.assert_array_equal(qd_to_numpy(data.n_hinges), 0)

@@ -1,3 +1,10 @@
+"""Composition root and bound graph definitions for the Newton runtime.
+
+Review order: registry/build lifecycle, host initialization and recovery, then
+the four bound graph entry points. Numerical kernels remain owned by their
+respective SimSystem modules.
+"""
+
 from __future__ import annotations
 
 from enum import IntEnum
@@ -110,6 +117,8 @@ class SimEngine:
         self.sim_config_system = SimConfig()
         self.add_system(self.sim_config_system)
 
+    # ---- Registry, dependency resolution, and build lifecycle -----------------
+
     def configure_genesis_serial_pipeline(self, enabled: bool) -> None:
         if self._is_built:
             raise RuntimeError("Pipeline scheduling must be configured before build_systems()")
@@ -220,7 +229,21 @@ class SimEngine:
         self._is_built = True
 
     def _make_graph_fastcache_key(self) -> int:
-        """Encode Python-static graph topology that Quadrants cannot infer from ndarray arguments."""
+        """Salt graph fastcache entries with the complete static Engine topology.
+
+        Quadrants hashes data-oriented properties read directly by the root
+        kernel, but the current compiler does not reliably include every
+        property reached only through bound ``qd.func`` calls and resolved
+        ``SimAction`` schedules. A cloth-only graph can therefore collide with
+        a later mixed Rigid+cloth graph and launch kernels against the wrong
+        nested Data layout. The impossible static branch in each root kernel
+        reads this non-negative bitset solely to specialize fastcache.
+
+        ``test_fastcache_separates_cloth_and_mixed_topologies`` is the minimal
+        integration regression: compile cloth-only first, then mixed topology
+        in the same process. Removing this salt reproduces a CUDA illegal
+        address in ``initialize_global_resources``.
+        """
         contact = self.contact_system
         broad_phase = self.broad_phase_system
         flags = (
@@ -268,6 +291,8 @@ class SimEngine:
             max_ls_iter=max_ls_iter,
         )
         self._solver_params = (int(max_ls_iter), float(pcg_tol_rate))
+
+    # ---- Host initialization, pipeline binding, and failure diagnostics -------
 
     def _initialize_runtime_fields(self, max_ls_iter: int) -> None:
         """Allocate mutable engine-owned graph state before binding pipelines."""
@@ -369,7 +394,6 @@ class SimEngine:
         self.friction_overflow = never_yield if contact_data is None else contact_data.friction_overflow_flag
         self.et_overflow = never_yield if contact_data is None else contact_data.et_overflow_flag
         self.graph_fastcache_key = self._make_graph_fastcache_key()
-
         init_contact_pipeline = SimPipeline(
             self.init_contact_graph,
             yield_callbacks=init_yield_callbacks,
@@ -448,9 +472,13 @@ class SimEngine:
                             )
             raise RuntimeError(f"SimEngine Newton solve failed ({', '.join(details)})")
 
+    # ---- Bound graph entry points ----------------------------------------------
+
     @qd.kernel(fastcache=True)
     def initialize_global_resources(self):
         data = self
+        # WORKAROUND: force the complete Engine topology into the Quadrants
+        # fastcache key. Removing this causes cross-topology graph reuse.
         if qd.static(self.graph_fastcache_key < 0):
             data.frame_failed[()] = 0
         if qd.static(data.has_fem):

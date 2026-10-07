@@ -874,6 +874,40 @@ def test_proxy_contact_routes_emit_block_counts():
 @pytest.mark.required
 @pytest.mark.precision("64")
 @pytest.mark.parametrize("backend", [gs.gpu])
+def test_fastcache_separates_cloth_and_mixed_topologies():
+    """Compile the same graph root for the smallest two distinct Engine topologies.
+
+    Without the explicit topology salt, the mixed scene can load the earlier
+    cloth-only graph and dereference absent Rigid/proxy Data.
+    """
+    cloth_asset = Path(__file__).parents[2] / "examples" / "newton_coupling" / "assets" / "qcloth_grid.obj"
+
+    cloth_scene = gs.Scene(engine_options=gs.options.NewtonEngineOptions())
+    cloth_scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(cloth_asset), pos=(-5.0, 0.0, 1.0)),
+        material=gs.materials.FEM.QCloth(E=1.0e4, thickness=1.0e-3),
+    )
+    cloth_scene.build()
+    assert cloth_scene.sim.engine.rigid is None
+
+    mixed_scene = gs.Scene(engine_options=gs.options.NewtonEngineOptions())
+    mixed_scene.add_entity(
+        morph=gs.morphs.Sphere(pos=(2.0, 0.0, 1.0), radius=0.1),
+        vis_mode="collision",
+    )
+    mixed_scene.add_entity(
+        morph=gs.morphs.Mesh(file=str(cloth_asset), pos=(-5.0, 0.0, 0.0)),
+        material=gs.materials.FEM.QCloth(E=1.0e4, thickness=1.0e-3),
+    )
+    mixed_scene.build()
+    assert cloth_scene.sim.engine.graph_fastcache_key != mixed_scene.sim.engine.graph_fastcache_key
+    assert mixed_scene.sim.engine.rigid_contact_proxy is not None
+    assert int(qd_to_numpy(mixed_scene.sim.engine.frame_failed)) == 0
+
+
+@pytest.mark.required
+@pytest.mark.precision("64")
+@pytest.mark.parametrize("backend", [gs.gpu])
 def test_standard_pcg_kkt_builder_path():
     scene = gs.Scene(
         engine_options=gs.options.NewtonEngineOptions(),

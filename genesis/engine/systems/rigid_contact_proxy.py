@@ -1,3 +1,10 @@
+"""Reduced-KKT rigid contact proxy ownership and numerical phases.
+
+Review order: scene geometry staging, SimSystem/Data contract, host-only Data
+initialization, then device-side globalization, kinematics, and trajectory
+publication.
+"""
+
 from __future__ import annotations
 
 import math
@@ -25,6 +32,9 @@ _MERIT_DOT_PARTIALS = _MERIT_DOT_BLOCKS * _MERIT_DOT_WARPS_PER_BLOCK
 _FILTER_CAPACITY = 1024
 _GLOBALIZATION_WATCHDOG = 0
 _GLOBALIZATION_MERIT = 1
+
+
+# ---- Scene geometry staging ----------------------------------------------------
 
 
 class RigidContactProxyGeometry:
@@ -142,6 +152,9 @@ class RigidContactProxyGeometry:
             link = rigid_solver.links[mechanism % rigid_solver.n_links]
             self.is_fixed[vertex] = int(link.is_fixed)
         return True
+
+
+# ---- SimSystem contract --------------------------------------------------------
 
 
 @qd.data_oriented  # WORKAROUND: Quadrants bound @qd.func self must be data-oriented.
@@ -561,6 +574,9 @@ class RigidContactProxySystem(SimSystem):
         )
 
 
+# ---- Host-only Data initialization --------------------------------------------
+
+
 def _reset_rigid_contact_proxy_scalars(data: RigidContactProxySystem.Data) -> None:
     for field in (
         "max_surface_residual",
@@ -815,6 +831,9 @@ def _populate_rigid_contact_proxy_data(
     )
     data.vertex_pair.from_numpy(vertex_pair if len(vertex_pair) else np.zeros(capacity, dtype=np.int32))
     _initialize_merit_gradient(data, merit_gradient_capacity, mode)
+
+
+# ---- Device-side reduced-KKT phases -------------------------------------------
 
 
 @qd.func(requires_top_level=True)

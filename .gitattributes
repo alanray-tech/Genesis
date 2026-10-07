@@ -10,3 +10,6 @@
 # Force LF for Docker-related files
 Dockerfile text eol=lf
 *.dockerignore text eol=lf
+
+# Collapse generated symbolic contact formulas in code review.
+genesis/engine/systems/contact_function/distance_primitives.py linguist-generated=true
