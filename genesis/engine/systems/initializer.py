@@ -12,6 +12,7 @@ from .rigid_sdf_system import RigidSdfSystem
 from .rigid_solver_system import RigidSolverSystem
 from .sf_solver_system import SFSolverSystem
 from .simulator_engine import SimulatorEngine
+from .sph_solver_system import SPHSolverSystem
 from .tool_solver_system import ToolSolverSystem
 
 if TYPE_CHECKING:
@@ -29,6 +30,7 @@ class Initializer(System):
     constraint = Find(ConstraintSolverSystem)
     mpm = Find(MPMSolverSystem)
     sf = Find(SFSolverSystem)
+    sph = Find(SPHSolverSystem)
     tool = Find(ToolSolverSystem)
 
     def initialize(self) -> None:
@@ -37,6 +39,8 @@ class Initializer(System):
         self.kinematic.initialize.invoke()
         if self.sf is not None:
             self.sf.initialize.invoke()
+        if self.sph is not None:
+            self.sph.initialize.invoke()
         if self.tool is not None:
             self.tool.initialize.invoke()
         # The signed distance fields of the rigid geoms are sized from the rigid model, and the collision detection

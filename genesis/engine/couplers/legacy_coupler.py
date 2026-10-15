@@ -5,6 +5,7 @@ import quadrants as qd
 
 import genesis as gs
 import genesis.utils.sdf as sdf
+from genesis.engine import sph_runtime
 from genesis.engine.entities.tool_entity.data import ToolSolverInfo
 from genesis.engine.entities.tool_entity.mesh import func_collide
 from genesis.options.solvers import LegacyCouplerOptions
@@ -12,6 +13,7 @@ from genesis.repr_base import RBC
 from genesis.utils import array_class
 from genesis.utils.array_class import LinksState
 from genesis.utils.geom import qd_inv_transform_by_trans_quat, qd_transform_by_trans_quat
+from genesis.utils.spatial_hash import func_grid_to_slot, func_pos_to_grid
 
 if TYPE_CHECKING:
     from genesis.engine.simulator import Simulator
@@ -203,6 +205,7 @@ class LegacyCoupler(RBC):
         links_info: array_class.LinksInfo,
         rigid_info: array_class.RigidInfo,
         sdf_info: array_class.SDFInfo,
+        sph_system: qd.template(),
         collider_static_config: qd.template(),
     ):
         """
@@ -228,18 +231,18 @@ class LegacyCoupler(RBC):
         # transfers nothing; this is what makes submerged geoms buoyant. Mirroring the particle pressure across the
         # surface and integrating the symmetric pressure force over the truncated kernel support yields the factor
         # 2 * sigma(signed_dist), with sigma the kernel plane integral (see cubic_kernel_plane_integral in
-        # sph_solver.py). Sigma integrates to 1/2 across the support band, so a covering particle layer transmits
+        # sph_runtime.py). Sigma integrates to 1/2 across the support band, so a covering particle layer transmits
         # exactly p per unit area: Archimedes buoyancy with no tuning constant. Fixed links are exempt: they cannot
         # respond to the force, and the reaction is a conservative stiff kick that keeps fluid resting on them
         # ringing forever, pumped by the acoustic pressure fluctuations of the fluid.
         link_idx = geoms_info.link_idx[geom_idx]
         I_l = [link_idx, batch_idx] if qd.static(self.rigid_solver._options.batch_links_info) else link_idx
-        if signed_dist < self.sph_solver._support_radius and pressure > 0 and not links_info.is_fixed[I_l]:
+        if signed_dist < sph_system._support_radius and pressure > 0 and not links_info.is_fixed[I_l]:
             pressure_force = (
                 -2.0
                 * pressure
-                * self.sph_solver._particle_volume
-                * self.sph_solver.cubic_kernel_plane_integral(signed_dist)
+                * sph_system._particle_volume
+                * sph_runtime.cubic_kernel_plane_integral(sph_system, signed_dist)
                 * normal_rigid
             )
             self.rigid_solver._func_apply_coupling_force(link_idx, batch_idx, pos_world, pressure_force, links_state)
@@ -337,6 +340,7 @@ class LegacyCoupler(RBC):
         sdf_info: array_class.SDFInfo,
         tool_data: qd.template(),
         tool_info: qd.template(),
+        sph_system: qd.template(),
         collider_static_config: qd.template(),
     ):
         for ii, jj, kk, i_b in qd.ndrange(*self.mpm_solver.grid_res, self.mpm_solver._B):
@@ -379,7 +383,7 @@ class LegacyCoupler(RBC):
                 #################### MPM <-> SPH ####################
                 if qd.static(self._mpm_sph):
                     # using the lower corner of MPM cell to find the corresponding SPH base cell
-                    base = self.sph_solver.sh.pos_to_grid(pos - 0.5 * self.mpm_solver.dx)
+                    base = func_pos_to_grid(pos - 0.5 * self.mpm_solver.dx, sph_system.sh)
 
                     # ---------- SPH -> MPM ----------
                     sph_vel = qd.Vector([0.0, 0.0, 0.0])
@@ -387,16 +391,17 @@ class LegacyCoupler(RBC):
                     for offset in qd.grouped(
                         qd.ndrange(self.mpm_sph_stencil_size, self.mpm_sph_stencil_size, self.mpm_sph_stencil_size)
                     ):
-                        slot_idx = self.sph_solver.sh.grid_to_slot(base + offset)
+                        slot_idx = func_grid_to_slot(base + offset, sph_system.sh)
                         for i in range(
-                            self.sph_solver.sh.slot_start[slot_idx, i_b],
-                            self.sph_solver.sh.slot_start[slot_idx, i_b] + self.sph_solver.sh.slot_size[slot_idx, i_b],
+                            sph_system.spatial_hasher.slot_start[slot_idx, i_b],
+                            sph_system.spatial_hasher.slot_start[slot_idx, i_b]
+                            + sph_system.spatial_hasher.slot_size[slot_idx, i_b],
                         ):
                             if (
-                                qd.abs(pos - self.sph_solver.particles_reordered.pos[i, i_b]).max()
+                                qd.abs(pos - sph_system.particles_reordered.pos[i, i_b]).max()
                                 < self.mpm_solver.dx * 0.5
                             ):
-                                sph_vel += self.sph_solver.particles_reordered.vel[i, i_b]
+                                sph_vel += sph_system.particles_reordered.vel[i, i_b]
                                 colliding_particles += 1
                     if colliding_particles > 0:
                         vel_old = vel_mpm
@@ -408,19 +413,19 @@ class LegacyCoupler(RBC):
                         for offset in qd.grouped(
                             qd.ndrange(self.mpm_sph_stencil_size, self.mpm_sph_stencil_size, self.mpm_sph_stencil_size)
                         ):
-                            slot_idx = self.sph_solver.sh.grid_to_slot(base + offset)
+                            slot_idx = func_grid_to_slot(base + offset, sph_system.sh)
                             for i in range(
-                                self.sph_solver.sh.slot_start[slot_idx, i_b],
-                                self.sph_solver.sh.slot_start[slot_idx, i_b]
-                                + self.sph_solver.sh.slot_size[slot_idx, i_b],
+                                sph_system.spatial_hasher.slot_start[slot_idx, i_b],
+                                sph_system.spatial_hasher.slot_start[slot_idx, i_b]
+                                + sph_system.spatial_hasher.slot_size[slot_idx, i_b],
                             ):
                                 if (
-                                    qd.abs(pos - self.sph_solver.particles_reordered.pos[i, i_b]).max()
+                                    qd.abs(pos - sph_system.particles_reordered.pos[i, i_b]).max()
                                     < self.mpm_solver.dx * 0.5
                                 ):
-                                    self.sph_solver.particles_reordered[i, i_b].vel = (
-                                        self.sph_solver.particles_reordered[i, i_b].vel
-                                        - delta_mv / self.sph_solver.particles_info_reordered[i, i_b].mass
+                                    sph_system.particles_reordered.vel[i, i_b] = (
+                                        sph_system.particles_reordered.vel[i, i_b]
+                                        - delta_mv / sph_system.particles_info_reordered.mass[i, i_b]
                                     )
 
                 #################### MPM <-> PBD ####################
@@ -515,6 +520,7 @@ class LegacyCoupler(RBC):
         links_state: array_class.LinksState,
         rigid_info: array_class.RigidInfo,
         sdf_info: array_class.SDFInfo,
+        sph_system: qd.template(),
         collider_static_config: qd.template(),
     ):
         # TODO: all collisions are on vertices instead of surface and edge
@@ -616,23 +622,23 @@ class LegacyCoupler(RBC):
                         vel_fem_sv = self.fem_solver.elements_v[f + 1, iv, i_b].vel
                         mass_fem_sv = mass / 4.0
 
-                        dx = self.sph_solver.hash_grid_cell_size  # self._dx
+                        dx = sph_system.sh.cell_size
                         stencil_size = 2  # self._stencil_size
 
-                        base = self.sph_solver.sh.pos_to_grid(pos - 0.5 * dx)
+                        base = func_pos_to_grid(pos - 0.5 * dx, sph_system.sh)
 
                         # ---------- SPH -> FEM ----------
                         sph_vel = qd.Vector([0.0, 0.0, 0.0])
                         colliding_particles = 0
                         for offset in qd.grouped(qd.ndrange(stencil_size, stencil_size, stencil_size)):
-                            slot_idx = self.sph_solver.sh.grid_to_slot(base + offset)
+                            slot_idx = func_grid_to_slot(base + offset, sph_system.sh)
                             for k in range(
-                                self.sph_solver.sh.slot_start[slot_idx, i_b],
-                                self.sph_solver.sh.slot_start[slot_idx, i_b]
-                                + self.sph_solver.sh.slot_size[slot_idx, i_b],
+                                sph_system.spatial_hasher.slot_start[slot_idx, i_b],
+                                sph_system.spatial_hasher.slot_start[slot_idx, i_b]
+                                + sph_system.spatial_hasher.slot_size[slot_idx, i_b],
                             ):
-                                if qd.abs(pos - self.sph_solver.particles_reordered.pos[k, i_b]).max() < dx * 0.5:
-                                    sph_vel += self.sph_solver.particles_reordered.vel[k, i_b]
+                                if qd.abs(pos - sph_system.particles_reordered.pos[k, i_b]).max() < dx * 0.5:
+                                    sph_vel += sph_system.particles_reordered.vel[k, i_b]
                                     colliding_particles += 1
 
                         if colliding_particles > 0:
@@ -646,16 +652,16 @@ class LegacyCoupler(RBC):
                             delta_mv = mass_fem_sv * (vel_fem_sv - vel_old)
 
                             for offset in qd.grouped(qd.ndrange(stencil_size, stencil_size, stencil_size)):
-                                slot_idx = self.sph_solver.sh.grid_to_slot(base + offset)
+                                slot_idx = func_grid_to_slot(base + offset, sph_system.sh)
                                 for k in range(
-                                    self.sph_solver.sh.slot_start[slot_idx, i_b],
-                                    self.sph_solver.sh.slot_start[slot_idx, i_b]
-                                    + self.sph_solver.sh.slot_size[slot_idx, i_b],
+                                    sph_system.spatial_hasher.slot_start[slot_idx, i_b],
+                                    sph_system.spatial_hasher.slot_start[slot_idx, i_b]
+                                    + sph_system.spatial_hasher.slot_size[slot_idx, i_b],
                                 ):
-                                    if qd.abs(pos - self.sph_solver.particles_reordered.pos[k, i_b]).max() < dx * 0.5:
-                                        self.sph_solver.particles_reordered[k, i_b].vel = (
-                                            self.sph_solver.particles_reordered[k, i_b].vel
-                                            - delta_mv / self.sph_solver.particles_info_reordered[k, i_b].mass
+                                    if qd.abs(pos - sph_system.particles_reordered.pos[k, i_b]).max() < dx * 0.5:
+                                        sph_system.particles_reordered.vel[k, i_b] = (
+                                            sph_system.particles_reordered.vel[k, i_b]
+                                            - delta_mv / sph_system.particles_info_reordered.mass[k, i_b]
                                         )
 
                             self.fem_solver.elements_v[f + 1, iv, i_b].vel = vel_fem_sv
@@ -683,20 +689,21 @@ class LegacyCoupler(RBC):
         links_info: array_class.LinksInfo,
         rigid_info: array_class.RigidInfo,
         sdf_info: array_class.SDFInfo,
+        sph_system: qd.template(),
         collider_static_config: qd.template(),
     ):
-        for i_p, i_b in qd.ndrange(self.sph_solver._n_particles, self.sph_solver._B):
-            if self.sph_solver.particles_ng_reordered[i_p, i_b].active:
+        for i_p, i_b in qd.ndrange(sph_system._n_particles, sph_system._B):
+            if sph_system.particles_ng_reordered.active[i_p, i_b]:
                 for i_g in range(self.rigid_solver.n_geoms):
                     if geoms_info.needs_coup[i_g]:
                         (
-                            self.sph_solver.particles_reordered[i_p, i_b].vel,
+                            sph_system.particles_reordered.vel[i_p, i_b],
                             self.sph_rigid_normal_reordered[i_p, i_g, i_b],
                         ) = self._func_collide_with_rigid_geom_robust(
-                            self.sph_solver.particles_reordered[i_p, i_b].pos,
-                            self.sph_solver.particles_reordered[i_p, i_b].vel,
-                            self.sph_solver.particles_info_reordered[i_p, i_b].mass,
-                            self.sph_solver.particles_reordered[i_p, i_b].p,
+                            sph_system.particles_reordered.pos[i_p, i_b],
+                            sph_system.particles_reordered.vel[i_p, i_b],
+                            sph_system.particles_info_reordered.mass[i_p, i_b],
+                            sph_system.particles_reordered.p[i_p, i_b],
                             self.sph_rigid_normal_reordered[i_p, i_g, i_b],
                             i_g,
                             i_b,
@@ -706,6 +713,7 @@ class LegacyCoupler(RBC):
                             links_info,
                             rigid_info,
                             sdf_info,
+                            sph_system,
                             collider_static_config,
                         )
 
@@ -907,6 +915,7 @@ class LegacyCoupler(RBC):
                 sdf_info=self.rigid_solver.sdf._sdf_info,
                 tool_data=self.tool_solver.data,
                 tool_info=self.tool_solver.info,
+                sph_system=self.sph_solver._system,
                 collider_static_config=self.rigid_solver.collider.collider_config,
             )
 
@@ -920,6 +929,7 @@ class LegacyCoupler(RBC):
                 self.rigid_solver.dyn_info.links,
                 self.rigid_solver.rigid_info,
                 self.rigid_solver.sdf._sdf_info,
+                self.sph_solver._system,
                 self.rigid_solver.collider.collider_config,
             )
 
@@ -947,6 +957,7 @@ class LegacyCoupler(RBC):
                 self.rigid_solver.dyn_state.links,
                 self.rigid_solver.rigid_info,
                 self.rigid_solver.sdf._sdf_info,
+                self.sph_solver._system,
                 self.rigid_solver.collider.collider_config,
             )
             self.fem_rigid_link_constraints()
@@ -960,6 +971,7 @@ class LegacyCoupler(RBC):
                 self.rigid_solver.dyn_state.links,
                 self.rigid_solver.rigid_info,
                 self.rigid_solver.sdf._sdf_info,
+                self.sph_solver._system,
                 self.rigid_solver.collider.collider_config,
             )
         if self.mpm_solver.is_active:
@@ -973,6 +985,7 @@ class LegacyCoupler(RBC):
                 sdf_info=self.rigid_solver.sdf._sdf_info,
                 tool_data=self.tool_solver.data,
                 tool_info=self.tool_solver.info,
+                sph_system=self.sph_solver._system,
                 collider_static_config=self.rigid_solver.collider.collider_config,
             )
 

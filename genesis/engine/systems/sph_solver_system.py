@@ -1,12 +1,16 @@
-"""System wrapping the SPH solver, whose phases the Substepper calls.
-
-The SPH solver keeps owning its data and running its own kernels; the System hands its phases to the Substepper as host
-Actions.
-"""
+"""System of the SPH solver, which owns its particle data, initialization and substep."""
 
 from typing import TYPE_CHECKING
 
+import quadrants as qd
+
+import genesis as gs
+from genesis.engine import sph_runtime
 from genesis.engine.core import System, register_system
+from genesis.engine.sph_data import SPHSolverData
+from genesis.engine.solvers.base_solver import adopt_model
+from genesis.utils.array_class import V, V_VEC
+from genesis.utils.misc import qd_to_numpy
 
 from .simulator_engine import SimulatorEngine
 
@@ -14,15 +18,73 @@ if TYPE_CHECKING:
     from genesis.engine.scene import Scene
 
 
-# FIXME: thin wrapper. The SPH solver still owns its data and runs each phase as a host method launching its own
-# kernels. The System owns that data and exposes its phases as Actions over it, the solver forwarding to it, once the
-# solver is inverted as the rigid solver is (see RigidSolverSystem).
+SPH_MODEL = (
+    "_entities",
+    "_B",
+    "_n_particles",
+    "_coupler",
+    "_particle_size",
+    "_support_radius",
+    "_particle_volume",
+    "_pressure_solver",
+    "_df_max_error_div",
+    "_df_max_error_den",
+    "_df_max_div_iters",
+    "_df_max_den_iters",
+    "_df_eps",
+    "_stable_dt_coef",
+    "_substep_dt",
+    "_ffs",
+    "_sim",
+    "_options",
+    "sh",
+    "boundary",
+)
+
+
+@qd.data_oriented
 class SPHSolverSystem(System):
-    """System wrapping the SPH solver of the scene."""
+    """System owning the particle data and simulation of the SPH solver of the scene."""
 
     def __init__(self, scene: "Scene") -> None:
         super().__init__(scene)
         self.solver = scene.sim.sph_solver
+
+    @System.action(kind="host")
+    def initialize(self):
+        return self.initialize_data
+
+    def initialize_data(self) -> None:
+        """Take over the model, then allocate and initialize the particles and spatial hash."""
+        adopt_model(self, SPH_MODEL)
+        self.solver._system = self
+        self.data = SPHSolverData(self)
+        self.particles = self.data.particles
+        self.particles_ng = self.data.particles_ng
+        self.particles_info = self.data.particles_info
+        self.particles_reordered = self.data.particles_reordered
+        self.particles_ng_reordered = self.data.particles_ng_reordered
+        self.particles_info_reordered = self.data.particles_info_reordered
+        self.particles_render = self.data.particles_render
+        self.spatial_hasher = self.data.spatial_hasher
+        self.density_error = V(dtype=gs.qd_float, shape=())
+        self.graph_counter = qd.ndarray(qd.i32, shape=())
+        self.solver._build_gravity(gravity=V_VEC(3, dtype=gs.qd_float, shape=(self._B,)))
+
+        for entity in self._entities:
+            entity._add_to_solver()
+
+        mu = qd_to_numpy(self.particles_info.mu, transpose=True).max()
+        stable_dt = self._stable_dt_coef * (0.01 * self._support_radius**2) / mu
+        if self._substep_dt > stable_dt:
+            gs.logger.warning(
+                f"Current timestep ({self._substep_dt:.4g}) is larger than the stable timestep "
+                f"({stable_dt:.4g}) for SPH solver. "
+                "Please consider reducing the timestep, liquid viscosity (mu), or increasing the particle size."
+            )
+
+        # TODO: Support per-particle density
+        self._density0 = float(qd_to_numpy(self.particles_info.rho, transpose=True)[0])
 
     @System.action(kind="host")
     def process_input(self):
@@ -30,14 +92,62 @@ class SPHSolverSystem(System):
 
     @System.action(kind="host")
     def pre_coupling(self):
-        return self.solver.substep_pre_coupling
+        return self.substep_pre_coupling
 
     @System.action(kind="host")
     def post_coupling(self):
-        return self.solver.substep_post_coupling
+        return self.substep_post_coupling
+
+    def substep_pre_coupling(self, f: int) -> None:
+        """Reorder the particles and advance their velocity through the pressure solve."""
+        if self._coupler._rigid_sph:
+            has_rigid_coupling = True
+            rigid_normal = self._coupler.sph_rigid_normal
+            rigid_normal_reordered = self._coupler.sph_rigid_normal_reordered
+            n_geoms = self._coupler.rigid_solver.n_geoms
+        else:
+            has_rigid_coupling = False
+            rigid_normal = None
+            rigid_normal_reordered = None
+            n_geoms = 0
+        if self._pressure_solver == "WCSPH":
+            sph_runtime.kernel_wcsph_pre_coupling(
+                self,
+                f,
+                self._sim.cur_t,
+                has_rigid_coupling,
+                rigid_normal,
+                rigid_normal_reordered,
+                n_geoms,
+            )
+        else:
+            sph_runtime.kernel_dfsph_pre_coupling(
+                self,
+                f,
+                self._sim.cur_t,
+                self.graph_counter,
+                has_rigid_coupling,
+                rigid_normal,
+                rigid_normal_reordered,
+                n_geoms,
+            )
+
+    def substep_post_coupling(self, f: int) -> None:
+        """Advect the particle positions after coupling and restore their authored order."""
+        if self._coupler._rigid_sph:
+            sph_runtime.kernel_post_coupling(
+                self,
+                f,
+                True,
+                self._coupler.sph_rigid_normal,
+                self._coupler.sph_rigid_normal_reordered,
+                self._coupler.rigid_solver.n_geoms,
+            )
+        else:
+            sph_runtime.kernel_post_coupling(self, f, False, None, None, 0)
 
 
 @register_system(SimulatorEngine)
 def create_sph_solver_system(scene: "Scene") -> SPHSolverSystem | None:
-    """Create the System wrapping the SPH solver whenever it simulates an entity."""
+    """Create the System owning the SPH solver whenever it simulates an entity."""
     return SPHSolverSystem(scene) if scene.sim.sph_solver.is_active else None
