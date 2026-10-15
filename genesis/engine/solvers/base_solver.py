@@ -313,6 +313,31 @@ class GravityMixin:
         return tensor[0] if self._sim.n_envs == 0 else tensor
 
 
+def forward_to_system(name: str, default: Any = None, *, settable: bool = False) -> property:
+    """Attribute of a solver that forwards to the System owning its data, `default` before the engine builds it.
+
+    A settable attribute is state the user-facing API writes, such as the flags telling whether the cartesian space is
+    up to date, which only exists once the System does.
+    """
+
+    def get(solver):
+        system = solver._system
+        return default if system is None else getattr(system, name)
+
+    def set(solver, value):
+        if solver._system is None:
+            gs.raise_exception(f"{type(solver).__name__}.{name} is set only once the scene is built.")
+        setattr(solver._system, name, value)
+
+    return property(get, set if settable else None)
+
+
+def adopt_model(system, model: tuple[str, ...]) -> None:
+    """Take over the given model from the solver of the System, the only reads of the solver past its own build."""
+    for name in model:
+        setattr(system, name, getattr(system.solver, name))
+
+
 class Solver(RBC):
     # The material of the entities this solver simulates, None for a solver holding no entity of its own
     material_cls: type[Material] | None = None
@@ -346,6 +371,9 @@ class Solver(RBC):
         # solvers that expose a kinematic structure (see KinematicSolver).
         self._articulated_links_idx: np.ndarray | None = None
         self._links_parent_idx: np.ndarray | None = None
+
+        # The System owning the data of this solver, which the engine builds once this solver has built its entities
+        self._system = None
 
     def _add_force_field(self, force_field):
         self._ffs.append(force_field)

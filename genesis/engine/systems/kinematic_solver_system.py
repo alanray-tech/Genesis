@@ -14,6 +14,7 @@ import torch
 import genesis as gs
 import genesis.utils.array_class as array_class
 from genesis.engine.core import System, register_system
+from genesis.engine.solvers.base_solver import adopt_model
 from genesis.engine.solvers.kinematic_solver import _balanced_variant_mapping
 from genesis.engine.solvers.rigid.abd.forward_kinematics import (
     kernel_forward_kinematics,
@@ -98,12 +99,6 @@ KINEMATIC_MODEL = (
     "_requires_grad",
     "_enable_heterogeneous",
 )
-
-
-def adopt_model(system, model: tuple[str, ...]) -> None:
-    """Take over the given model from the solver of the System, the only reads of the solver past its own build."""
-    for name in model:
-        setattr(system, name, getattr(system.solver, name))
 
 
 class KinematicSolverSystem(System):
