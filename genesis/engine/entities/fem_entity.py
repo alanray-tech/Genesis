@@ -11,8 +11,9 @@ import genesis as gs
 import genesis.utils.element as eu
 import genesis.utils.geom as gu
 import genesis.utils.mesh as mu
-from genesis.engine.entities.rigid_entity import RigidLink
+from genesis.engine import fem_runtime
 from genesis.engine.couplers import SAPCoupler
+from genesis.engine.entities.rigid_entity import RigidLink
 from genesis.engine.states.cache import QueriedStates
 from genesis.engine.states.entities import FEMEntityState
 from genesis.repr_base import RBC
@@ -546,7 +547,8 @@ class FEMEntity(Entity):
         verts_numpy = tensor_to_array(self.init_positions, dtype=gs.np_float)
 
         if isinstance(self.material, gs.materials.FEM.Cloth):
-            self._solver._kernel_add_cloth(
+            fem_runtime._kernel_add_cloth(
+                self._solver._system,
                 f=self._sim.cur_substep_local,
                 v_start=self._v_start,
                 s_start=self._s_start,
@@ -555,7 +557,8 @@ class FEMEntity(Entity):
             )
         else:
             elems_np = self.elems.astype(gs.np_int, copy=False)
-            self._solver._kernel_add_elements(
+            fem_runtime._kernel_add_elements(
+                self._solver._system,
                 f=self._sim.cur_substep_local,
                 mat_idx=self._material.idx,
                 mat_mu=self._material.mu,
@@ -576,7 +579,8 @@ class FEMEntity(Entity):
             uvs = vgeom.uvs
             if uvs is None:
                 uvs = np.zeros((0, 2), dtype=gs.np_float)
-            self._solver._kernel_add_vverts(
+            fem_runtime._kernel_add_vverts(
+                self._solver._system,
                 vvert_start=vgeom.vvert_start,
                 vface_start=vgeom.vface_start,
                 v_start=self._v_start,
@@ -790,7 +794,8 @@ class FEMEntity(Entity):
             Tensor of shape (n_envs, n_vertices, 3) containing new positions.
         """
 
-        self._solver._kernel_set_elements_pos(
+        fem_runtime._kernel_set_elements_pos(
+            self._solver._system,
             f=f,
             element_v_start=self._v_start,
             n_vertices=self.n_vertices,
@@ -810,7 +815,8 @@ class FEMEntity(Entity):
             Tensor of shape (n_envs, n_vertices, 3) containing gradients of positions.
         """
 
-        self._solver._kernel_set_elements_pos_grad(
+        fem_runtime._kernel_set_elements_pos_grad(
+            self._solver._system,
             f=f,
             element_v_start=self._v_start,
             n_vertices=self.n_vertices,
@@ -830,7 +836,8 @@ class FEMEntity(Entity):
             Tensor of shape (n_envs, n_vertices, 3) containing velocities.
         """
 
-        self._solver._kernel_set_elements_vel(
+        fem_runtime._kernel_set_elements_vel(
+            self._solver._system,
             f=f,
             element_v_start=self._v_start,
             n_vertices=self.n_vertices,
@@ -850,7 +857,8 @@ class FEMEntity(Entity):
             Tensor of shape (n_envs, n_vertices, 3) containing gradients of velocities.
         """
 
-        self._solver._kernel_set_elements_vel_grad(
+        fem_runtime._kernel_set_elements_vel_grad(
+            self._solver._system,
             f=f,
             element_v_start=self._v_start,
             n_vertices=self.n_vertices,
@@ -870,7 +878,8 @@ class FEMEntity(Entity):
             Tensor of shape (n_envs, n_groups) specifying actuation values.
         """
 
-        self._solver._kernel_set_elements_actu(
+        fem_runtime._kernel_set_elements_actu(
+            self._solver._system,
             f=f,
             element_el_start=self._el_start,
             n_elements=self.n_elements,
@@ -891,7 +900,8 @@ class FEMEntity(Entity):
             Tensor of shape (n_envs, n_groups) specifying gradients of actuation.
         """
 
-        self._solver._kernel_set_elements_actu(
+        fem_runtime._kernel_set_elements_actu_grad(
+            self._solver._system,
             f=f,
             element_el_start=self._el_start,
             n_elements=self.n_elements,
@@ -911,7 +921,8 @@ class FEMEntity(Entity):
             Activity flag (gs.ACTIVE or gs.INACTIVE).
         """
 
-        self._solver._kernel_set_active(
+        fem_runtime._kernel_set_active(
+            self._solver._system,
             f=f,
             element_el_start=self._el_start,
             n_elements=self.n_elements,
@@ -929,7 +940,8 @@ class FEMEntity(Entity):
             Tensor of shape (n_elements,) specifying muscle group IDs.
         """
 
-        self._solver._kernel_set_muscle_group(
+        fem_runtime._kernel_set_muscle_group(
+            self._solver._system,
             element_el_start=self._el_start,
             n_elements=self.n_elements,
             muscle_group=muscle_group,
@@ -946,7 +958,8 @@ class FEMEntity(Entity):
             Tensor of shape (n_elements, 3) with unit direction vectors.
         """
 
-        self._solver._kernel_set_muscle_direction(
+        fem_runtime._kernel_set_muscle_direction(
+            self._solver._system,
             element_el_start=self._el_start,
             n_elements=self.n_elements,
             muscle_direction=muscle_direction,
@@ -1010,7 +1023,8 @@ class FEMEntity(Entity):
                 link_init_pos = link.get_pos(envs_idx=envs_idx, relative=False)
                 link_init_quat = link.get_quat(envs_idx=envs_idx, relative=False)
 
-        self._solver._kernel_set_vertex_constraints(
+        fem_runtime._kernel_set_vertex_constraints(
+            self._solver._system,
             self._sim.cur_substep_local,
             verts_idx,
             envs_idx,
@@ -1034,7 +1048,7 @@ class FEMEntity(Entity):
         verts_idx = verts_idx_local + self._v_start
         target_poss = self._sanitize_verts_tensor(target_poss, gs.tc_float, verts_idx, envs_idx, (3,))
 
-        self._solver._kernel_update_constraint_targets(verts_idx, envs_idx, target_poss)
+        fem_runtime._kernel_update_constraint_targets(self._solver._system, verts_idx, envs_idx, target_poss)
 
     def remove_vertex_constraints(self, verts_idx_local=None, envs_idx=None):
         """Remove constraints from the specified vertices and environments, or from all of them if None."""
@@ -1051,7 +1065,7 @@ class FEMEntity(Entity):
         verts_idx_local = self._sanitize_verts_idx_local(verts_idx_local, envs_idx)
         verts_idx = verts_idx_local + self._v_start
 
-        self._solver._kernel_remove_specific_constraints(verts_idx, envs_idx)
+        fem_runtime._kernel_remove_specific_constraints(self._solver._system, verts_idx, envs_idx)
 
     @qd.kernel
     def _kernel_get_verts_pos(
@@ -1061,7 +1075,7 @@ class FEMEntity(Entity):
             i_b = envs_idx[i_b_]
             i_v = verts_idx[i_b_, i_v_]
             for j in qd.static(range(3)):
-                pos[i_b_, i_v_, j] = self._solver.elements_v[f, i_v, i_b].pos[j]
+                pos[i_b_, i_v_, j] = self._solver.elements_v.pos[f, i_v, i_b][j]
 
     def get_el2v(self):
         """
@@ -1073,8 +1087,12 @@ class FEMEntity(Entity):
             Tensor of shape (n_elements, 4) mapping each element to its local vertex indices.
         """
         el2v = gs.zeros((self.n_elements, 4), dtype=int, requires_grad=False, scene=self.scene)
-        self._solver._kernel_get_el2v(
-            element_el_start=self._el_start, element_v_start=self._v_start, el2v=el2v, n_elements=self.n_elements
+        fem_runtime._kernel_get_el2v(
+            self._solver._system,
+            element_el_start=self._el_start,
+            element_v_start=self._v_start,
+            el2v=el2v,
+            n_elements=self.n_elements,
         )
         return el2v
 
@@ -1101,12 +1119,12 @@ class FEMEntity(Entity):
         for i_v, i_b in qd.ndrange(self.n_vertices, self._sim._B):
             i_global = i_v + self.v_start
             for j in qd.static(range(3)):
-                pos[i_b, i_v, j] = self._solver.elements_v[f, i_global, i_b].pos[j]
-                vel[i_b, i_v, j] = self._solver.elements_v[f, i_global, i_b].vel[j]
+                pos[i_b, i_v, j] = self._solver.elements_v.pos[f, i_global, i_b][j]
+                vel[i_b, i_v, j] = self._solver.elements_v.vel[f, i_global, i_b][j]
 
         for i_v, i_b in qd.ndrange(self.n_elements, self._sim._B):
             i_global = i_v + self.el_start
-            active[i_b, i_v] = self._solver.elements_el_ng[f, i_global, i_b].active
+            active[i_b, i_v] = self._solver.elements_el_ng.active[f, i_global, i_b]
 
     @qd.kernel
     def clear_grad(self, f: qd.i32):

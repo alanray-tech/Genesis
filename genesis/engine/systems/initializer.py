@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from genesis.engine.core import Find, Require, System, register_system
 
 from .constraint_solver_system import ConstraintSolverSystem
+from .fem_solver_system import FEMSolverSystem
 from .kinematic_solver_system import KinematicSolverSystem
 from .mpm_solver_system import MPMSolverSystem
 from .pbd_solver_system import PBDSolverSystem
@@ -31,6 +32,7 @@ class Initializer(System):
     constraint = Find(ConstraintSolverSystem)
     mpm = Find(MPMSolverSystem)
     pbd = Find(PBDSolverSystem)
+    fem = Find(FEMSolverSystem)
     sf = Find(SFSolverSystem)
     sph = Find(SPHSolverSystem)
     tool = Find(ToolSolverSystem)
@@ -45,6 +47,8 @@ class Initializer(System):
             self.sph.initialize.invoke()
         if self.pbd is not None:
             self.pbd.initialize.invoke()
+        if self.fem is not None:
+            self.fem.initialize.invoke()
         if self.tool is not None:
             self.tool.initialize.invoke()
         # The signed distance fields of the rigid geoms are sized from the rigid model, and the collision detection
