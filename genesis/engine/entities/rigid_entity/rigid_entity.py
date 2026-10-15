@@ -2149,7 +2149,7 @@ class RigidEntity(KinematicEntity):
         envs_idx : None | array_like, optional
             The indices of the environments. If None, all environments will be considered. Defaults to None.
         allow_fast_approx : bool
-            Whether to allow fast approximation for efficiency if supported, i.e. 'LegacyCoupler' is enabled. In this
+            Whether to allow fast approximation for efficiency when the pairwise coupler is enabled. In this
             case, each collision geometry is approximated by their pre-computed AABB in geometry-local frame, which is
             more efficiency but inaccurate.
 
@@ -2159,13 +2159,13 @@ class RigidEntity(KinematicEntity):
             The AABB of the entity, where `[:, 0] = min_corner (x_min, y_min, z_min)` and
             `[:, 1] = max_corner (x_max, y_max, z_max)`.
         """
-        from genesis.engine.couplers import LegacyCoupler
+        from genesis.engine.couplers import PairwiseCoupler
 
         if self.n_geoms == 0:
             gs.raise_exception("Entity has no collision geometries.")
 
         # Already computed internally by the solver. Let's access it directly for efficiency.
-        if allow_fast_approx and isinstance(self.sim.coupler, LegacyCoupler):
+        if allow_fast_approx and isinstance(self.sim.coupler, PairwiseCoupler):
             return self._solver.get_AABB(entities_idx=[self._idx_in_solver], envs_idx=envs_idx)[..., 0, :]
 
         # For heterogeneous entities, compute AABB per-environment respecting active_envs_idx.

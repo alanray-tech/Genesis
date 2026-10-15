@@ -667,7 +667,7 @@ class MPMEntity(ParticleEntity):
             self._solver.init_constraints()
 
         # Get link position and quaternion for all envs
-        rigid_solver = self._sim.coupler.rigid_solver
+        rigid_solver = self._scene.rigid_solver
         link_pos = rigid_solver.get_links_pos(links_idx=[link_idx])  # (n_envs, 1, 3)
         link_quat = rigid_solver.get_links_quat(links_idx=[link_idx])  # (n_envs, 1, 4)
         if link_pos.ndim == 2:

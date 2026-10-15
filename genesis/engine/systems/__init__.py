@@ -13,5 +13,15 @@ from .pbd_solver_system import PBDSolverSystem
 from .fem_solver_system import FEMSolverSystem
 from .sf_solver_system import SFSolverSystem
 from .coupler_system import CouplerSystem
+from .pairwise_coupling_systems import (
+    FEMPairwiseCouplingSystem,
+    MPMGridCouplingSystem,
+    MPMPBDCouplingSystem,
+    MPMRigidCouplingSystem,
+    MPMSPHCouplingSystem,
+    MPMToolCouplingSystem,
+    PBDRigidCouplingSystem,
+    SPHRigidCouplingSystem,
+)
 from .substepper import Substepper
 from .initializer import Initializer

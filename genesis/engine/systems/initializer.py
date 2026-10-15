@@ -7,6 +7,12 @@ from genesis.engine.core import Find, Require, System, register_system
 from .constraint_solver_system import ConstraintSolverSystem
 from .fem_solver_system import FEMSolverSystem
 from .kinematic_solver_system import KinematicSolverSystem
+from .pairwise_coupling_systems import (
+    FEMPairwiseCouplingSystem,
+    MPMRigidCouplingSystem,
+    PBDRigidCouplingSystem,
+    SPHRigidCouplingSystem,
+)
 from .mpm_solver_system import MPMSolverSystem
 from .pbd_solver_system import PBDSolverSystem
 from .rigid_rigid_contact_system import RigidRigidContactSystem
@@ -36,6 +42,10 @@ class Initializer(System):
     sf = Find(SFSolverSystem)
     sph = Find(SPHSolverSystem)
     tool = Find(ToolSolverSystem)
+    mpm_rigid_coupling = Find(MPMRigidCouplingSystem)
+    sph_rigid_coupling = Find(SPHRigidCouplingSystem)
+    pbd_rigid_coupling = Find(PBDRigidCouplingSystem)
+    fem_pairwise_coupling = Find(FEMPairwiseCouplingSystem)
 
     def initialize(self) -> None:
         """Initialize the data of every System."""
@@ -65,6 +75,15 @@ class Initializer(System):
         # The MPM solver fills the signed distance fields against the static configuration of the rigid data
         if self.mpm is not None:
             self.mpm.initialize.invoke()
+        # Pairwise coupling data is sized from the fully initialized solver Systems.
+        if self.mpm_rigid_coupling is not None:
+            self.mpm_rigid_coupling.initialize.invoke()
+        if self.sph_rigid_coupling is not None:
+            self.sph_rigid_coupling.initialize.invoke()
+        if self.pbd_rigid_coupling is not None:
+            self.pbd_rigid_coupling.initialize.invoke()
+        if self.fem_pairwise_coupling is not None:
+            self.fem_pairwise_coupling.initialize.invoke()
 
 
 @register_system(SimulatorEngine)

@@ -22,7 +22,6 @@ SPH_MODEL = (
     "_entities",
     "_B",
     "_n_particles",
-    "_coupler",
     "_particle_size",
     "_support_radius",
     "_particle_volume",
@@ -49,6 +48,11 @@ class SPHSolverSystem(System):
     def __init__(self, scene: "Scene") -> None:
         super().__init__(scene)
         self.solver = scene.sim.sph_solver
+
+    def build(self) -> None:
+        from .pairwise_coupling_systems import SPHRigidCouplingSystem
+
+        self.rigid_coupling = self.find(SPHRigidCouplingSystem)
 
     @System.action(kind="host")
     def initialize(self):
@@ -100,15 +104,13 @@ class SPHSolverSystem(System):
 
     def substep_pre_coupling(self, f: int) -> None:
         """Reorder the particles and advance their velocity through the pressure solve."""
-        if self._coupler._rigid_sph:
+        if self.rigid_coupling is not None:
             has_rigid_coupling = True
-            rigid_normal = self._coupler.sph_rigid_normal
-            rigid_normal_reordered = self._coupler.sph_rigid_normal_reordered
-            n_geoms = self._coupler.rigid_solver.n_geoms
+            rigid_coupling = self.rigid_coupling
+            n_geoms = self.rigid_coupling.rigid.n_geoms
         else:
             has_rigid_coupling = False
-            rigid_normal = None
-            rigid_normal_reordered = None
+            rigid_coupling = None
             n_geoms = 0
         if self._pressure_solver == "WCSPH":
             sph_runtime.kernel_wcsph_pre_coupling(
@@ -116,8 +118,7 @@ class SPHSolverSystem(System):
                 f,
                 self._sim.cur_t,
                 has_rigid_coupling,
-                rigid_normal,
-                rigid_normal_reordered,
+                rigid_coupling,
                 n_geoms,
             )
         else:
@@ -127,24 +128,22 @@ class SPHSolverSystem(System):
                 self._sim.cur_t,
                 self.graph_counter,
                 has_rigid_coupling,
-                rigid_normal,
-                rigid_normal_reordered,
+                rigid_coupling,
                 n_geoms,
             )
 
     def substep_post_coupling(self, f: int) -> None:
         """Advect the particle positions after coupling and restore their authored order."""
-        if self._coupler._rigid_sph:
+        if self.rigid_coupling is not None:
             sph_runtime.kernel_post_coupling(
                 self,
                 f,
                 True,
-                self._coupler.sph_rigid_normal,
-                self._coupler.sph_rigid_normal_reordered,
-                self._coupler.rigid_solver.n_geoms,
+                self.rigid_coupling,
+                self.rigid_coupling.rigid.n_geoms,
             )
         else:
-            sph_runtime.kernel_post_coupling(self, f, False, None, None, 0)
+            sph_runtime.kernel_post_coupling(self, f, False, None, 0)
 
 
 @register_system(SimulatorEngine)

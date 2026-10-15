@@ -63,6 +63,11 @@ class PBDSolverSystem(System):
         super().__init__(scene)
         self.solver = scene.sim.pbd_solver
 
+    def build(self) -> None:
+        from .pairwise_coupling_systems import PBDRigidCouplingSystem
+
+        self.rigid_coupling = self.find(PBDRigidCouplingSystem)
+
     @System.action(kind="host")
     def initialize(self):
         return self.initialize_data

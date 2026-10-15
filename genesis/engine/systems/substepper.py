@@ -56,7 +56,7 @@ class Substepper(System):
         if self.sf is not None:
             self.sf.process_input.invoke((in_backward,))
 
-    # The manager stays on the host while implicit FEM, rigid constraint dispatch, SAP and LegacyCoupler retain host
+    # The manager stays on the host while implicit FEM, rigid constraint dispatch, SAP and PairwiseCoupler retain host
     # phases. Each migrated participant may still run its own device graph inside these explicit lifecycle boundaries.
     def substep(self, f: int) -> None:
         """Advance every solver by substep f. A scene simulating rigid entities alone advances through

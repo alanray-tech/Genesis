@@ -6,6 +6,7 @@ import genesis as gs
 import genesis.utils.geom as gu
 import genesis.utils.sdf as sdf
 from genesis.utils import array_class
+from genesis.engine.coupling_runtime import func_collide_in_rigid_geom
 
 
 @qd.func
@@ -83,8 +84,7 @@ def p2g(
     sdf_info: array_class.SDFInfo,
     collider_static_config: qd.template(),
     cpic_active: qd.template(),
-    cpic_flag: qd.template(),
-    mpm_rigid_normal: qd.template(),
+    mpm_rigid_coupling: qd.template(),
     n_rigid_geoms: qd.template(),
 ):
     for i_p, i_b in qd.ndrange(system._n_particles, system._B):
@@ -157,7 +157,7 @@ def p2g(
 
                     for i_g in range(n_rigid_geoms):
                         if geoms_info.needs_coup[i_g]:
-                            sdf_normal_particle = mpm_rigid_normal[i_p, i_g, i_b]
+                            sdf_normal_particle = mpm_rigid_coupling.rigid_normal[i_p, i_g, i_b]
                             sdf_normal_cell = sdf.sdf_func_normal_world(
                                 i_g,
                                 i_b,
@@ -172,7 +172,7 @@ def p2g(
                             if sdf_normal_particle.dot(sdf_normal_cell) < 0:  # separated by geom i_g
                                 sep_geom_idx = i_g
                                 break
-                    cpic_flag[i_p, offset[0], offset[1], offset[2], i_b] = sep_geom_idx
+                    mpm_rigid_coupling.cpic_flag[i_p, offset[0], offset[1], offset[2], i_b] = sep_geom_idx
                 if sep_geom_idx == -1:
                     cell_ijk = base - system._grid_offset + offset
                     system.grid.vel_in[f, cell_ijk, i_b] += weight * (
@@ -206,10 +206,8 @@ def g2p(
     geoms_info: array_class.GeomsInfo,
     links_state: array_class.LinksState,
     rigid_info: array_class.RigidInfo,
-    rigid_coupler: qd.template(),
     cpic_active: qd.template(),
-    cpic_flag: qd.template(),
-    mpm_rigid_normal: qd.template(),
+    mpm_rigid_coupling: qd.template(),
 ):
     for i_p, i_b in qd.ndrange(system._n_particles, system._B):
         if system.particles_ng.active[f, i_p, i_b]:
@@ -226,13 +224,13 @@ def g2p(
                     weight *= w[offset[d]][d]
 
                 if qd.static(cpic_active):
-                    sep_geom_idx = cpic_flag[i_p, offset[0], offset[1], offset[2], i_b]
+                    sep_geom_idx = mpm_rigid_coupling.cpic_flag[i_p, offset[0], offset[1], offset[2], i_b]
                     if sep_geom_idx != -1:
-                        grid_vel = rigid_coupler._func_collide_in_rigid_geom(
+                        grid_vel = func_collide_in_rigid_geom(
                             system.particles.pos[f, i_p, i_b],
                             system.particles.vel[f, i_p, i_b],
                             system.particles_info.mass[i_p] * weight / system._particle_volume_scale,
-                            mpm_rigid_normal[i_p, sep_geom_idx, i_b],
+                            mpm_rigid_coupling.rigid_normal[i_p, sep_geom_idx, i_b],
                             1.0,
                             sep_geom_idx,
                             i_b,

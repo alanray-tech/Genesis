@@ -296,7 +296,9 @@ class PBDSolver(GravityMixin, TimeBasedMixin, Solver):
         envs_idx=None,
     ) -> None:
         envs_idx = self._scene._sanitize_envs_idx(envs_idx)
-        self._sim._coupler.kernel_attach_pbd_to_rigid_link(self._system, particles_idx, envs_idx, link_idx, links_state)
+        if self._system.rigid_coupling is None:
+            gs.raise_exception("PBD particles can attach to a rigid link only when rigid-PBD coupling is enabled.")
+        self._system.rigid_coupling.attach(particles_idx, envs_idx, link_idx, links_state)
 
     @property
     def n_particles(self):
