@@ -15,10 +15,10 @@ from genesis.utils.geom import (
 from genesis.utils.misc import to_gs_tensor
 
 from ..base_entity import Entity
+from .data import ToolEntityData, ToolSolverConfig, ToolSolverInfo
 from .mesh import Mesh
 
 
-@qd.data_oriented
 class ToolEntity(Entity):
     # Mesh-based tool body entity
     def __init__(
@@ -49,9 +49,7 @@ class ToolEntity(Entity):
         self.init_tgt_vars()
         self.init_ckpt()
         self._queried_states = QueriedStates()
-
-        # for rendering purpose only
-        self.latest_pos = qd.Vector.field(3, dtype=gs.qd_float, shape=(1))
+        self._data: ToolEntityData | None = None
 
     # ------------------------------------------------------------------------------------
     # --------------------------------- naming methods -----------------------------------
@@ -98,32 +96,6 @@ class ToolEntity(Entity):
 
         self._queried_states.clear()
 
-    @qd.kernel
-    def save_ckpt_kernel(
-        self, pos: qd.types.ndarray(), quat: qd.types.ndarray(), vel: qd.types.ndarray(), ang: qd.types.ndarray()
-    ):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(3)):
-                pos[i_b, i] = self.pos[0, i_b][i]
-                vel[i_b, i] = self.vel[0, i_b][i]
-                ang[i_b, i] = self.ang[0, i_b][i]
-
-            for i in qd.static(range(4)):
-                quat[i_b, i] = self.quat[0, i_b][i]
-
-    @qd.kernel
-    def load_ckpt_kernel(
-        self, pos: qd.types.ndarray(), quat: qd.types.ndarray(), vel: qd.types.ndarray(), ang: qd.types.ndarray()
-    ):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(3)):
-                self.pos[0, i_b][i] = pos[i_b, i]
-                self.vel[0, i_b][i] = vel[i_b, i]
-                self.ang[0, i_b][i] = ang[i_b, i]
-
-            for i in qd.static(range(4)):
-                self.quat[0, i_b][i] = quat[i_b, i]
-
     def save_ckpt(self, ckpt_name):
         if self._sim.requires_grad:
             if ckpt_name not in self._ckpt:
@@ -135,11 +107,12 @@ class ToolEntity(Entity):
                     "_tgt_buffer": dict(),
                 }
 
-            self.save_ckpt_kernel(
+            kernel_save_ckpt(
                 self._ckpt[ckpt_name]["pos"],
                 self._ckpt[ckpt_name]["quat"],
                 self._ckpt[ckpt_name]["vel"],
                 self._ckpt[ckpt_name]["ang"],
+                self.data,
             )
 
             self._ckpt[ckpt_name]["_tgt_buffer"]["pos"] = list(self._tgt_buffer["pos"])
@@ -153,18 +126,19 @@ class ToolEntity(Entity):
             self._tgt_buffer["ang"].clear()
 
         # restart from frame 0 in memory
-        self.copy_frame(self._sim.substeps_local, 0)
+        kernel_copy_frame(self._sim.substeps_local, 0, self.data)
 
     def load_ckpt(self, ckpt_name):
-        self.copy_frame(0, self._sim.substeps_local)
-        self.copy_grad(0, self._sim.substeps_local)
-        self.reset_grad_till_frame(self._sim.substeps_local)
+        kernel_copy_frame(0, self._sim.substeps_local, self.data)
+        kernel_copy_grad(0, self._sim.substeps_local, self.data)
+        kernel_reset_grad_till_frame(self._sim.substeps_local, self.data)
 
-        self.load_ckpt_kernel(
+        kernel_load_ckpt(
             self._ckpt[ckpt_name]["pos"],
             self._ckpt[ckpt_name]["quat"],
             self._ckpt[ckpt_name]["vel"],
             self._ckpt[ckpt_name]["ang"],
+            self.data,
         )
 
         self._tgt_buffer["pos"] = list(self._ckpt[ckpt_name]["_tgt_buffer"]["pos"])
@@ -173,137 +147,23 @@ class ToolEntity(Entity):
         self._tgt_buffer["ang"] = list(self._ckpt[ckpt_name]["_tgt_buffer"]["ang"])
 
     def substep_pre_coupling(self, f):
-        self.advect(f)
+        kernel_advect(f, self.data, self.solver.info, self.solver.config)
 
     def substep_pre_coupling_grad(self, f):
-        self.advect.grad(f)
+        kernel_advect.grad(f, self.data, self.solver.info, self.solver.config)
 
     def substep_post_coupling(self, f):
-        self.update_latest_pos(f)
+        kernel_update_latest_pos(f, self.data)
 
     def substep_post_coupling_grad(self, f):
         pass
-
-    @qd.func
-    def collide(self, f, pos_world, vel_mat, i_b):
-        return self.mesh.collide(f, pos_world, vel_mat, i_b)
-
-    @qd.func
-    def pbd_collide(self, f, pos_world, thickness, dt):
-        return self.mesh.pbd_collide(f, pos_world, thickness, dt)
-
-    @qd.kernel
-    def update_latest_pos(self, f: qd.i32):
-        self.latest_pos[0] = self.pos[f, 0]
-
-    @qd.kernel
-    def advect(self, f: qd.i32):
-        for i_b in range(self._sim._B):
-            self.pos[f + 1, i_b] = self._solver.boundary.impose_pos(
-                self.pos[f, i_b] + self.vel[f, i_b] * self._solver.substep_dt
-            )
-            # rotate in world coordinates about itself.
-            self.quat[f + 1, i_b] = qd_transform_quat_by_quat(
-                self.quat[f, i_b], qd_rotvec_to_quat(self.ang[f, i_b] * self._solver.substep_dt, gs.EPS)
-            )
-
-            self.vel[f + 1, i_b] = self.vel[f, i_b]
-            self.ang[f + 1, i_b] = self.ang[f, i_b]
-
-    # state set and copy ...
-    @qd.kernel
-    def copy_frame(self, source: qd.i32, target: qd.i32):
-        for i_b in range(self._sim._B):
-            self.pos[target, i_b] = self.pos[source, i_b]
-            self.quat[target, i_b] = self.quat[source, i_b]
-            self.vel[target, i_b] = self.vel[source, i_b]
-            self.ang[target, i_b] = self.ang[source, i_b]
-
-    @qd.kernel
-    def copy_grad(self, source: qd.i32, target: qd.i32):
-        for i_b in range(self._sim._B):
-            self.pos.grad[target, i_b] = self.pos.grad[source, i_b]
-            self.quat.grad[target, i_b] = self.quat.grad[source, i_b]
-            self.vel.grad[target, i_b] = self.vel.grad[source, i_b]
-            self.ang.grad[target, i_b] = self.ang.grad[source, i_b]
-
-    @qd.kernel
-    def reset_grad_till_frame(self, f: qd.i32):
-        for i_b in range(self._sim._B):
-            for i_f in range(f):
-                self.pos.grad[i_f, i_b].fill(0)
-                self.quat.grad[i_f, i_b].fill(0)
-                self.vel.grad[i_f, i_b].fill(0)
-                self.ang.grad[i_f, i_b].fill(0)
-
-    @qd.kernel
-    def get_frame(
-        self,
-        f: qd.i32,
-        pos: qd.types.ndarray(),
-        quat: qd.types.ndarray(),
-        vel: qd.types.ndarray(),
-        ang: qd.types.ndarray(),
-    ):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(3)):
-                pos[i_b, i] = self.pos[f, i_b][i]
-            for i in qd.static(range(4)):
-                quat[i_b, i] = self.quat[f, i_b][i]
-            for i in qd.static(range(3)):
-                vel[i_b, i] = self.vel[f, i_b][i]
-            for i in qd.static(range(3)):
-                ang[i_b, i] = self.ang[f, i_b][i]
-
-    @qd.kernel
-    def set_frame(
-        self,
-        f: qd.i32,
-        pos: qd.types.ndarray(),
-        quat: qd.types.ndarray(),
-        vel: qd.types.ndarray(),
-        ang: qd.types.ndarray(),
-    ):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(3)):
-                self.pos[f, i_b][i] = pos[i_b, i]
-            for i in qd.static(range(4)):
-                self.quat[f, i_b][i] = quat[i_b, i]
-            for i in qd.static(range(3)):
-                self.vel[f, i_b][i] = vel[i_b, i]
-            for i in qd.static(range(3)):
-                self.ang[f, i_b][i] = ang[i_b, i]
-
-    @qd.kernel
-    def set_frame_add_grad_pos(self, f: qd.i32, pos_grad: qd.types.ndarray()):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(3)):
-                self.pos.grad[f, i_b][i] += pos_grad[i_b, i]
-
-    @qd.kernel
-    def set_frame_add_grad_quat(self, f: qd.i32, quat_grad: qd.types.ndarray()):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(4)):
-                self.quat.grad[f, i_b][i] += quat_grad[i_b, i]
-
-    @qd.kernel
-    def set_frame_add_grad_vel(self, f: qd.i32, vel_grad: qd.types.ndarray()):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(3)):
-                self.vel.grad[f, i_b][i] += vel_grad[i_b, i]
-
-    @qd.kernel
-    def set_frame_add_grad_ang(self, f: qd.i32, ang_grad: qd.types.ndarray()):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(3)):
-                self.ang.grad[f, i_b][i] += ang_grad[i_b, i]
 
     def get_state(self, f=None):
         state = ToolEntityState(self, self._sim.cur_step_global)
 
         if f is None:
             f = self._sim.cur_substep_local
-        self.get_frame(f, state.pos, state.quat, state.vel, state.ang)
+        kernel_get_frame(f, state.pos, state.quat, state.vel, state.ang, self.data)
 
         # we store all queried states to track gradient flow
         self._queried_states.append(state)
@@ -312,83 +172,7 @@ class ToolEntity(Entity):
 
     def set_state(self, f, state):
         f = self._sim.cur_substep_local
-        self.set_frame(f, state.pos, state.quat, state.vel, state.ang)
-
-    def build(self):
-        self.pos = qd.Vector.field(3, gs.qd_float, needs_grad=True)  # positon
-        self.quat = qd.Vector.field(4, gs.qd_float, needs_grad=True)  # quaternion wxyz
-        self.vel = qd.Vector.field(3, gs.qd_float, needs_grad=True)  # velocity
-        self.ang = qd.Vector.field(3, gs.qd_float, needs_grad=True)  # angular velocity
-
-        qd.root.dense(qd.ij, (self._sim.substeps_local + 1, self._sim._B)).place(
-            self.pos, self.pos.grad, self.quat, self.quat.grad, self.vel, self.vel.grad, self.ang, self.ang.grad
-        )
-        self.init_state = ToolEntityState(self, 0)
-        self.set_init_state(self._init_pos, self._init_quat)
-
-    @qd.kernel
-    def set_init_state(self, pos: qd.types.ndarray(), quat: qd.types.ndarray()):
-        for i_b in range(self._sim._B):
-            for i in qd.static(range(3)):
-                self.pos[0, i_b][i] = pos[i]
-            for i in qd.static(range(4)):
-                self.quat[0, i_b][i] = quat[i]
-
-    @qd.kernel
-    def set_vel(self, s: qd.i32, vel: qd.types.ndarray()):
-        f = s * self._sim.substeps
-        for i_b in range(self._sim._B):
-            for k in qd.static(range(3)):
-                self.vel[f, i_b][k] = vel[i_b, k]
-
-    @qd.kernel
-    def set_vel_grad(self, s: qd.i32, vel_grad: qd.types.ndarray()):
-        f = s * self._sim.substeps
-        for i_b in range(self._sim._B):
-            for k in qd.static(range(3)):
-                vel_grad[i_b, k] += self.vel.grad[f, i_b][k]
-
-    @qd.kernel
-    def set_ang(self, s: qd.i32, ang: qd.types.ndarray()):
-        f = s * self._sim.substeps
-        for i_b in range(self._sim._B):
-            for k in qd.static(range(3)):
-                self.ang[f, i_b][k] = ang[i_b, k]
-
-    @qd.kernel
-    def set_ang_grad(self, s: qd.i32, ang_grad: qd.types.ndarray()):
-        f = s * self._sim.substeps
-        for i_b in range(self._sim._B):
-            for k in qd.static(range(3)):
-                ang_grad[i_b, k] += self.ang.grad[f, i_b][k]
-
-    @qd.kernel
-    def set_pos(self, s: qd.i32, pos: qd.types.ndarray()):
-        f = s * self._sim.substeps
-        for i_b in range(self._sim._B):
-            for k in qd.static(range(3)):
-                self.pos[f, i_b][k] = pos[i_b, k]
-
-    @qd.kernel
-    def set_pos_grad(self, s: qd.i32, pos_grad: qd.types.ndarray()):
-        f = s * self._sim.substeps
-        for i_b in range(self._sim._B):
-            for k in qd.static(range(3)):
-                pos_grad[i_b, k] += self.pos.grad[f, i_b][k]
-
-    @qd.kernel
-    def set_quat(self, s: qd.i32, quat: qd.types.ndarray()):
-        f = s * self._sim.substeps
-        for i_b in range(self._sim._B):
-            for k in qd.static(range(4)):
-                self.quat[f, i_b][k] = quat[i_b, k]
-
-    @qd.kernel
-    def set_quat_grad(self, s: qd.i32, quat_grad: qd.types.ndarray()):
-        f = s * self._sim.substeps
-        for i_b in range(self._sim._B):
-            for k in qd.static(range(4)):
-                quat_grad[i_b, k] += self.quat.grad[f, i_b][k]
+        kernel_set_frame(f, state.pos, state.quat, state.vel, state.ang, self.data)
 
     def set_velocity(self, vel=None, ang=None):
         if vel is not None:
@@ -422,22 +206,22 @@ class ToolEntity(Entity):
         if self._tgt["pos"] is not None:
             self._tgt["pos"].assert_contiguous()
             self._tgt["pos"].assert_sceneless()
-            self.set_pos(self._sim.cur_step_local, self._tgt["pos"])
+            kernel_set_pos(self._sim.cur_step_local, self._tgt["pos"], self.data, self.solver.info)
 
         if self._tgt["quat"] is not None:
             self._tgt["quat"].assert_contiguous()
             self._tgt["quat"].assert_sceneless()
-            self.set_quat(self._sim.cur_step_local, self._tgt["quat"])
+            kernel_set_quat(self._sim.cur_step_local, self._tgt["quat"], self.data, self.solver.info)
 
         if self._tgt["vel"] is not None:
             self._tgt["vel"].assert_contiguous()
             self._tgt["vel"].assert_sceneless()
-            self.set_vel(self._sim.cur_step_local, self._tgt["vel"])
+            kernel_set_vel(self._sim.cur_step_local, self._tgt["vel"], self.data, self.solver.info)
 
         if self._tgt["ang"] is not None:
             self._tgt["ang"].assert_contiguous()
             self._tgt["ang"].assert_sceneless()
-            self.set_ang(self._sim.cur_step_local, self._tgt["ang"])
+            kernel_set_ang(self._sim.cur_step_local, self._tgt["ang"], self.data, self.solver.info)
 
         self._tgt["pos"] = None
         self._tgt["quat"] = None
@@ -451,16 +235,16 @@ class ToolEntity(Entity):
         _tgt_ang = self._tgt_buffer["ang"].pop()
 
         if _tgt_vel is not None and _tgt_vel.requires_grad:
-            _tgt_vel._backward_from_qd(self.set_vel_grad, self._sim.cur_step_local)
+            _tgt_vel._backward_from_qd(kernel_set_vel_grad, self._sim.cur_step_local, self.data, self.solver.info)
 
         if _tgt_ang is not None and _tgt_ang.requires_grad:
-            _tgt_ang._backward_from_qd(self.set_ang_grad, self._sim.cur_step_local)
+            _tgt_ang._backward_from_qd(kernel_set_ang_grad, self._sim.cur_step_local, self.data, self.solver.info)
 
         if _tgt_pos is not None and _tgt_pos.requires_grad:
-            _tgt_pos._backward_from_qd(self.set_pos_grad, self._sim.cur_step_local)
+            _tgt_pos._backward_from_qd(kernel_set_pos_grad, self._sim.cur_step_local, self.data, self.solver.info)
 
         if _tgt_quat is not None and _tgt_quat.requires_grad:
-            _tgt_quat._backward_from_qd(self.set_quat_grad, self._sim.cur_step_local)
+            _tgt_quat._backward_from_qd(kernel_set_quat_grad, self._sim.cur_step_local, self.data, self.solver.info)
 
     def collect_output_grads(self):
         """
@@ -474,23 +258,48 @@ class ToolEntity(Entity):
     def add_grad_from_state(self, state):
         if state.pos.grad is not None:
             state.pos.assert_contiguous()
-            self.set_frame_add_grad_pos(self._sim.cur_substep_local, state.pos.grad)
+            kernel_add_frame_grad_pos(self._sim.cur_substep_local, state.pos.grad, self.data)
 
         if state.quat.grad is not None:
             state.quat.assert_contiguous()
-            self.set_frame_add_grad_quat(self._sim.cur_substep_local, state.quat.grad)
+            kernel_add_frame_grad_quat(self._sim.cur_substep_local, state.quat.grad, self.data)
 
         if state.vel.grad is not None:
             state.vel.assert_contiguous()
-            self.set_frame_add_grad_vel(self._sim.cur_substep_local, state.vel.grad)
+            kernel_add_frame_grad_vel(self._sim.cur_substep_local, state.vel.grad, self.data)
 
         if state.ang.grad is not None:
             state.ang.assert_contiguous()
-            self.set_frame_add_grad_ang(self._sim.cur_substep_local, state.ang.grad)
+            kernel_add_frame_grad_ang(self._sim.cur_substep_local, state.ang.grad, self.data)
 
     # ------------------------------------------------------------------------------------
     # ----------------------------------- properties -------------------------------------
     # ------------------------------------------------------------------------------------
+
+    @property
+    def data(self) -> ToolEntityData:
+        assert self._data is not None
+        return self._data
+
+    @property
+    def pos(self):
+        return self.data.state.pos
+
+    @property
+    def quat(self):
+        return self.data.state.quat
+
+    @property
+    def vel(self):
+        return self.data.state.vel
+
+    @property
+    def ang(self):
+        return self.data.state.ang
+
+    @property
+    def latest_pos(self):
+        return self.data.state.latest_pos
 
     @property
     def uid(self):
@@ -527,3 +336,247 @@ class ToolEntity(Entity):
     @property
     def init_quat(self):
         return self._init_quat
+
+
+@qd.kernel
+def kernel_save_ckpt(
+    pos: qd.types.ndarray(),
+    quat: qd.types.ndarray(),
+    vel: qd.types.ndarray(),
+    ang: qd.types.ndarray(),
+    entity_data: ToolEntityData,
+):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            pos[i_b, k] = entity_data.state.pos[0, i_b][k]
+            vel[i_b, k] = entity_data.state.vel[0, i_b][k]
+            ang[i_b, k] = entity_data.state.ang[0, i_b][k]
+        for k in qd.static(range(4)):
+            quat[i_b, k] = entity_data.state.quat[0, i_b][k]
+
+
+@qd.kernel
+def kernel_load_ckpt(
+    pos: qd.types.ndarray(),
+    quat: qd.types.ndarray(),
+    vel: qd.types.ndarray(),
+    ang: qd.types.ndarray(),
+    entity_data: ToolEntityData,
+):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.pos[0, i_b][k] = pos[i_b, k]
+            entity_data.state.vel[0, i_b][k] = vel[i_b, k]
+            entity_data.state.ang[0, i_b][k] = ang[i_b, k]
+        for k in qd.static(range(4)):
+            entity_data.state.quat[0, i_b][k] = quat[i_b, k]
+
+
+@qd.kernel
+def kernel_update_latest_pos(f: int, entity_data: ToolEntityData):
+    entity_data.state.latest_pos[0] = entity_data.state.pos[f, 0]
+
+
+@qd.kernel
+def kernel_advect(
+    f: int,
+    entity_data: ToolEntityData,
+    solver_info: ToolSolverInfo,
+    solver_config: qd.template(),
+):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        entity_data.state.pos[f + 1, i_b] = solver_config.boundary.impose_pos(
+            entity_data.state.pos[f, i_b] + entity_data.state.vel[f, i_b] * solver_info.substep_dt[None]
+        )
+        # Rotate in world coordinates about the entity origin
+        entity_data.state.quat[f + 1, i_b] = qd_transform_quat_by_quat(
+            entity_data.state.quat[f, i_b],
+            qd_rotvec_to_quat(entity_data.state.ang[f, i_b] * solver_info.substep_dt[None], gs.EPS),
+        )
+        entity_data.state.vel[f + 1, i_b] = entity_data.state.vel[f, i_b]
+        entity_data.state.ang[f + 1, i_b] = entity_data.state.ang[f, i_b]
+
+
+@qd.kernel
+def kernel_copy_frame(source: int, target: int, entity_data: ToolEntityData):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        entity_data.state.pos[target, i_b] = entity_data.state.pos[source, i_b]
+        entity_data.state.quat[target, i_b] = entity_data.state.quat[source, i_b]
+        entity_data.state.vel[target, i_b] = entity_data.state.vel[source, i_b]
+        entity_data.state.ang[target, i_b] = entity_data.state.ang[source, i_b]
+
+
+@qd.kernel
+def kernel_copy_grad(source: int, target: int, entity_data: ToolEntityData):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        entity_data.state.pos.grad[target, i_b] = entity_data.state.pos.grad[source, i_b]
+        entity_data.state.quat.grad[target, i_b] = entity_data.state.quat.grad[source, i_b]
+        entity_data.state.vel.grad[target, i_b] = entity_data.state.vel.grad[source, i_b]
+        entity_data.state.ang.grad[target, i_b] = entity_data.state.ang.grad[source, i_b]
+
+
+@qd.kernel
+def kernel_reset_grad_till_frame(f: int, entity_data: ToolEntityData):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for i_f in range(f):
+            entity_data.state.pos.grad[i_f, i_b].fill(0)
+            entity_data.state.quat.grad[i_f, i_b].fill(0)
+            entity_data.state.vel.grad[i_f, i_b].fill(0)
+            entity_data.state.ang.grad[i_f, i_b].fill(0)
+
+
+@qd.kernel
+def kernel_get_frame(
+    f: int,
+    pos: qd.types.ndarray(),
+    quat: qd.types.ndarray(),
+    vel: qd.types.ndarray(),
+    ang: qd.types.ndarray(),
+    entity_data: ToolEntityData,
+):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            pos[i_b, k] = entity_data.state.pos[f, i_b][k]
+            vel[i_b, k] = entity_data.state.vel[f, i_b][k]
+            ang[i_b, k] = entity_data.state.ang[f, i_b][k]
+        for k in qd.static(range(4)):
+            quat[i_b, k] = entity_data.state.quat[f, i_b][k]
+
+
+@qd.kernel
+def kernel_set_frame(
+    f: int,
+    pos: qd.types.ndarray(),
+    quat: qd.types.ndarray(),
+    vel: qd.types.ndarray(),
+    ang: qd.types.ndarray(),
+    entity_data: ToolEntityData,
+):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.pos[f, i_b][k] = pos[i_b, k]
+            entity_data.state.vel[f, i_b][k] = vel[i_b, k]
+            entity_data.state.ang[f, i_b][k] = ang[i_b, k]
+        for k in qd.static(range(4)):
+            entity_data.state.quat[f, i_b][k] = quat[i_b, k]
+
+
+@qd.kernel
+def kernel_add_frame_grad_pos(f: int, pos_grad: qd.types.ndarray(), entity_data: ToolEntityData):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.pos.grad[f, i_b][k] += pos_grad[i_b, k]
+
+
+@qd.kernel
+def kernel_add_frame_grad_quat(f: int, quat_grad: qd.types.ndarray(), entity_data: ToolEntityData):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(4)):
+            entity_data.state.quat.grad[f, i_b][k] += quat_grad[i_b, k]
+
+
+@qd.kernel
+def kernel_add_frame_grad_vel(f: int, vel_grad: qd.types.ndarray(), entity_data: ToolEntityData):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.vel.grad[f, i_b][k] += vel_grad[i_b, k]
+
+
+@qd.kernel
+def kernel_add_frame_grad_ang(f: int, ang_grad: qd.types.ndarray(), entity_data: ToolEntityData):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.ang.grad[f, i_b][k] += ang_grad[i_b, k]
+
+
+@qd.kernel
+def kernel_set_init_state(pos: qd.types.ndarray(), quat: qd.types.ndarray(), entity_data: ToolEntityData):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.pos[0, i_b][k] = pos[k]
+        for k in qd.static(range(4)):
+            entity_data.state.quat[0, i_b][k] = quat[k]
+
+
+@qd.kernel
+def kernel_set_vel(s: int, vel: qd.types.ndarray(), entity_data: ToolEntityData, solver_info: ToolSolverInfo):
+    f = s * solver_info.substeps[None]
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.vel[f, i_b][k] = vel[i_b, k]
+
+
+@qd.kernel
+def kernel_set_vel_grad(
+    s: int,
+    entity_data: ToolEntityData,
+    solver_info: ToolSolverInfo,
+    vel_grad: qd.types.ndarray(),
+):
+    f = s * solver_info.substeps[None]
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            vel_grad[i_b, k] += entity_data.state.vel.grad[f, i_b][k]
+
+
+@qd.kernel
+def kernel_set_ang(s: int, ang: qd.types.ndarray(), entity_data: ToolEntityData, solver_info: ToolSolverInfo):
+    f = s * solver_info.substeps[None]
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.ang[f, i_b][k] = ang[i_b, k]
+
+
+@qd.kernel
+def kernel_set_ang_grad(
+    s: int,
+    entity_data: ToolEntityData,
+    solver_info: ToolSolverInfo,
+    ang_grad: qd.types.ndarray(),
+):
+    f = s * solver_info.substeps[None]
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            ang_grad[i_b, k] += entity_data.state.ang.grad[f, i_b][k]
+
+
+@qd.kernel
+def kernel_set_pos(s: int, pos: qd.types.ndarray(), entity_data: ToolEntityData, solver_info: ToolSolverInfo):
+    f = s * solver_info.substeps[None]
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            entity_data.state.pos[f, i_b][k] = pos[i_b, k]
+
+
+@qd.kernel
+def kernel_set_pos_grad(
+    s: int,
+    entity_data: ToolEntityData,
+    solver_info: ToolSolverInfo,
+    pos_grad: qd.types.ndarray(),
+):
+    f = s * solver_info.substeps[None]
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(3)):
+            pos_grad[i_b, k] += entity_data.state.pos.grad[f, i_b][k]
+
+
+@qd.kernel
+def kernel_set_quat(s: int, quat: qd.types.ndarray(), entity_data: ToolEntityData, solver_info: ToolSolverInfo):
+    f = s * solver_info.substeps[None]
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(4)):
+            entity_data.state.quat[f, i_b][k] = quat[i_b, k]
+
+
+@qd.kernel
+def kernel_set_quat_grad(
+    s: int,
+    entity_data: ToolEntityData,
+    solver_info: ToolSolverInfo,
+    quat_grad: qd.types.ndarray(),
+):
+    f = s * solver_info.substeps[None]
+    for i_b in range(entity_data.state.pos.shape[1]):
+        for k in qd.static(range(4)):
+            quat_grad[i_b, k] += entity_data.state.quat.grad[f, i_b][k]

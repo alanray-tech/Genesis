@@ -5,7 +5,8 @@ import quadrants as qd
 
 import genesis as gs
 import genesis.utils.sdf as sdf
-
+from genesis.engine.entities.tool_entity.data import ToolSolverInfo
+from genesis.engine.entities.tool_entity.mesh import func_collide
 from genesis.options.solvers import LegacyCouplerOptions
 from genesis.repr_base import RBC
 from genesis.utils import array_class
@@ -310,10 +311,18 @@ class LegacyCoupler(RBC):
         return vel
 
     @qd.func
-    def _func_mpm_tool(self, f, pos_world, vel, i_b):
-        for entity in qd.static(self.tool_solver.entities):
-            if qd.static(entity.material.collision):
-                vel = entity.collide(f, pos_world, vel, i_b)
+    def _func_mpm_tool(
+        self,
+        f: int,
+        pos_world: qd.types.vector(3),
+        vel: qd.types.vector(3),
+        i_b: int,
+        tool_data: qd.template(),
+        tool_info: ToolSolverInfo,
+    ):
+        for i_e in qd.static(range(len(tool_data.entities))):
+            if qd.static(tool_data.meshes[i_e].collision):
+                vel = func_collide(f, pos_world, vel, i_b, tool_data.entities[i_e], tool_info, tool_data.meshes[i_e])
         return vel
 
     @qd.kernel
@@ -326,6 +335,8 @@ class LegacyCoupler(RBC):
         links_state: array_class.LinksState,
         rigid_info: array_class.RigidInfo,
         sdf_info: array_class.SDFInfo,
+        tool_data: qd.template(),
+        tool_info: qd.template(),
         collider_static_config: qd.template(),
     ):
         for ii, jj, kk, i_b in qd.ndrange(*self.mpm_solver.grid_res, self.mpm_solver._B):
@@ -347,7 +358,7 @@ class LegacyCoupler(RBC):
 
                 #################### MPM <-> Tool ####################
                 if qd.static(self.tool_solver.is_active):
-                    vel_mpm = self._func_mpm_tool(f, pos, vel_mpm, i_b)
+                    vel_mpm = self._func_mpm_tool(f, pos, vel_mpm, i_b, tool_data, tool_info)
 
                 #################### MPM <-> Rigid ####################
                 if qd.static(self._rigid_mpm):
@@ -894,6 +905,8 @@ class LegacyCoupler(RBC):
                 links_state=self.rigid_solver.dyn_state.links,
                 rigid_info=self.rigid_solver.rigid_info,
                 sdf_info=self.rigid_solver.sdf._sdf_info,
+                tool_data=self.tool_solver.data,
+                tool_info=self.tool_solver.info,
                 collider_static_config=self.rigid_solver.collider.collider_config,
             )
 
@@ -958,6 +971,8 @@ class LegacyCoupler(RBC):
                 links_state=self.rigid_solver.dyn_state.links,
                 rigid_info=self.rigid_solver.rigid_info,
                 sdf_info=self.rigid_solver.sdf._sdf_info,
+                tool_data=self.tool_solver.data,
+                tool_info=self.tool_solver.info,
                 collider_static_config=self.rigid_solver.collider.collider_config,
             )
 
