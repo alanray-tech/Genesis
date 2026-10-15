@@ -7,6 +7,7 @@ from genesis.engine.core import Find, Require, System, register_system
 from .constraint_solver_system import ConstraintSolverSystem
 from .kinematic_solver_system import KinematicSolverSystem
 from .mpm_solver_system import MPMSolverSystem
+from .pbd_solver_system import PBDSolverSystem
 from .rigid_rigid_contact_system import RigidRigidContactSystem
 from .rigid_sdf_system import RigidSdfSystem
 from .rigid_solver_system import RigidSolverSystem
@@ -29,6 +30,7 @@ class Initializer(System):
     rigid_rigid_contact = Find(RigidRigidContactSystem)
     constraint = Find(ConstraintSolverSystem)
     mpm = Find(MPMSolverSystem)
+    pbd = Find(PBDSolverSystem)
     sf = Find(SFSolverSystem)
     sph = Find(SPHSolverSystem)
     tool = Find(ToolSolverSystem)
@@ -41,6 +43,8 @@ class Initializer(System):
             self.sf.initialize.invoke()
         if self.sph is not None:
             self.sph.initialize.invoke()
+        if self.pbd is not None:
+            self.pbd.initialize.invoke()
         if self.tool is not None:
             self.tool.initialize.invoke()
         # The signed distance fields of the rigid geoms are sized from the rigid model, and the collision detection
