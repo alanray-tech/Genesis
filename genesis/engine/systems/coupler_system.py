@@ -16,6 +16,11 @@ class CouplerSystem(System):
 
     SAP and IPC keep their monolithic host entry points. Pairwise coupling is composed from Systems, each of which
     registers one ordered preprocess or coupling Action and owns the data specific to that interaction.
+
+    A collection boundary below exists only for a data dependency: MPM grid begin produces ``vel_out``; every MPM
+    pair consumes and mutates that same velocity in sequence; grid end consumes their result; and FEM-MPM/FEM-SPH
+    consume the FEM surface velocity after Rigid-FEM has updated it. Post-MPM interactions with rigid have no
+    producer/consumer edge and therefore share one collection.
     """
 
     def __init__(self, scene: "Scene") -> None:
@@ -32,39 +37,42 @@ class CouplerSystem(System):
 
     @System.action_collection(kind="host", call_args=("f",))
     def pairwise_mpm_grid_begin(self):
-        """Produce MPM grid velocity before pairwise coupling."""
+        """Serial exception: produce MPM ``vel_out`` consumed by every MPM pair below."""
 
     @System.action_collection(kind="host", call_args=("f",))
     def pairwise_mpm_tool_couple(self):
-        """Apply MPM-Tool interaction."""
+        """Serial exception: consume and mutate ``vel_out`` produced by grid begin."""
 
     @System.action_collection(kind="host", call_args=("f",))
     def pairwise_mpm_rigid_couple(self):
-        """Apply MPM-Rigid interaction."""
+        """Serial exception: consume and mutate ``vel_out`` after MPM-Tool."""
 
     @System.action_collection(kind="host", call_args=("f",))
     def pairwise_mpm_sph_couple(self):
-        """Apply MPM-SPH interaction."""
+        """Serial exception: consume and mutate ``vel_out`` after MPM-Rigid, and produce SPH velocity."""
 
     @System.action_collection(kind="host", call_args=("f",))
     def pairwise_mpm_pbd_couple(self):
-        """Apply MPM-PBD interaction."""
+        """Serial exception: consume and mutate ``vel_out`` after MPM-SPH, and produce PBD velocity."""
 
     @System.action_collection(kind="host", call_args=("f",))
     def pairwise_mpm_grid_end(self):
-        """Apply MPM boundary conditions after pairwise coupling."""
+        """Serial exception: consume the final ``vel_out`` after all MPM pair transforms."""
 
     @System.action_collection(kind="host", call_args=("f",))
-    def pairwise_sph_rigid_couple(self):
-        """Rigid-SPH coupling after the MPM grid has possibly changed SPH velocity."""
+    def parallel_couples(self):
+        """Default phase for independent pair couplers.
+
+        Host fallback invokes them serially; graph mode launches the corresponding StageActions in parallel.
+        """
 
     @System.action_collection(kind="host", call_args=("f",))
-    def pairwise_pbd_rigid_couple(self):
-        """Rigid-PBD coupling and link animation."""
+    def pairwise_fem_mpm_couple(self):
+        """Serial exception: consume FEM velocity after Rigid-FEM and MPM ``vel_out`` after grid end."""
 
     @System.action_collection(kind="host", call_args=("f",))
-    def pairwise_fem_couple(self):
-        """FEM coupling after MPM vel_out exists and before MPM G2P consumes it."""
+    def pairwise_fem_sph_couple(self):
+        """Serial exception: consume FEM velocity after FEM-MPM and SPH velocity after the parallel phase."""
 
     @System.action_collection(kind="host", call_args=("envs_idx",))
     def pairwise_resets(self):
@@ -95,8 +103,16 @@ class CouplerSystem(System):
         """Adjoint of MPM grid boundary conditions."""
 
     @System.action_collection(kind="host", call_args=("f",))
-    def pairwise_fem_grads(self):
-        """Adjoint of pairwise FEM coupling."""
+    def parallel_grads(self):
+        """Adjoints of the default independent pair couplers."""
+
+    @System.action_collection(kind="host", call_args=("f",))
+    def pairwise_fem_mpm_grads(self):
+        """Adjoint of FEM-MPM coupling."""
+
+    @System.action_collection(kind="host", call_args=("f",))
+    def pairwise_fem_sph_grads(self):
+        """Adjoint of FEM-SPH coupling."""
 
     @System.protocol
     def on_pairwise_mpm_rigid_preprocess(self, *, action: HostAction) -> None:
@@ -127,16 +143,17 @@ class CouplerSystem(System):
         self.pairwise_mpm_grid_end += action
 
     @System.protocol
-    def on_pairwise_sph_rigid_couple(self, *, action: HostAction) -> None:
-        self.pairwise_sph_rigid_couple += action
+    def on_pairwise_couple(self, *, action: HostAction) -> None:
+        """Register a dependency-free pair in the default parallel phase."""
+        self.parallel_couples += action
 
     @System.protocol
-    def on_pairwise_pbd_rigid_couple(self, *, action: HostAction) -> None:
-        self.pairwise_pbd_rigid_couple += action
+    def on_pairwise_fem_mpm_couple(self, *, action: HostAction) -> None:
+        self.pairwise_fem_mpm_couple += action
 
     @System.protocol
-    def on_pairwise_fem_couple(self, *, action: HostAction) -> None:
-        self.pairwise_fem_couple += action
+    def on_pairwise_fem_sph_couple(self, *, action: HostAction) -> None:
+        self.pairwise_fem_sph_couple += action
 
     @System.protocol
     def on_pairwise_reset(self, *, action: HostAction) -> None:
@@ -167,8 +184,17 @@ class CouplerSystem(System):
         self.pairwise_mpm_grid_end_grads += action
 
     @System.protocol
-    def on_pairwise_fem_grad(self, *, action: HostAction) -> None:
-        self.pairwise_fem_grads += action
+    def on_pairwise_grad(self, *, action: HostAction) -> None:
+        """Register the adjoint of a dependency-free pair."""
+        self.parallel_grads += action
+
+    @System.protocol
+    def on_pairwise_fem_mpm_grad(self, *, action: HostAction) -> None:
+        self.pairwise_fem_mpm_grads += action
+
+    @System.protocol
+    def on_pairwise_fem_sph_grad(self, *, action: HostAction) -> None:
+        self.pairwise_fem_sph_grads += action
 
     @System.action(kind="host")
     def preprocess(self):
@@ -197,9 +223,9 @@ class CouplerSystem(System):
             self.pairwise_mpm_sph_couple,
             self.pairwise_mpm_pbd_couple,
             self.pairwise_mpm_grid_end,
-            self.pairwise_sph_rigid_couple,
-            self.pairwise_pbd_rigid_couple,
-            self.pairwise_fem_couple,
+            self.parallel_couples,
+            self.pairwise_fem_mpm_couple,
+            self.pairwise_fem_sph_couple,
         ):
             for action in collection.actions:
                 action.invoke((f,))
@@ -217,7 +243,9 @@ class CouplerSystem(System):
             return
         # Reverse-mode follows the exact reverse of the explicit forward phases above.
         for collection in (
-            self.pairwise_fem_grads,
+            self.pairwise_fem_sph_grads,
+            self.pairwise_fem_mpm_grads,
+            self.parallel_grads,
             self.pairwise_mpm_grid_end_grads,
             self.pairwise_mpm_pbd_grads,
             self.pairwise_mpm_sph_grads,

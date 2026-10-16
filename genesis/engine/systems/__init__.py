@@ -13,15 +13,15 @@ from .pbd_solver_system import PBDSolverSystem
 from .fem_solver_system import FEMSolverSystem
 from .sf_solver_system import SFSolverSystem
 from .coupler_system import CouplerSystem
-from .pairwise_coupling_systems import (
-    FEMPairwiseCouplingSystem,
-    MPMGridCouplingSystem,
-    MPMPBDCouplingSystem,
-    MPMRigidCouplingSystem,
-    MPMSPHCouplingSystem,
-    MPMToolCouplingSystem,
-    PBDRigidCouplingSystem,
-    SPHRigidCouplingSystem,
-)
+from .fem_mpm_coupling_system import FEMMPMCouplingSystem
+from .fem_sph_coupling_system import FEMSPHCouplingSystem
+from .mpm_grid_lifecycle_system import MPMGridLifecycleSystem
+from .mpm_pbd_coupling_system import MPMPBDCouplingSystem
+from .mpm_rigid_coupling_system import MPMRigidCouplingSystem
+from .mpm_sph_coupling_system import MPMSPHCouplingSystem
+from .mpm_tool_coupling_system import MPMToolCouplingSystem
+from .pbd_rigid_coupling_system import PBDRigidCouplingSystem
+from .rigid_fem_coupling_system import RigidFEMCouplingSystem
+from .sph_rigid_coupling_system import SPHRigidCouplingSystem
 from .substepper import Substepper
 from .initializer import Initializer

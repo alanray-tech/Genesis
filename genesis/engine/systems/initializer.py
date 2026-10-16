@@ -7,19 +7,17 @@ from genesis.engine.core import Find, Require, System, register_system
 from .constraint_solver_system import ConstraintSolverSystem
 from .fem_solver_system import FEMSolverSystem
 from .kinematic_solver_system import KinematicSolverSystem
-from .pairwise_coupling_systems import (
-    FEMPairwiseCouplingSystem,
-    MPMRigidCouplingSystem,
-    PBDRigidCouplingSystem,
-    SPHRigidCouplingSystem,
-)
+from .mpm_rigid_coupling_system import MPMRigidCouplingSystem
 from .mpm_solver_system import MPMSolverSystem
+from .pbd_rigid_coupling_system import PBDRigidCouplingSystem
 from .pbd_solver_system import PBDSolverSystem
 from .rigid_rigid_contact_system import RigidRigidContactSystem
+from .rigid_fem_coupling_system import RigidFEMCouplingSystem
 from .rigid_sdf_system import RigidSdfSystem
 from .rigid_solver_system import RigidSolverSystem
 from .sf_solver_system import SFSolverSystem
 from .simulator_engine import SimulatorEngine
+from .sph_rigid_coupling_system import SPHRigidCouplingSystem
 from .sph_solver_system import SPHSolverSystem
 from .tool_solver_system import ToolSolverSystem
 
@@ -45,7 +43,7 @@ class Initializer(System):
     mpm_rigid_coupling = Find(MPMRigidCouplingSystem)
     sph_rigid_coupling = Find(SPHRigidCouplingSystem)
     pbd_rigid_coupling = Find(PBDRigidCouplingSystem)
-    fem_pairwise_coupling = Find(FEMPairwiseCouplingSystem)
+    rigid_fem_coupling = Find(RigidFEMCouplingSystem)
 
     def initialize(self) -> None:
         """Initialize the data of every System."""
@@ -82,8 +80,8 @@ class Initializer(System):
             self.sph_rigid_coupling.initialize.invoke()
         if self.pbd_rigid_coupling is not None:
             self.pbd_rigid_coupling.initialize.invoke()
-        if self.fem_pairwise_coupling is not None:
-            self.fem_pairwise_coupling.initialize.invoke()
+        if self.rigid_fem_coupling is not None:
+            self.rigid_fem_coupling.initialize.invoke()
 
 
 @register_system(SimulatorEngine)

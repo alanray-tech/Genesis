@@ -628,3 +628,172 @@ def kernel_mpm_grid_end(f: qd.i32, mpm: qd.template()):
         if mpm.grid.mass[f, I, i_b] > gs.EPS:
             pos = (I + mpm.grid_offset) * mpm.dx
             _, mpm.grid.vel_out[f, I, i_b] = mpm.boundary.impose_pos_vel(pos, mpm.grid.vel_out[f, I, i_b])
+
+
+# Whole-scene graph copies of pairwise rigid stages.
+@qd.func(requires_top_level=True)
+def graph_sph_rigid_couple(
+    f: qd.i32,
+    sph: qd.template(),
+    coupling: qd.template(),
+    n_geoms: qd.template(),
+    batch_links_info: qd.template(),
+    geoms_state: array_class.GeomsState,
+    geoms_info: array_class.GeomsInfo,
+    links_state: array_class.LinksState,
+    links_info: array_class.LinksInfo,
+    rigid_info: array_class.RigidInfo,
+    sdf_info: array_class.SDFInfo,
+    collider_static_config: qd.template(),
+):
+    for i_p, i_b in qd.ndrange(sph._n_particles, sph._B):
+        if sph.particles_ng_reordered.active[i_p, i_b]:
+            for i_g in range(n_geoms):
+                if geoms_info.needs_coup[i_g]:
+                    (
+                        sph.particles_reordered.vel[i_p, i_b],
+                        coupling.rigid_normal_reordered[i_p, i_g, i_b],
+                    ) = func_collide_with_rigid_geom_robust(
+                        sph.particles_reordered.pos[i_p, i_b],
+                        sph.particles_reordered.vel[i_p, i_b],
+                        sph.particles_info_reordered.mass[i_p, i_b],
+                        sph.particles_reordered.p[i_p, i_b],
+                        coupling.rigid_normal_reordered[i_p, i_g, i_b],
+                        i_g,
+                        i_b,
+                        geoms_state,
+                        geoms_info,
+                        links_state,
+                        links_info,
+                        rigid_info,
+                        sdf_info,
+                        sph,
+                        batch_links_info,
+                        collider_static_config,
+                    )
+
+
+@qd.func(requires_top_level=True)
+def graph_pbd_rigid_couple(
+    pbd: qd.template(),
+    coupling: qd.template(),
+    n_geoms: qd.template(),
+    rigid_substep_dt: qd.template(),
+    geoms_state: array_class.GeomsState,
+    geoms_info: array_class.GeomsInfo,
+    links_state: array_class.LinksState,
+    sdf_info: array_class.SDFInfo,
+    rigid_info: array_class.RigidInfo,
+    collider_static_config: qd.template(),
+):
+    for i_p, i_b in qd.ndrange(pbd._n_particles, pbd._B):
+        if pbd.particles_ng_reordered.active[i_p, i_b]:
+            for i_g in range(n_geoms):
+                if geoms_info.needs_coup[i_g]:
+                    (
+                        pbd.particles_reordered.pos[i_p, i_b],
+                        pbd.particles_reordered.vel[i_p, i_b],
+                        coupling.rigid_normal_reordered[i_p, i_b, i_g],
+                    ) = func_pbd_collide_with_rigid_geom(
+                        i_p,
+                        pbd.particles_reordered.pos[i_p, i_b],
+                        pbd.particles_reordered.vel[i_p, i_b],
+                        pbd.particles_info_reordered.mass[i_p, i_b],
+                        i_g,
+                        i_b,
+                        geoms_state,
+                        geoms_info,
+                        links_state,
+                        sdf_info,
+                        rigid_info,
+                        pbd,
+                        rigid_substep_dt,
+                        collider_static_config,
+                    )
+
+
+@qd.func(requires_top_level=True)
+def graph_solve_pbd_rigid_attachment(
+    pbd: qd.template(),
+    coupling: qd.template(),
+    clamped_inv_dt: qd.f32,
+    links_state: array_class.LinksState,
+):
+    for i_p, i_b in qd.ndrange(pbd._n_particles, pbd._B):
+        if coupling.attachment.link_idx[i_p, i_b] >= 0:
+            link_idx = coupling.attachment.link_idx[i_p, i_b]
+            target_world_pos = qd_transform_by_trans_quat(
+                coupling.attachment.local_pos[i_p, i_b],
+                links_state.pos[link_idx, i_b],
+                links_state.quat[link_idx, i_b],
+            )
+            link_com = links_state.root_COM[link_idx, i_b] + links_state.i_pos[link_idx, i_b]
+            target_world_vel = links_state.cd_vel[link_idx, i_b] + links_state.cd_ang[link_idx, i_b].cross(
+                target_world_pos - link_com
+            )
+            i_rp = pbd.particles_ng.reordered_idx[i_p, i_b]
+            corrective_vel = (target_world_pos - pbd.particles_reordered.pos[i_rp, i_b]) * clamped_inv_dt
+            pbd.particles_reordered.vel[i_rp, i_b] = corrective_vel + target_world_vel
+
+
+@qd.func(requires_top_level=True)
+def graph_mpm_surface_to_particle(
+    f: qd.i32,
+    mpm: qd.template(),
+    coupling: qd.template(),
+    n_geoms: qd.template(),
+    geoms_state: array_class.GeomsState,
+    geoms_info: array_class.GeomsInfo,
+    rigid_info: array_class.RigidInfo,
+    sdf_info: array_class.SDFInfo,
+    collider_static_config: qd.template(),
+):
+    """Update CPIC particle-side normals before MPM P2G."""
+    for i_p, i_b in qd.ndrange(mpm._n_particles, mpm._B):
+        if mpm.particles_ng.active[f, i_p, i_b]:
+            for i_g in range(n_geoms):
+                if geoms_info.needs_coup[i_g]:
+                    normal = sdf.sdf_func_normal_world(
+                        i_g,
+                        i_b,
+                        mpm.particles.pos[f, i_p, i_b],
+                        geoms_state,
+                        geoms_info,
+                        rigid_info,
+                        sdf_info,
+                        collider_static_config,
+                    )
+                    if normal.dot(coupling.rigid_normal[i_p, i_g, i_b]) >= 0:
+                        coupling.rigid_normal[i_p, i_g, i_b] = normal
+
+
+@qd.func(requires_top_level=True)
+def graph_mpm_rigid_couple(
+    f: qd.i32,
+    mpm: qd.template(),
+    geoms_state: array_class.GeomsState,
+    geoms_info: array_class.GeomsInfo,
+    links_state: array_class.LinksState,
+    rigid_info: array_class.RigidInfo,
+    sdf_info: array_class.SDFInfo,
+    collider_static_config: qd.template(),
+    n_geoms: qd.template(),
+):
+    for ii, jj, kk, i_b in qd.ndrange(*mpm.grid_res, mpm._B):
+        I = (ii, jj, kk)
+        if mpm.grid.mass[f, I, i_b] > gs.EPS:
+            pos = (I + mpm.grid_offset) * mpm.dx
+            mass = mpm.grid.mass[f, I, i_b] / mpm._particle_volume_scale
+            mpm.grid.vel_out[f, I, i_b] = func_collide_with_rigid(
+                pos,
+                mpm.grid.vel_out[f, I, i_b],
+                mass,
+                i_b,
+                n_geoms,
+                geoms_state,
+                geoms_info,
+                links_state,
+                rigid_info,
+                sdf_info,
+                collider_static_config,
+            )

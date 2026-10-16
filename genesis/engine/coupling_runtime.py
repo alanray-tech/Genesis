@@ -21,8 +21,12 @@ def func_apply_rigid_coupling_force(
     links_state: array_class.LinksState,
 ):
     torque = (pos_world - links_state.root_COM[link_idx, i_b]).cross(force)
-    links_state.cfrc_coupling_ang[link_idx, i_b] -= torque
-    links_state.cfrc_coupling_vel[link_idx, i_b] -= force
+    # Coupling pairs are parallel by default, and threads within one pair already target the same rigid link. The
+    # accumulated force is commutative, so atomic component updates make both levels race-free without imposing an
+    # artificial pair ordering.
+    for d in qd.static(range(3)):
+        qd.atomic_add(links_state.cfrc_coupling_ang[link_idx, i_b][d], -torque[d])
+        qd.atomic_add(links_state.cfrc_coupling_vel[link_idx, i_b][d], -force[d])
 
 
 @qd.func
