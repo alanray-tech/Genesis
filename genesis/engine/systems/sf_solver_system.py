@@ -108,6 +108,26 @@ class SFSolverSystem(System):
         super().__init__(scene)
         self.solver = scene.sim.sf_solver
 
+    @System.data
+    def state_data(self):
+        return self.grid_state
+
+    @System.data
+    def info_data(self):
+        return self.grid_info
+
+    @System.data
+    def projection_data(self):
+        return self.projection_state
+
+    @System.data
+    def static_config(self):
+        return self.sf_config
+
+    @System.data
+    def graph_condition(self):
+        return self.graph_counter
+
     @property
     def t(self) -> float:
         """The simulated duration of the grid, in seconds."""
@@ -141,6 +161,10 @@ class SFSolverSystem(System):
     @System.action(kind="host")
     def post_coupling(self):
         return self.substep_post_coupling
+
+    @System.action(kind="stage")
+    def graph_pre_coupling(self):
+        return (func_graph_sf_odd if self.solver_iters % 2 else func_graph_sf_even), self
 
     def substep_pre_coupling(self, f: int) -> None:
         """Advect the grid by one substep, inject the jets, then project the velocity onto a divergence-free field."""
@@ -213,6 +237,31 @@ def kernel_substep_odd(
     func_pressure_jacobi_odd(grid_state, projection_state)
     func_projection_finish(grid_state, projection_state, is_odd=True)
     func_subtract_gradient(grid_state, grid_info)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_sf_even(system: qd.template(), f: int, t: float):
+    func_advect_and_impulse(system.grid_state, system.grid_info, system.sf_config)
+    func_divergence(system.grid_state)
+    func_projection_init(system.graph_counter, system.grid_state, system.grid_info, system.projection_state)
+    while qd.graph.do_while(system.graph_counter):
+        func_pressure_jacobi_to_next(system.grid_state, system.projection_state)
+        func_pressure_jacobi_to_current(system.graph_counter, system.grid_state, system.projection_state)
+    func_projection_finish(system.grid_state, system.projection_state, is_odd=False)
+    func_subtract_gradient(system.grid_state, system.grid_info)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_sf_odd(system: qd.template(), f: int, t: float):
+    func_advect_and_impulse(system.grid_state, system.grid_info, system.sf_config)
+    func_divergence(system.grid_state)
+    func_projection_init(system.graph_counter, system.grid_state, system.grid_info, system.projection_state)
+    while qd.graph.do_while(system.graph_counter):
+        func_pressure_jacobi_to_next(system.grid_state, system.projection_state)
+        func_pressure_jacobi_to_current(system.graph_counter, system.grid_state, system.projection_state)
+    func_pressure_jacobi_odd(system.grid_state, system.projection_state)
+    func_projection_finish(system.grid_state, system.projection_state, is_odd=True)
+    func_subtract_gradient(system.grid_state, system.grid_info)
 
 
 @qd.func(requires_top_level=True)
