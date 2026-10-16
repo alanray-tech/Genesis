@@ -57,6 +57,8 @@ class SimulatorEngine(Engine):
                 or substepper.graph_mpm_grid_begin.actions
                 or substepper.graph_parallel_couplings.actions
             )
+            # Keep immutable control topology separate from the GlobalDataContext built after Data initialization.
+            # Graph kernels therefore receive neither Substepper nor its dependency graph as a second data root.
             self.graph_schedule = substepper.action_schedule()
 
             if self.scene.options.sim.graph_partition == "single":
