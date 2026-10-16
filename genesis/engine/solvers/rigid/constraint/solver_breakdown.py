@@ -302,8 +302,8 @@ def _func_check_early_exit(
 # ============================================== Solve body dispatch ================================================
 
 
-@qd.kernel(graph=True, fastcache=True)
-def _kernel_solve_graph(
+@qd.func(requires_top_level=True)
+def func_solve_graph_iterations(
     graph_counter: qd.types.ndarray(qd.i32, ndim=0),
     dyn_state: array_class.DynState,
     constraint_state: array_class.ConstraintState,
@@ -331,6 +331,49 @@ def _kernel_solve_graph(
             _func_update_gradient(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
         _func_islands_update_search_direction(dyn_state, constraint_state, rigid_info, rigid_config)
         _func_check_early_exit(graph_counter, constraint_state)
+
+
+@qd.kernel(graph=True, fastcache=True)
+def _kernel_solve_graph(
+    graph_counter: qd.types.ndarray(qd.i32, ndim=0),
+    dyn_state: array_class.DynState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+):
+    func_solve_graph_iterations(graph_counter, dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
+
+
+@qd.func(requires_top_level=True)
+def func_solve_decomposed_graph(
+    dyn_state: array_class.DynState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+    n_iterations: qd.template(),
+):
+    """Frozen decomposed solve arm for the whole-scene graph pipeline."""
+    solver.func_solve_init_graph(
+        dyn_state,
+        constraint_state,
+        dyn_info,
+        rigid_info,
+        rigid_config,
+        write_L=False,
+    )
+    for _ in range(1):
+        constraint_state.graph_counter[()] = n_iterations
+    if qd.static(n_iterations > 0):
+        func_solve_graph_iterations(
+            constraint_state.graph_counter,
+            dyn_state,
+            constraint_state,
+            dyn_info,
+            rigid_info,
+            rigid_config,
+        )
 
 
 @solver.func_solve_body.register(

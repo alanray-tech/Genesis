@@ -50,6 +50,10 @@ class SimOptions(Options):
     pipeline : {"host", "graph"}, optional
         Whole-scene substep pipeline. ``"host"`` keeps the kernel-by-kernel fallback; ``"graph"`` freezes the active
         System set at build and launches one device graph per substep. Defaults to ``"host"``.
+    graph_partition : {"single", "split"}, optional
+        Graph compilation strategy when ``pipeline="graph"``. ``"single"`` compiles one graph as the performance
+        baseline; ``"split"`` compiles explicit dependency phases separately to reduce first-build time. Defaults to
+        ``"single"``.
     use_hydroelastic_contact : bool, optional
         Whether to use hydroelastic contact. Defaults to False.
     """
@@ -61,6 +65,7 @@ class SimOptions(Options):
     floor_height: float = 0.0
     requires_grad: StrictBool = False
     pipeline: Literal["host", "graph"] = "host"
+    graph_partition: Literal["single", "split"] = "single"
 
     _steps_local: int | None = PrivateAttr(default=None)
 

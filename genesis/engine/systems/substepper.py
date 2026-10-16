@@ -120,6 +120,13 @@ class Substepper(System):
         # Resolve System admission once; absent Systems contribute no Action to the frozen device schedule.
         if self.mpm_rigid_coupling is not None and self.mpm_rigid_coupling.mpm.solver.enable_CPIC:
             self.graph_preprocess += self.mpm_rigid_coupling.graph_preprocess
+        if self.rigid.is_active:
+            self.graph_rigid_wakeup += self.rigid.graph_wakeup
+            self.graph_rigid_dynamics += self.rigid.graph_dynamics
+            self.graph_rigid_collision += self.rigid.graph_collision
+            self.graph_rigid_post += self.rigid.graph_post
+        if self.constraint is not None:
+            self.graph_rigid_solve += self.constraint.graph_solve
         for system in (self.tool, self.mpm, self.sph, self.pbd, self.sf):
             if system is not None:
                 self.graph_particle_pre += system.graph_pre_coupling
@@ -141,6 +148,8 @@ class Substepper(System):
         for system in (self.tool, self.mpm, self.sph, self.pbd):
             if system is not None:
                 self.graph_solver_post += system.graph_post_coupling
+        if self.kinematic.is_active:
+            self.graph_solver_post += self.kinematic.graph_post_coupling
 
     def process_input(self, in_backward: bool) -> None:
         """Apply the external commands of one step to every solver, each of which applies its own."""
