@@ -12,7 +12,7 @@ from genesis.utils.geom import (
     qd_transform_quat_by_quat,
     transform_pos_quat_by_trans_quat,
 )
-from genesis.utils.misc import to_gs_tensor
+from genesis.utils.misc import qd_zero_grad, to_gs_tensor
 
 from ..base_entity import Entity
 from .data import ToolEntityData, ToolSolverConfig, ToolSolverInfo
@@ -84,10 +84,7 @@ class ToolEntity(Entity):
         self._ckpt = dict()
 
     def reset_grad(self):
-        self.pos.grad.fill(0)
-        self.quat.grad.fill(0)
-        self.vel.grad.fill(0)
-        self.ang.grad.fill(0)
+        qd_zero_grad(self._data.state)
 
         self._tgt_buffer["pos"].clear()
         self._tgt_buffer["quat"].clear()
@@ -377,6 +374,12 @@ def kernel_update_latest_pos(f: int, entity_data: ToolEntityData):
     entity_data.state.latest_pos[0] = entity_data.state.pos[f, 0]
 
 
+@qd.func(requires_top_level=True)
+def func_update_latest_pos(f: int, entity_data: ToolEntityData):
+    for _ in range(1):
+        entity_data.state.latest_pos[0] = entity_data.state.pos[f, 0]
+
+
 @qd.kernel
 def kernel_advect(
     f: int,
@@ -389,6 +392,25 @@ def kernel_advect(
             entity_data.state.pos[f, i_b] + entity_data.state.vel[f, i_b] * solver_info.substep_dt[None]
         )
         # Rotate in world coordinates about the entity origin
+        entity_data.state.quat[f + 1, i_b] = qd_transform_quat_by_quat(
+            entity_data.state.quat[f, i_b],
+            qd_rotvec_to_quat(entity_data.state.ang[f, i_b] * solver_info.substep_dt[None], gs.EPS),
+        )
+        entity_data.state.vel[f + 1, i_b] = entity_data.state.vel[f, i_b]
+        entity_data.state.ang[f + 1, i_b] = entity_data.state.ang[f, i_b]
+
+
+@qd.func(requires_top_level=True)
+def func_advect(
+    f: int,
+    entity_data: ToolEntityData,
+    solver_info: ToolSolverInfo,
+    solver_config: qd.template(),
+):
+    for i_b in range(entity_data.state.pos.shape[1]):
+        entity_data.state.pos[f + 1, i_b] = solver_config.boundary.impose_pos(
+            entity_data.state.pos[f, i_b] + entity_data.state.vel[f, i_b] * solver_info.substep_dt[None]
+        )
         entity_data.state.quat[f + 1, i_b] = qd_transform_quat_by_quat(
             entity_data.state.quat[f, i_b],
             qd_rotvec_to_quat(entity_data.state.ang[f, i_b] * solver_info.substep_dt[None], gs.EPS),

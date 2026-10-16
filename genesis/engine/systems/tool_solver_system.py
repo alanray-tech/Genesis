@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING
 
+import quadrants as qd
+
 from genesis.engine.core import System, register_system
 from genesis.engine.entities.tool_entity.data import (
     ToolSolverConfig,
@@ -11,6 +13,8 @@ from genesis.engine.entities.tool_entity.data import (
     get_tool_solver_info,
 )
 from genesis.engine.entities.tool_entity.tool_entity import (
+    func_advect,
+    func_update_latest_pos,
     kernel_advect,
     kernel_set_init_state,
     kernel_update_latest_pos,
@@ -33,6 +37,14 @@ class ToolSolverSystem(System):
     def __init__(self, scene: "Scene") -> None:
         super().__init__(scene)
         self.solver = scene.sim.tool_solver
+
+    @System.data
+    def solver_info(self):
+        return self.info
+
+    @System.data
+    def solver_config(self):
+        return self.config
 
     @System.action(kind="host")
     def initialize(self):
@@ -63,6 +75,14 @@ class ToolSolverSystem(System):
     def post_coupling(self):
         return self.substep_post_coupling
 
+    @System.action(kind="stage")
+    def graph_pre_coupling(self):
+        return func_graph_tool_pre_coupling, self
+
+    @System.action(kind="stage")
+    def graph_post_coupling(self):
+        return func_graph_tool_post_coupling, self
+
     def substep_pre_coupling(self, f: int) -> None:
         """Advect every tool entity through substep f."""
         for entity_data in self.data.entities:
@@ -78,3 +98,15 @@ class ToolSolverSystem(System):
 def create_tool_solver_system(scene: "Scene") -> ToolSolverSystem | None:
     """Create the System owning the tool data whenever the solver holds an entity."""
     return ToolSolverSystem(scene) if scene.sim.tool_solver.is_active else None
+
+
+@qd.func(requires_top_level=True)
+def func_graph_tool_pre_coupling(system: qd.template(), f: int, t: float):
+    for i_e in qd.static(range(len(system.data.entities))):
+        func_advect(f, system.data.entities[i_e], system.info, system.config)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_tool_post_coupling(system: qd.template(), f: int, t: float):
+    for i_e in qd.static(range(len(system.data.entities))):
+        func_update_latest_pos(f, system.data.entities[i_e])

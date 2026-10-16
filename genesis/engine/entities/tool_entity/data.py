@@ -8,6 +8,7 @@ import quadrants as qd
 import genesis as gs
 from genesis.engine.core import Data
 from genesis.utils.array_class import V, V_MAT, V_SCALAR_FROM, V_VEC, AutoInitMeta, DataKind, of_kind
+from genesis.utils.qd_ext import expose_data_sequence
 
 
 @dataclasses.dataclass(eq=True, kw_only=False, frozen=True)
@@ -25,11 +26,12 @@ class ToolEntityStateData:
 
 def get_tool_entity_state_data(entity):
     shape = (entity.sim.substeps_local + 1, entity.sim._B)
+    needs_grad = entity.sim.requires_grad
     return ToolEntityStateData(
-        pos=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        quat=V_VEC(4, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        vel=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        ang=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=True),
+        pos=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        quat=V_VEC(4, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        vel=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        ang=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
         latest_pos=V_VEC(3, dtype=gs.qd_float, shape=(1,)),
     )
 
@@ -112,9 +114,7 @@ class ToolSolverData(Data):
     def __init__(self, entities: tuple[ToolEntityData, ...], meshes: tuple[ToolMeshConfig, ...]) -> None:
         self.entities = entities
         self.meshes = meshes
-        # WORKAROUND: Quadrants discovers ndarrays only through named attributes of a data-oriented kernel argument
-        for i_e, entity_data in enumerate(entities):
-            setattr(self, f"_entity_{i_e}", entity_data)
+        expose_data_sequence(self, "entity", entities)
 
 
 @qd.data_oriented
