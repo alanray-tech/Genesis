@@ -1,7 +1,7 @@
 """Engine of the simulator, with host fallback and whole-scene graph pipelines."""
 
 import genesis as gs
-from genesis.engine.core import Engine, Pipeline, make_stage_schedule
+from genesis.engine.core import Engine, Pipeline
 
 
 class SimulatorEngine(Engine):
@@ -57,7 +57,7 @@ class SimulatorEngine(Engine):
                 or substepper.graph_mpm_grid_begin.actions
                 or substepper.graph_parallel_couplings.actions
             )
-            self.graph_schedule = make_stage_schedule(substepper)
+            self.graph_schedule = substepper.action_schedule()
 
             if self.scene.options.sim.graph_partition == "single":
                 self._graph_entries = (kernel_graph_substep,)

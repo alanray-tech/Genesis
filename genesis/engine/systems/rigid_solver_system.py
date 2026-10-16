@@ -46,6 +46,7 @@ from genesis.engine.solvers.rigid.rigid_solver import (
     kernel_step_2,
 )
 from genesis.utils.misc import get_gpu_core_count, get_gpu_shared_tile_sizes, qd_to_numpy
+from genesis.utils.qd_ext import invoke_stage_actions
 
 from .kinematic_solver_system import (
     KINEMATIC_MODEL,
@@ -349,15 +350,15 @@ class RigidSolverSystem(System):
 
     @System.action(kind="stage")
     def graph_dynamics(self):
-        return func_graph_rigid_dynamics, self
+        return func_graph_rigid_dynamics, self, self.equality_assemblies
 
     @System.action(kind="stage")
     def graph_collision(self):
-        return func_graph_rigid_collision, self
+        return func_graph_rigid_collision, self, self.detections, self.inequality_assemblies
 
     @System.action(kind="stage")
     def graph_post(self):
-        return func_graph_rigid_post, self
+        return func_graph_rigid_post, self, self.force_updates
 
     def reset(self, envs_idx=None) -> None:
         """Restart what the given environments carry over from the previous substeps, once their configuration is
@@ -527,24 +528,26 @@ def func_graph_rigid_wakeup(system: qd.template(), f: int, t: float):
 
 
 @qd.func(requires_top_level=True)
-def func_graph_rigid_dynamics(system: qd.template(), f: int, t: float):
+def func_graph_rigid_dynamics(system: qd.template(), equality_assemblies: qd.template(), f: int, t: float):
     func_substep_forward_dynamics(system.data, system.rigid_config, False, False)
-    for action in qd.static(system.equality_assemblies.actions):
-        action.invoke()
+    invoke_stage_actions(equality_assemblies.actions, ())
 
 
 @qd.func(requires_top_level=True)
-def func_graph_rigid_collision(system: qd.template(), f: int, t: float):
-    for action in qd.static(system.detections.actions):
-        action.invoke()
-    for action in qd.static(system.inequality_assemblies.actions):
-        action.invoke()
+def func_graph_rigid_collision(
+    system: qd.template(),
+    detections: qd.template(),
+    inequality_assemblies: qd.template(),
+    f: int,
+    t: float,
+):
+    invoke_stage_actions(detections.actions, ())
+    invoke_stage_actions(inequality_assemblies.actions, ())
 
 
 @qd.func(requires_top_level=True)
-def func_graph_rigid_post(system: qd.template(), f: int, t: float):
-    for action in qd.static(system.force_updates.actions):
-        action.invoke()
+def func_graph_rigid_post(system: qd.template(), force_updates: qd.template(), f: int, t: float):
+    invoke_stage_actions(force_updates.actions, ())
     func_substep_integrate(system.data, system.rigid_config)
 
 
