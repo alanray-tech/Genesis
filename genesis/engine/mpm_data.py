@@ -48,17 +48,18 @@ class MPMParticlesState:
 
 def get_mpm_particles_state(system) -> MPMParticlesState:
     shape = (system._sim.substeps_local + 1, system._n_particles, system._B)
+    needs_grad = system._sim.requires_grad
     return MPMParticlesState(
-        pos=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        vel=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        C=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        F=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        F_tmp=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        U=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        V=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        S=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        actu=V(dtype=gs.qd_float, shape=shape, needs_grad=True),
-        Jp=V(dtype=gs.qd_float, shape=shape, needs_grad=True),
+        pos=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        vel=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        C=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        F=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        F_tmp=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        U=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        V=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        S=V_MAT(3, 3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        actu=V(dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        Jp=V(dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
     )
 
 
@@ -127,10 +128,11 @@ class MPMGridState:
 
 def get_mpm_grid_state(system) -> MPMGridState:
     shape = (system._sim.substeps_local, *system._grid_res, system._B)
+    needs_grad = system._sim.requires_grad
     return MPMGridState(
-        mass=V(dtype=gs.qd_float, shape=shape, needs_grad=True),
-        vel_in=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=True),
-        vel_out=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=True),
+        mass=V(dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        vel_in=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
+        vel_out=V_VEC(3, dtype=gs.qd_float, shape=shape, needs_grad=needs_grad),
     )
 
 

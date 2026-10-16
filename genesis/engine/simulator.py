@@ -427,7 +427,10 @@ class Simulator(RBC):
 
     def substep(self, f):
         if self._substep_pipeline is not None:
-            self._substep_pipeline.run(f)
+            if self._engine.substep_takes_time:
+                self._substep_pipeline.run(f, self.cur_t)
+            else:
+                self._substep_pipeline.run(f)
             return
         self._coupler.preprocess(f)
         self.substep_pre_coupling(f)
