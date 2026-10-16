@@ -41,7 +41,6 @@ SPH_MODEL = (
 )
 
 
-@qd.data_oriented
 class SPHSolverSystem(System):
     """System owning the particle data and simulation of the SPH solver of the scene."""
 
@@ -49,8 +48,20 @@ class SPHSolverSystem(System):
         super().__init__(scene)
         self.solver = scene.sim.sph_solver
 
+    @System.data
+    def gravity_data(self):
+        return self._gravity
+
+    @System.data
+    def density_error_data(self):
+        return self.density_error
+
+    @System.data
+    def graph_condition(self):
+        return self.graph_counter
+
     def build(self) -> None:
-        from .pairwise_coupling_systems import SPHRigidCouplingSystem
+        from .sph_rigid_coupling_system import SPHRigidCouplingSystem
 
         self.rigid_coupling = self.find(SPHRigidCouplingSystem)
 
@@ -102,6 +113,18 @@ class SPHSolverSystem(System):
     def post_coupling(self):
         return self.substep_post_coupling
 
+    @System.action(kind="stage")
+    def graph_pre_coupling(self):
+        if self.rigid_coupling is None:
+            return func_graph_sph_pre, self
+        return func_graph_sph_pre_rigid, self, self.rigid_coupling
+
+    @System.action(kind="stage")
+    def graph_post_coupling(self):
+        if self.rigid_coupling is None:
+            return func_graph_sph_post, self
+        return func_graph_sph_post_rigid, self, self.rigid_coupling
+
     def substep_pre_coupling(self, f: int) -> None:
         """Reorder the particles and advance their velocity through the pressure solve."""
         if self.rigid_coupling is not None:
@@ -150,3 +173,49 @@ class SPHSolverSystem(System):
 def create_sph_solver_system(scene: "Scene") -> SPHSolverSystem | None:
     """Create the System owning the SPH solver whenever it simulates an entity."""
     return SPHSolverSystem(scene) if scene.sim.sph_solver.is_active else None
+
+
+@qd.func(requires_top_level=True)
+def func_graph_sph_pre(system: qd.template(), f: int, t: float):
+    sph_runtime.func_reorder_particles(system, f, False, None, 0)
+    sph_runtime.func_compute_rho(system, f)
+    if qd.static(system._pressure_solver == "WCSPH"):
+        sph_runtime.func_compute_non_pressure_forces(system, f, t)
+        sph_runtime.func_compute_pressure_forces(system, f)
+        sph_runtime.func_advect_velocity(system, f)
+    else:
+        sph_runtime.func_compute_DFSPH_factor(system, f)
+        sph_runtime.func_divergence_solve(system, system.graph_counter)
+        sph_runtime.func_advect_velocity(system, f)
+        sph_runtime.func_compute_non_pressure_forces(system, f, t)
+        sph_runtime.func_predict_velocity(system, f)
+        sph_runtime.func_density_solve(system, system.graph_counter)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_sph_pre_rigid(system: qd.template(), coupling: qd.template(), f: int, t: float):
+    sph_runtime.func_reorder_particles(system, f, True, coupling, coupling.rigid.n_geoms)
+    sph_runtime.func_compute_rho(system, f)
+    if qd.static(system._pressure_solver == "WCSPH"):
+        sph_runtime.func_compute_non_pressure_forces(system, f, t)
+        sph_runtime.func_compute_pressure_forces(system, f)
+        sph_runtime.func_advect_velocity(system, f)
+    else:
+        sph_runtime.func_compute_DFSPH_factor(system, f)
+        sph_runtime.func_divergence_solve(system, system.graph_counter)
+        sph_runtime.func_advect_velocity(system, f)
+        sph_runtime.func_compute_non_pressure_forces(system, f, t)
+        sph_runtime.func_predict_velocity(system, f)
+        sph_runtime.func_density_solve(system, system.graph_counter)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_sph_post(system: qd.template(), f: int, t: float):
+    sph_runtime.func_advect_position(system, f)
+    sph_runtime.func_copy_from_reordered(system, f, False, None, 0)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_sph_post_rigid(system: qd.template(), coupling: qd.template(), f: int, t: float):
+    sph_runtime.func_advect_position(system, f)
+    sph_runtime.func_copy_from_reordered(system, f, True, coupling, coupling.rigid.n_geoms)
