@@ -204,6 +204,7 @@ class ParticleEntity(Entity):
         P_invs = np.linalg.pinv(Ps)
 
         self._kernel_add_vverts_to_solver(
+            solver_system=self._solver if self._solver._system is None else self._solver._system,
             vverts=self._vverts,
             particles=self._particles,
             P_invs=P_invs,
@@ -213,6 +214,7 @@ class ParticleEntity(Entity):
     @qd.kernel
     def _kernel_add_vverts_to_solver(
         self,
+        solver_system: qd.template(),
         vverts: qd.types.ndarray(element_dim=1),
         particles: qd.types.ndarray(element_dim=1),
         P_invs: qd.types.ndarray(element_dim=2),
@@ -222,12 +224,12 @@ class ParticleEntity(Entity):
             i_vv = i_vv_ + self._vvert_start
             v = vverts[i_vv_]
             P_inv = P_invs[i_vv_]
-            b = P_inv @ (v - particles[support_idxs_local[i_vv_, self.solver._n_vvert_supports - 1]])
-            for j in range(self.solver._n_vvert_supports - 1):
-                self.solver.vverts_info.support_weights[i_vv][j] = b[j]
-            self.solver.vverts_info.support_weights[i_vv][self.solver._n_vvert_supports - 1] = 1.0 - b.sum()
-            for j in range(self.solver._n_vvert_supports):
-                self.solver.vverts_info.support_idxs[i_vv][j] = support_idxs_local[i_vv_, j] + self._particle_start
+            b = P_inv @ (v - particles[support_idxs_local[i_vv_, solver_system._n_vvert_supports - 1]])
+            for j in range(solver_system._n_vvert_supports - 1):
+                solver_system.vverts_info.support_weights[i_vv][j] = b[j]
+            solver_system.vverts_info.support_weights[i_vv][solver_system._n_vvert_supports - 1] = 1.0 - b.sum()
+            for j in range(solver_system._n_vvert_supports):
+                solver_system.vverts_info.support_idxs[i_vv][j] = support_idxs_local[i_vv_, j] + self._particle_start
 
     def sample(self):
         """

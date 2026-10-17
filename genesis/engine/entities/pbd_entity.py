@@ -22,22 +22,22 @@ class PBDBaseEntity(ParticleEntity):
             # No UVs available, pass empty array (kernel will skip copy)
             uvs = np.zeros((0, 2), dtype=gs.np_float)
 
-        self._kernel_add_uvs_and_faces_to_solver(uvs=uvs, faces=self._vfaces)
+        self._kernel_add_uvs_and_faces_to_solver(self._solver._system, uvs=uvs, faces=self._vfaces)
 
     @qd.kernel
     def _kernel_add_uvs_and_faces_to_solver(
-        self, uvs: qd.types.ndarray(element_dim=1), faces: qd.types.ndarray(element_dim=1)
+        self, solver_system: qd.template(), uvs: qd.types.ndarray(element_dim=1), faces: qd.types.ndarray(element_dim=1)
     ):
         # Copy UVs to solver's global UV buffer (skip if no UVs provided)
         n_uvs = uvs.shape[0]
         for i_vv_ in range(n_uvs):
             i_vv = i_vv_ + self._vvert_start
-            self.solver.vverts_uvs[i_vv] = uvs[i_vv_]
+            solver_system.vverts_uvs[i_vv] = uvs[i_vv_]
 
         # Copy faces to solver's global face buffer (with global vertex indices)
         for i_vf_ in range(self.n_vfaces):
             i_vf = i_vf_ + self._vface_start
-            self.solver.vfaces_indices[i_vf] = qd.Vector(
+            solver_system.vfaces_indices[i_vf] = qd.Vector(
                 [
                     faces[i_vf_][0] + self._vvert_start,
                     faces[i_vf_][1] + self._vvert_start,
@@ -99,7 +99,7 @@ class PBDBaseEntity(ParticleEntity):
         particles_idx_local = self._sanitize_particles_idx_local(particles_idx_local, envs_idx)
         particles_idx = particles_idx_local + self._particle_start
         self._sim._coupler.kernel_attach_pbd_to_rigid_link(
-            particles_idx, envs_idx, link_idx, self._scene.rigid_solver.dyn_state.links
+            self._solver._system, particles_idx, envs_idx, link_idx, self._scene.rigid_solver.dyn_state.links
         )
 
     @gs.assert_built
@@ -139,7 +139,9 @@ class PBDBaseEntity(ParticleEntity):
         particles_idx_local = self._sanitize_particles_idx_local(particles_idx_local, envs_idx)
         particles_idx = particles_idx_local + self._particle_start
         self.solver._kernel_release_particle(particles_idx, envs_idx)
-        self.solver._sim._coupler.kernel_pbd_rigid_clear_animate_particles_by_link(particles_idx, envs_idx)
+        self.solver._sim._coupler.kernel_pbd_rigid_clear_animate_particles_by_link(
+            self._solver._system, particles_idx, envs_idx
+        )
 
     # ------------------------------------------------------------------------------------
     # --------------------------------- naming methods -----------------------------------
@@ -212,6 +214,7 @@ class PBDTetEntity(PBDBaseEntity):
 
     def _add_particles_to_solver(self):
         self._kernel_add_particles_edges_to_solver(
+            self._solver._system,
             f=self._scene.sim.cur_substep_local,
             particles=self._particles,
             edges=self._edges,
@@ -223,6 +226,7 @@ class PBDTetEntity(PBDBaseEntity):
     @qd.kernel
     def _kernel_add_particles_edges_to_solver(
         self,
+        solver_system: qd.template(),
         f: qd.i32,
         particles: qd.types.ndarray(),
         edges: qd.types.ndarray(),
@@ -233,29 +237,29 @@ class PBDTetEntity(PBDBaseEntity):
         for i_p_ in range(self.n_particles):
             i_p = i_p_ + self._particle_start
             for i in qd.static(range(3)):
-                self.solver.particles_info[i_p].pos_rest[i] = particles[i_p_, i]
-            self.solver.particles_info[i_p].material_type = material_type
-            self.solver.particles_info[i_p].mass = self._particle_mass
-            self.solver.particles_info[i_p].mu_s = self.material.static_friction
-            self.solver.particles_info[i_p].mu_k = self.material.kinetic_friction
+                solver_system.particles_info.pos_rest[i_p][i] = particles[i_p_, i]
+            solver_system.particles_info.material_type[i_p] = material_type
+            solver_system.particles_info.mass[i_p] = self._particle_mass
+            solver_system.particles_info.mu_s[i_p] = self.material.static_friction
+            solver_system.particles_info.mu_k[i_p] = self.material.kinetic_friction
 
         for i_p_, i_b in qd.ndrange(self.n_particles, self._sim._B):
             i_p = i_p_ + self._particle_start
             for i in qd.static(range(3)):
-                self.solver.particles[i_p, i_b].pos[i] = particles[i_p_, i]
-            self.solver.particles[i_p, i_b].vel = qd.Vector.zero(gs.qd_float, 3)
-            self.solver.particles[i_p, i_b].dpos = qd.Vector.zero(gs.qd_float, 3)
-            self.solver.particles[i_p, i_b].free = True
+                solver_system.particles.pos[i_p, i_b][i] = particles[i_p_, i]
+            solver_system.particles.vel[i_p, i_b] = qd.Vector.zero(gs.qd_float, 3)
+            solver_system.particles.dpos[i_p, i_b] = qd.Vector.zero(gs.qd_float, 3)
+            solver_system.particles.free[i_p, i_b] = True
 
-            self.solver.particles_ng[i_p, i_b].active = qd.cast(active, gs.qd_bool)
+            solver_system.particles_ng.active[i_p, i_b] = qd.cast(active, gs.qd_bool)
 
         for i_e_ in range(self.n_edges):
             i_e = i_e_ + self._edge_start
-            self.solver.edges_info[i_e].stretch_compliance = self.material.stretch_compliance
-            self.solver.edges_info[i_e].stretch_relaxation = self.material.stretch_relaxation
-            self.solver.edges_info[i_e].len_rest = edges_len_rest[i_e_]
-            self.solver.edges_info[i_e].v1 = self._particle_start + edges[i_e_, 0]
-            self.solver.edges_info[i_e].v2 = self._particle_start + edges[i_e_, 1]
+            solver_system.edges_info.stretch_compliance[i_e] = self.material.stretch_compliance
+            solver_system.edges_info.stretch_relaxation[i_e] = self.material.stretch_relaxation
+            solver_system.edges_info.len_rest[i_e] = edges_len_rest[i_e_]
+            solver_system.edges_info.v1[i_e] = self._particle_start + edges[i_e_, 0]
+            solver_system.edges_info.v2[i_e] = self._particle_start + edges[i_e_, 1]
 
     def sample(self):
         """
@@ -406,33 +410,38 @@ class PBD2DEntity(PBDTetEntity):
     def _add_particles_to_solver(self):
         super()._add_particles_to_solver()
 
-        self._kernel_add_particles_air_resistance_to_solver(f=self._scene.sim.cur_substep_local)
+        self._kernel_add_particles_air_resistance_to_solver(self._solver._system, f=self._scene.sim.cur_substep_local)
 
         self._kernel_add_inner_edges_to_solver(
+            self._solver._system,
             f=self._scene.sim.cur_substep_local,
             inner_edges=self._inner_edges,
             inner_edges_len_rest=self._inner_edges_len_rest,
         )
 
     @qd.kernel
-    def _kernel_add_particles_air_resistance_to_solver(self, f: qd.i32):
+    def _kernel_add_particles_air_resistance_to_solver(self, solver_system: qd.template(), f: qd.i32):
         for i_p_ in range(self.n_particles):
             i_p = i_p_ + self._particle_start
-            self.solver.particles_info[i_p].air_resistance = self.material.air_resistance
+            solver_system.particles_info.air_resistance[i_p] = self.material.air_resistance
 
     @qd.kernel
     def _kernel_add_inner_edges_to_solver(
-        self, f: qd.i32, inner_edges: qd.types.ndarray(), inner_edges_len_rest: qd.types.ndarray()
+        self,
+        solver_system: qd.template(),
+        f: qd.i32,
+        inner_edges: qd.types.ndarray(),
+        inner_edges_len_rest: qd.types.ndarray(),
     ):
         for i_ie_ in range(self.n_inner_edges):
             i_ie = i_ie_ + self._inner_edge_start
-            self.solver.inner_edges_info[i_ie].bending_compliance = self.material.bending_compliance
-            self.solver.inner_edges_info[i_ie].bending_relaxation = self.material.bending_relaxation
-            self.solver.inner_edges_info[i_ie].len_rest = inner_edges_len_rest[i_ie_]
-            self.solver.inner_edges_info[i_ie].v1 = self._particle_start + inner_edges[i_ie_, 0]
-            self.solver.inner_edges_info[i_ie].v2 = self._particle_start + inner_edges[i_ie_, 1]
-            self.solver.inner_edges_info[i_ie].v3 = self._particle_start + inner_edges[i_ie_, 2]
-            self.solver.inner_edges_info[i_ie].v4 = self._particle_start + inner_edges[i_ie_, 3]
+            solver_system.inner_edges_info.bending_compliance[i_ie] = self.material.bending_compliance
+            solver_system.inner_edges_info.bending_relaxation[i_ie] = self.material.bending_relaxation
+            solver_system.inner_edges_info.len_rest[i_ie] = inner_edges_len_rest[i_ie_]
+            solver_system.inner_edges_info.v1[i_ie] = self._particle_start + inner_edges[i_ie_, 0]
+            solver_system.inner_edges_info.v2[i_ie] = self._particle_start + inner_edges[i_ie_, 1]
+            solver_system.inner_edges_info.v3[i_ie] = self._particle_start + inner_edges[i_ie_, 2]
+            solver_system.inner_edges_info.v4[i_ie] = self._particle_start + inner_edges[i_ie_, 3]
 
     @property
     def n_inner_edges(self):
@@ -544,19 +553,21 @@ class PBD3DEntity(PBDTetEntity):
 
     def _add_particles_to_solver(self):
         super()._add_particles_to_solver()
-        self._kernel_add_elems_to_solver(elems=self._elems, elems_vol_rest=self._elems_vol_rest)
+        self._kernel_add_elems_to_solver(self._solver._system, elems=self._elems, elems_vol_rest=self._elems_vol_rest)
 
     @qd.kernel
-    def _kernel_add_elems_to_solver(self, elems: qd.types.ndarray(), elems_vol_rest: qd.types.ndarray()):
+    def _kernel_add_elems_to_solver(
+        self, solver_system: qd.template(), elems: qd.types.ndarray(), elems_vol_rest: qd.types.ndarray()
+    ):
         for i_el_ in range(self.n_elems):
             i_el = i_el_ + self._elem_start
-            self.solver.elems_info[i_el].volume_compliance = self.material.volume_compliance
-            self.solver.elems_info[i_el].volume_relaxation = self.material.volume_relaxation
-            self.solver.elems_info[i_el].vol_rest = elems_vol_rest[i_el_]
-            self.solver.elems_info[i_el].v1 = self._particle_start + elems[i_el_, 0]
-            self.solver.elems_info[i_el].v2 = self._particle_start + elems[i_el_, 1]
-            self.solver.elems_info[i_el].v3 = self._particle_start + elems[i_el_, 2]
-            self.solver.elems_info[i_el].v4 = self._particle_start + elems[i_el_, 3]
+            solver_system.elems_info.volume_compliance[i_el] = self.material.volume_compliance
+            solver_system.elems_info.volume_relaxation[i_el] = self.material.volume_relaxation
+            solver_system.elems_info.vol_rest[i_el] = elems_vol_rest[i_el_]
+            solver_system.elems_info.v1[i_el] = self._particle_start + elems[i_el_, 0]
+            solver_system.elems_info.v2[i_el] = self._particle_start + elems[i_el_, 1]
+            solver_system.elems_info.v3[i_el] = self._particle_start + elems[i_el_, 2]
+            solver_system.elems_info.v4[i_el] = self._particle_start + elems[i_el_, 3]
 
     @property
     def n_elems(self):
@@ -608,6 +619,8 @@ class PBDParticleEntity(PBDBaseEntity):
 
     def _add_particles_to_solver(self):
         self._kernel_add_particles_to_solver(
+            self._solver._system,
+            self._solver._system,
             f=self._sim.cur_substep_local,
             particles=self._particles,
             rho=self._material.rho,
@@ -617,29 +630,35 @@ class PBDParticleEntity(PBDBaseEntity):
 
     @qd.kernel
     def _kernel_add_particles_to_solver(
-        self, f: qd.i32, particles: qd.types.ndarray(), rho: qd.float32, material_type: qd.i32, active: qd.i32
+        self,
+        solver_system: qd.template(),
+        f: qd.i32,
+        particles: qd.types.ndarray(),
+        rho: qd.float32,
+        material_type: qd.i32,
+        active: qd.i32,
     ):
         for i_p_ in range(self._n_particles):
             i_p = i_p_ + self._particle_start
             for j in qd.static(range(3)):
-                self.solver.particles_info[i_p].pos_rest[j] = particles[i_p_, j]
+                solver_system.particles_info.pos_rest[i_p][j] = particles[i_p_, j]
 
-            self.solver.particles_info[i_p].material_type = material_type
-            self.solver.particles_info[i_p].mass = rho
-            self.solver.particles_info[i_p].rho_rest = rho
+            solver_system.particles_info.material_type[i_p] = material_type
+            solver_system.particles_info.mass[i_p] = rho
+            solver_system.particles_info.rho_rest[i_p] = rho
 
-            self.solver.particles_info[i_p].density_relaxation = self.material.density_relaxation
-            self.solver.particles_info[i_p].viscosity_relaxation = self.material.viscosity_relaxation
+            solver_system.particles_info.density_relaxation[i_p] = self.material.density_relaxation
+            solver_system.particles_info.viscosity_relaxation[i_p] = self.material.viscosity_relaxation
 
         for i_p_, i_b in qd.ndrange(self.n_particles, self._sim._B):
             i_p = i_p_ + self._particle_start
             for j in qd.static(range(3)):
-                self.solver.particles[i_p, i_b].pos[j] = particles[i_p_, j]
-            self.solver.particles[i_p, i_b].vel = qd.Vector.zero(gs.qd_float, 3)
-            self.solver.particles[i_p, i_b].dpos = qd.Vector.zero(gs.qd_float, 3)
-            self.solver.particles[i_p, i_b].free = True
+                solver_system.particles.pos[i_p, i_b][j] = particles[i_p_, j]
+            solver_system.particles.vel[i_p, i_b] = qd.Vector.zero(gs.qd_float, 3)
+            solver_system.particles.dpos[i_p, i_b] = qd.Vector.zero(gs.qd_float, 3)
+            solver_system.particles.free[i_p, i_b] = True
 
-            self.solver.particles_ng[i_p, i_b].active = qd.cast(active, gs.qd_bool)
+            solver_system.particles_ng.active[i_p, i_b] = qd.cast(active, gs.qd_bool)
 
     @property
     def n_fluid_particles(self):
@@ -681,6 +700,8 @@ class PBDFreeParticleEntity(PBDBaseEntity):
 
     def _add_particles_to_solver(self):
         self._kernel_add_particles_to_solver(
+            self._solver._system,
+            self._solver._system,
             f=self._sim.cur_substep_local,
             particles=self._particles,
             rho=self._material.rho,
@@ -690,23 +711,29 @@ class PBDFreeParticleEntity(PBDBaseEntity):
 
     @qd.kernel
     def _kernel_add_particles_to_solver(
-        self, f: qd.i32, particles: qd.types.ndarray(), rho: qd.float32, material_type: qd.i32, active: qd.i32
+        self,
+        solver_system: qd.template(),
+        f: qd.i32,
+        particles: qd.types.ndarray(),
+        rho: qd.float32,
+        material_type: qd.i32,
+        active: qd.i32,
     ):
         for i_p_ in range(self.n_particles):
             i_p = i_p_ + self._particle_start
             for j in qd.static(range(3)):
-                self.solver.particles_info[i_p].pos_rest[j] = particles[i_p_, j]
+                solver_system.particles_info.pos_rest[i_p][j] = particles[i_p_, j]
 
-            self.solver.particles_info[i_p].material_type = material_type
-            self.solver.particles_info[i_p].mass = rho
-            self.solver.particles_info[i_p].rho_rest = rho
+            solver_system.particles_info.material_type[i_p] = material_type
+            solver_system.particles_info.mass[i_p] = rho
+            solver_system.particles_info.rho_rest[i_p] = rho
 
         for i_p_, i_b in qd.ndrange(self.n_particles, self._sim._B):
             i_p = i_p_ + self._particle_start
             for j in qd.static(range(3)):
-                self.solver.particles[i_p, i_b].pos[j] = particles[i_p_, j]
-            self.solver.particles[i_p, i_b].vel = qd.Vector.zero(gs.qd_float, 3)
-            self.solver.particles[i_p, i_b].dpos = qd.Vector.zero(gs.qd_float, 3)
-            self.solver.particles[i_p, i_b].free = True
+                solver_system.particles.pos[i_p, i_b][j] = particles[i_p_, j]
+            solver_system.particles.vel[i_p, i_b] = qd.Vector.zero(gs.qd_float, 3)
+            solver_system.particles.dpos[i_p, i_b] = qd.Vector.zero(gs.qd_float, 3)
+            solver_system.particles.free[i_p, i_b] = True
 
-            self.solver.particles_ng[i_p, i_b].active = qd.cast(active, gs.qd_bool)
+            solver_system.particles_ng.active[i_p, i_b] = qd.cast(active, gs.qd_bool)

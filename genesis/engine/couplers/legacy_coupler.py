@@ -341,6 +341,7 @@ class LegacyCoupler(RBC):
         tool_data: qd.template(),
         tool_info: qd.template(),
         sph_system: qd.template(),
+        pbd_system: qd.template(),
         collider_static_config: qd.template(),
     ):
         for ii, jj, kk, i_b in qd.ndrange(*self.mpm_solver.grid_res, self.mpm_solver._B):
@@ -431,7 +432,7 @@ class LegacyCoupler(RBC):
                 #################### MPM <-> PBD ####################
                 if qd.static(self._mpm_pbd):
                     # using the lower corner of MPM cell to find the corresponding PBD base cell
-                    base = self.pbd_solver.sh.pos_to_grid(pos - 0.5 * self.mpm_solver.dx)
+                    base = func_pos_to_grid(pos - 0.5 * self.mpm_solver.dx, pbd_system.sh)
 
                     # ---------- PBD -> MPM ----------
                     pbd_vel = qd.Vector([0.0, 0.0, 0.0])
@@ -439,16 +440,17 @@ class LegacyCoupler(RBC):
                     for offset in qd.grouped(
                         qd.ndrange(self.mpm_pbd_stencil_size, self.mpm_pbd_stencil_size, self.mpm_pbd_stencil_size)
                     ):
-                        slot_idx = self.pbd_solver.sh.grid_to_slot(base + offset)
+                        slot_idx = func_grid_to_slot(base + offset, pbd_system.sh)
                         for i in range(
-                            self.pbd_solver.sh.slot_start[slot_idx, i_b],
-                            self.pbd_solver.sh.slot_start[slot_idx, i_b] + self.pbd_solver.sh.slot_size[slot_idx, i_b],
+                            pbd_system.spatial_hasher.slot_start[slot_idx, i_b],
+                            pbd_system.spatial_hasher.slot_start[slot_idx, i_b]
+                            + pbd_system.spatial_hasher.slot_size[slot_idx, i_b],
                         ):
                             if (
-                                qd.abs(pos - self.pbd_solver.particles_reordered.pos[i, i_b]).max()
+                                qd.abs(pos - pbd_system.particles_reordered.pos[i, i_b]).max()
                                 < self.mpm_solver.dx * 0.5
                             ):
-                                pbd_vel += self.pbd_solver.particles_reordered.vel[i, i_b]
+                                pbd_vel += pbd_system.particles_reordered.vel[i, i_b]
                                 colliding_particles += 1
                     if colliding_particles > 0:
                         vel_old = vel_mpm
@@ -460,20 +462,20 @@ class LegacyCoupler(RBC):
                         for offset in qd.grouped(
                             qd.ndrange(self.mpm_pbd_stencil_size, self.mpm_pbd_stencil_size, self.mpm_pbd_stencil_size)
                         ):
-                            slot_idx = self.pbd_solver.sh.grid_to_slot(base + offset)
+                            slot_idx = func_grid_to_slot(base + offset, pbd_system.sh)
                             for i in range(
-                                self.pbd_solver.sh.slot_start[slot_idx, i_b],
-                                self.pbd_solver.sh.slot_start[slot_idx, i_b]
-                                + self.pbd_solver.sh.slot_size[slot_idx, i_b],
+                                pbd_system.spatial_hasher.slot_start[slot_idx, i_b],
+                                pbd_system.spatial_hasher.slot_start[slot_idx, i_b]
+                                + pbd_system.spatial_hasher.slot_size[slot_idx, i_b],
                             ):
                                 if (
-                                    qd.abs(pos - self.pbd_solver.particles_reordered.pos[i, i_b]).max()
+                                    qd.abs(pos - pbd_system.particles_reordered.pos[i, i_b]).max()
                                     < self.mpm_solver.dx * 0.5
                                 ):
-                                    if self.pbd_solver.particles_reordered[i, i_b].free:
-                                        self.pbd_solver.particles_reordered[i, i_b].vel = (
-                                            self.pbd_solver.particles_reordered[i, i_b].vel
-                                            - delta_mv / self.pbd_solver.particles_info_reordered[i, i_b].mass
+                                    if pbd_system.particles_reordered.free[i, i_b]:
+                                        pbd_system.particles_reordered.vel[i, i_b] = (
+                                            pbd_system.particles_reordered.vel[i, i_b]
+                                            - delta_mv / pbd_system.particles_info_reordered.mass[i, i_b]
                                         )
 
                 #################### MPM boundary ####################
@@ -725,22 +727,23 @@ class LegacyCoupler(RBC):
         links_state: array_class.LinksState,
         sdf_info: array_class.SDFInfo,
         rigid_info: array_class.RigidInfo,
+        pbd_system: qd.template(),
         collider_static_config: qd.template(),
     ):
-        for i_p, i_b in qd.ndrange(self.pbd_solver._n_particles, self.sph_solver._B):
-            if self.pbd_solver.particles_ng_reordered[i_p, i_b].active:
+        for i_p, i_b in qd.ndrange(pbd_system._n_particles, pbd_system._B):
+            if pbd_system.particles_ng_reordered.active[i_p, i_b]:
                 # NOTE: Couldn't figure out a good way to handle collision with non-free particle. Such collision is not phsically plausible anyway.
                 for i_g in range(self.rigid_solver.n_geoms):
                     if geoms_info.needs_coup[i_g]:
                         (
-                            self.pbd_solver.particles_reordered[i_p, i_b].pos,
-                            self.pbd_solver.particles_reordered[i_p, i_b].vel,
+                            pbd_system.particles_reordered.pos[i_p, i_b],
+                            pbd_system.particles_reordered.vel[i_p, i_b],
                             self.pbd_rigid_normal_reordered[i_p, i_b, i_g],
                         ) = self._func_pbd_collide_with_rigid_geom(
                             i_p,
-                            self.pbd_solver.particles_reordered[i_p, i_b].pos,
-                            self.pbd_solver.particles_reordered[i_p, i_b].vel,
-                            self.pbd_solver.particles_info_reordered[i_p, i_b].mass,
+                            pbd_system.particles_reordered.pos[i_p, i_b],
+                            pbd_system.particles_reordered.vel[i_p, i_b],
+                            pbd_system.particles_info_reordered.mass[i_p, i_b],
                             self.pbd_rigid_normal_reordered[i_p, i_b, i_g],
                             i_g,
                             i_b,
@@ -749,20 +752,24 @@ class LegacyCoupler(RBC):
                             links_state,
                             sdf_info,
                             rigid_info,
+                            pbd_system,
                             collider_static_config,
                         )
 
     @qd.kernel
     def kernel_attach_pbd_to_rigid_link(
-        self, particles_idx: qd.types.ndarray(), envs_idx: qd.types.ndarray(), link_idx: qd.i32, links_state: LinksState
+        self,
+        pbd_system: qd.template(),
+        particles_idx: qd.types.ndarray(),
+        envs_idx: qd.types.ndarray(),
+        link_idx: qd.i32,
+        links_state: LinksState,
     ) -> None:
         """
         Sets listed particles in listed environments to be animated by the link.
 
         Current position of the particle, relatively to the link, is stored and preserved.
         """
-        pdb = self.pbd_solver
-
         for i_p_, i_b_ in qd.ndrange(particles_idx.shape[1], envs_idx.shape[0]):
             i_p = particles_idx[i_b_, i_p_]
             i_b = envs_idx[i_b_]
@@ -770,29 +777,30 @@ class LegacyCoupler(RBC):
             link_quat = links_state.quat[link_idx, i_b]
 
             # compute local offset from link to the particle
-            world_pos = pdb.particles[i_p, i_b].pos
+            world_pos = pbd_system.particles.pos[i_p, i_b]
             local_pos = qd_inv_transform_by_trans_quat(world_pos, link_pos, link_quat)
 
             # set particle to be animated (not free) and store animation info
-            pdb.particles[i_p, i_b].free = False
+            pbd_system.particles.free[i_p, i_b] = False
             self.particle_attach_info[i_p, i_b].link_idx = link_idx
             self.particle_attach_info[i_p, i_b].local_pos = local_pos
 
     @qd.kernel
     def kernel_pbd_rigid_clear_animate_particles_by_link(
-        self, particles_idx: qd.types.ndarray(), envs_idx: qd.types.ndarray()
+        self, pbd_system: qd.template(), particles_idx: qd.types.ndarray(), envs_idx: qd.types.ndarray()
     ) -> None:
         """Detach listed particles from links, and simulate them freely."""
-        pdb = self.pbd_solver
         for i_p_, i_b_ in qd.ndrange(particles_idx.shape[1], envs_idx.shape[0]):
             i_p = particles_idx[i_b_, i_p_]
             i_b = envs_idx[i_b_]
-            pdb.particles[i_p, i_b].free = True
+            pbd_system.particles.free[i_p, i_b] = True
             self.particle_attach_info[i_p, i_b].link_idx = -1
             self.particle_attach_info[i_p, i_b].local_pos = qd.math.vec3([0.0, 0.0, 0.0])
 
     @qd.kernel
-    def kernel_pbd_rigid_solve_animate_particles_by_link(self, clamped_inv_dt: qd.f32, links_state: LinksState):
+    def kernel_pbd_rigid_solve_animate_particles_by_link(
+        self, pbd_system: qd.template(), clamped_inv_dt: qd.f32, links_state: LinksState
+    ):
         """
         Itearates all particles and environments, and sets corrective velocity for all animated particle.
 
@@ -804,8 +812,7 @@ class LegacyCoupler(RBC):
 
         Note, it's adviced to clamp inv_dt to avoid large jerks and instability. 1/0.02 might be a good max value.
         """
-        pdb = self.pbd_solver
-        for i_p, i_env in qd.ndrange(pdb._n_particles, pdb._B):
+        for i_p, i_env in qd.ndrange(pbd_system._n_particles, pbd_system._B):
             if self.particle_attach_info[i_p, i_env].link_idx >= 0:
                 # read link state
                 link_idx = self.particle_attach_info[i_p, i_env].link_idx
@@ -824,11 +831,11 @@ class LegacyCoupler(RBC):
                 target_world_vel = link_lin_vel + link_ang_vel.cross(world_arm)
 
                 # compute and apply corrective velocity
-                i_rp = pdb.particles_ng[i_p, i_env].reordered_idx
-                particle_pos = pdb.particles_reordered[i_rp, i_env].pos
+                i_rp = pbd_system.particles_ng.reordered_idx[i_p, i_env]
+                particle_pos = pbd_system.particles_reordered.pos[i_rp, i_env]
                 pos_correction = target_world_pos - particle_pos
                 corrective_vel = pos_correction * clamped_inv_dt
-                pdb.particles_reordered[i_rp, i_env].vel = corrective_vel + target_world_vel
+                pbd_system.particles_reordered.vel[i_rp, i_env] = corrective_vel + target_world_vel
 
     @qd.func
     def _func_pbd_collide_with_rigid_geom(
@@ -845,6 +852,7 @@ class LegacyCoupler(RBC):
         links_state: array_class.LinksState,
         sdf_info: array_class.SDFInfo,
         rigid_info: array_class.RigidInfo,
+        pbd_system: qd.template(),
         collider_static_config: qd.template(),
     ):
         """
@@ -857,7 +865,7 @@ class LegacyCoupler(RBC):
         )
         new_pos = pos_world
         new_vel = vel
-        if signed_dist < self.pbd_solver.particle_size / 2:  # skip non-penetration particles
+        if signed_dist < pbd_system._particle_size / 2:  # skip non-penetration particles
             stiffness = 1.0  # value in [0, 1]
 
             # we don't consider friction for now
@@ -876,9 +884,9 @@ class LegacyCoupler(RBC):
             #################### rigid -> particle ####################
 
             energy_loss = 0.0  # value in [0, 1]
-            new_pos = pos_world + stiffness * contact_normal * (self.pbd_solver.particle_size / 2 - signed_dist)
-            prev_pos = self.pbd_solver.particles_reordered[i, batch_idx].ipos
-            new_vel = (new_pos - prev_pos) / self.pbd_solver._substep_dt
+            new_pos = pos_world + stiffness * contact_normal * (pbd_system._particle_size / 2 - signed_dist)
+            prev_pos = pbd_system.particles_reordered.ipos[i, batch_idx]
+            new_vel = (new_pos - prev_pos) / pbd_system._substep_dt
 
             #################### particle -> rigid ####################
             delta_mv = mass * (new_vel - vel)
@@ -916,6 +924,7 @@ class LegacyCoupler(RBC):
                 tool_data=self.tool_solver.data,
                 tool_info=self.tool_solver.info,
                 sph_system=self.sph_solver._system,
+                pbd_system=self.pbd_solver._system,
                 collider_static_config=self.rigid_solver.collider.collider_config,
             )
 
@@ -941,13 +950,16 @@ class LegacyCoupler(RBC):
                 links_state=self.rigid_solver.dyn_state.links,
                 sdf_info=self.rigid_solver.sdf._sdf_info,
                 rigid_info=self.rigid_solver.rigid_info,
+                pbd_system=self.pbd_solver._system,
                 collider_static_config=self.rigid_solver.collider.collider_config,
             )
 
             # 1-way: animate particles by links, over the substep interval and no faster than the clamp allows.
             substep_inv_dt = 1.0 / self.pbd_solver.substep_dt
             clamped_inv_dt = min(substep_inv_dt, CLAMPED_INV_DT)
-            self.kernel_pbd_rigid_solve_animate_particles_by_link(clamped_inv_dt, self.rigid_solver.dyn_state.links)
+            self.kernel_pbd_rigid_solve_animate_particles_by_link(
+                self.pbd_solver._system, clamped_inv_dt, self.rigid_solver.dyn_state.links
+            )
 
         if self.fem_solver.is_active:
             self.fem_surface_force(
@@ -986,6 +998,7 @@ class LegacyCoupler(RBC):
                 tool_data=self.tool_solver.data,
                 tool_info=self.tool_solver.info,
                 sph_system=self.sph_solver._system,
+                pbd_system=self.pbd_solver._system,
                 collider_static_config=self.rigid_solver.collider.collider_config,
             )
 
