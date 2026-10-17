@@ -13,8 +13,7 @@ def func_reorder_particles(
     system: qd.template(),
     f: int,
     has_rigid_coupling: qd.template(),
-    rigid_normal: qd.template(),
-    rigid_normal_reordered: qd.template(),
+    rigid_coupling: qd.template(),
     n_geoms: qd.template(),
 ):
     func_compute_reordered_idx(
@@ -52,9 +51,9 @@ def func_reorder_particles(
     if qd.static(has_rigid_coupling):
         for i_p, i_g, i_b in qd.ndrange(system._n_particles, n_geoms, system._B):
             if system.particles_ng.active[i_p, i_b]:
-                rigid_normal_reordered[system.particles_ng.reordered_idx[i_p, i_b], i_g, i_b] = rigid_normal[
-                    i_p, i_g, i_b
-                ]
+                rigid_coupling.rigid_normal_reordered[system.particles_ng.reordered_idx[i_p, i_b], i_g, i_b] = (
+                    rigid_coupling.rigid_normal[i_p, i_g, i_b]
+                )
 
 
 @qd.func(requires_top_level=True)
@@ -62,8 +61,7 @@ def func_copy_from_reordered(
     system: qd.template(),
     f: int,
     has_rigid_coupling: qd.template(),
-    rigid_normal: qd.template(),
-    rigid_normal_reordered: qd.template(),
+    rigid_coupling: qd.template(),
     n_geoms: qd.template(),
 ):
     for i_p, i_b in qd.ndrange(system._n_particles, system._B):
@@ -81,7 +79,7 @@ def func_copy_from_reordered(
     if qd.static(has_rigid_coupling):
         for i_p, i_g, i_b in qd.ndrange(system._n_particles, n_geoms, system._B):
             if system.particles_ng.active[i_p, i_b]:
-                rigid_normal[i_p, i_g, i_b] = rigid_normal_reordered[
+                rigid_coupling.rigid_normal[i_p, i_g, i_b] = rigid_coupling.rigid_normal_reordered[
                     system.particles_ng.reordered_idx[i_p, i_b], i_g, i_b
                 ]
 
@@ -563,11 +561,10 @@ def _kernel_reorder_particles(
     system: qd.template(),
     f: int,
     has_rigid_coupling: qd.template(),
-    rigid_normal: qd.template(),
-    rigid_normal_reordered: qd.template(),
+    rigid_coupling: qd.template(),
     n_geoms: qd.template(),
 ):
-    func_reorder_particles(system, f, has_rigid_coupling, rigid_normal, rigid_normal_reordered, n_geoms)
+    func_reorder_particles(system, f, has_rigid_coupling, rigid_coupling, n_geoms)
 
 
 @qd.kernel
@@ -581,11 +578,10 @@ def kernel_wcsph_pre_coupling(
     f: int,
     t: qd.f32,
     has_rigid_coupling: qd.template(),
-    rigid_normal: qd.template(),
-    rigid_normal_reordered: qd.template(),
+    rigid_coupling: qd.template(),
     n_geoms: qd.template(),
 ):
-    func_reorder_particles(system, f, has_rigid_coupling, rigid_normal, rigid_normal_reordered, n_geoms)
+    func_reorder_particles(system, f, has_rigid_coupling, rigid_coupling, n_geoms)
     func_compute_rho(system, f)
     func_compute_non_pressure_forces(system, f, t)
     func_compute_pressure_forces(system, f)
@@ -599,11 +595,10 @@ def kernel_dfsph_pre_coupling(
     t: qd.f32,
     graph_counter: qd.types.ndarray(qd.i32, ndim=0),
     has_rigid_coupling: qd.template(),
-    rigid_normal: qd.template(),
-    rigid_normal_reordered: qd.template(),
+    rigid_coupling: qd.template(),
     n_geoms: qd.template(),
 ):
-    func_reorder_particles(system, f, has_rigid_coupling, rigid_normal, rigid_normal_reordered, n_geoms)
+    func_reorder_particles(system, f, has_rigid_coupling, rigid_coupling, n_geoms)
     func_compute_rho(system, f)
     func_compute_DFSPH_factor(system, f)
     func_divergence_solve(system, graph_counter)
@@ -618,12 +613,11 @@ def kernel_post_coupling(
     system: qd.template(),
     f: int,
     has_rigid_coupling: qd.template(),
-    rigid_normal: qd.template(),
-    rigid_normal_reordered: qd.template(),
+    rigid_coupling: qd.template(),
     n_geoms: qd.template(),
 ):
     func_advect_position(system, f)
-    func_copy_from_reordered(system, f, has_rigid_coupling, rigid_normal, rigid_normal_reordered, n_geoms)
+    func_copy_from_reordered(system, f, has_rigid_coupling, rigid_coupling, n_geoms)
 
 
 @qd.func

@@ -98,9 +98,10 @@ class PBDBaseEntity(ParticleEntity):
         envs_idx = self._scene._sanitize_envs_idx(envs_idx)
         particles_idx_local = self._sanitize_particles_idx_local(particles_idx_local, envs_idx)
         particles_idx = particles_idx_local + self._particle_start
-        self._sim._coupler.kernel_attach_pbd_to_rigid_link(
-            self._solver._system, particles_idx, envs_idx, link_idx, self._scene.rigid_solver.dyn_state.links
-        )
+        coupling = self._solver._system.rigid_coupling
+        if coupling is None:
+            gs.raise_exception("PBD particles can attach to a rigid link only when rigid-PBD coupling is enabled.")
+        coupling.attach(particles_idx, envs_idx, link_idx, self._scene.rigid_solver.dyn_state.links)
 
     @gs.assert_built
     def fix_particles(self, particles_idx_local=None, envs_idx=None, zero_velocity=True):
@@ -139,9 +140,10 @@ class PBDBaseEntity(ParticleEntity):
         particles_idx_local = self._sanitize_particles_idx_local(particles_idx_local, envs_idx)
         particles_idx = particles_idx_local + self._particle_start
         self.solver._kernel_release_particle(particles_idx, envs_idx)
-        self.solver._sim._coupler.kernel_pbd_rigid_clear_animate_particles_by_link(
-            self._solver._system, particles_idx, envs_idx
-        )
+        coupling = self._solver._system.rigid_coupling
+        if coupling is None:
+            gs.raise_exception("PBD particles can detach from a rigid link only when rigid-PBD coupling is enabled.")
+        coupling.detach(particles_idx, envs_idx)
 
     # ------------------------------------------------------------------------------------
     # --------------------------------- naming methods -----------------------------------

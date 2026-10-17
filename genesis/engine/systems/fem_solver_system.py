@@ -8,7 +8,8 @@ import quadrants as qd
 
 import genesis as gs
 from genesis.engine import fem_runtime
-from genesis.engine.core import System, register_system
+from genesis.engine.core import HostAction, System, register_system
+from genesis.engine.fem_pairwise_coupling_runtime import kernel_fem_boundary
 from genesis.engine.fem_data import (
     FEMSolverData,
     FEMSurfaceMeta,
@@ -53,13 +54,20 @@ FEM_MODEL = (
 )
 
 
-@qd.data_oriented
 class FEMSolverSystem(System):
     """System owning the FEM model, typed data and explicit/implicit integration of the scene."""
 
     def __init__(self, scene: "Scene") -> None:
         super().__init__(scene)
         self.solver = scene.sim.fem_solver
+
+    @System.action_collection(kind="host", call_args=("f",))
+    def post_pairwise_constraints(self):
+        """Pair-owned constraints applied after all pairwise interactions and before FEM integration."""
+
+    @System.protocol
+    def on_post_pairwise_constraint(self, *, action: HostAction) -> None:
+        self.post_pairwise_constraints += action
 
     @System.action(kind="host")
     def initialize(self):
@@ -209,6 +217,9 @@ class FEMSolverSystem(System):
                 fem_runtime.apply_soft_constraints(self, f)
 
     def substep_post_coupling(self, f: int) -> None:
+        for action in self.post_pairwise_constraints.actions:
+            action.invoke((f,))
+        kernel_fem_boundary(f, self)
         fem_runtime.compute_pos(self, f)
         if self.solver._constraints_initialized and not self._use_implicit_solver:
             fem_runtime.apply_hard_constraints(self, f)

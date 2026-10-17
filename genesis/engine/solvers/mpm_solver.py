@@ -193,21 +193,20 @@ class MPMSolver(GravityMixin, TimeBasedMixin, Solver):
         self._system.substep_pre_coupling(f)
 
     def substep_pre_coupling_grad(self, f):
-        coupler = self.sim.coupler
-        cpic_active = self._system._enable_CPIC and coupler._rigid_mpm
+        cpic_active = self._system.rigid_coupling is not None and self._system.rigid_coupling.data is not None
+        mpm_rigid_coupling = self._system.rigid_coupling if cpic_active else None
         mpm_runtime.p2g.grad(
             self._system,
             f,
-            self.sim.coupler.rigid_solver.dyn_state.geoms,
-            self.sim.coupler.rigid_solver.dyn_info.geoms,
-            self.sim.coupler.rigid_solver.dyn_state.links,
-            self.sim.coupler.rigid_solver.rigid_info,
-            self.sim.coupler.rigid_solver.sdf._sdf_info,
-            self.sim.coupler.rigid_solver.collider.collider_config,
+            self.sim.rigid_solver.dyn_state.geoms,
+            self.sim.rigid_solver.dyn_info.geoms,
+            self.sim.rigid_solver.dyn_state.links,
+            self.sim.rigid_solver.rigid_info,
+            self.sim.rigid_solver.sdf._sdf_info,
+            self.sim.rigid_solver.collider.collider_config,
             cpic_active,
-            coupler.cpic_flag if cpic_active else None,
-            coupler.mpm_rigid_normal if cpic_active else None,
-            self.sim.coupler.rigid_solver.n_geoms,
+            mpm_rigid_coupling,
+            self.sim.rigid_solver.n_geoms,
         )
         mpm_runtime.svd_grad(self._system, f)
         mpm_runtime.compute_F_tmp.grad(self._system, f)
@@ -216,18 +215,16 @@ class MPMSolver(GravityMixin, TimeBasedMixin, Solver):
         self._system.substep_post_coupling(f)
 
     def substep_post_coupling_grad(self, f):
-        coupler = self.sim.coupler
-        cpic_active = self._system._enable_CPIC and coupler._rigid_mpm
+        cpic_active = self._system.rigid_coupling is not None and self._system.rigid_coupling.data is not None
+        mpm_rigid_coupling = self._system.rigid_coupling if cpic_active else None
         mpm_runtime.g2p.grad(
             self._system,
             f,
-            self.sim.coupler.rigid_solver.dyn_info.geoms,
-            self.sim.coupler.rigid_solver.dyn_state.links,
-            self.sim.coupler.rigid_solver.rigid_info,
-            coupler,
+            self.sim.rigid_solver.dyn_info.geoms,
+            self.sim.rigid_solver.dyn_state.links,
+            self.sim.rigid_solver.rigid_info,
             cpic_active,
-            coupler.cpic_flag if cpic_active else None,
-            coupler.mpm_rigid_normal if cpic_active else None,
+            mpm_rigid_coupling,
         )
 
     def collect_output_grads(self):

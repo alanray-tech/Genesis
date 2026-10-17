@@ -13,6 +13,7 @@ class SimulatorEngine(Engine):
     def build(self):
         super().build()
         # The Systems import this module to register, so they are imported here rather than declared on the class
+        from .coupler_system import CouplerSystem
         from .initializer import Initializer
         from .rigid_solver_system import RigidSolverSystem
         from .substepper import Substepper
@@ -21,6 +22,8 @@ class SimulatorEngine(Engine):
         substepper = self.require(Substepper)
         self.input_pipeline = Pipeline(substepper.process_input)
         self.substep_pipeline = Pipeline(substepper.substep)
+        self.coupler_reset_pipeline = Pipeline(self.require(CouplerSystem).run_reset)
+        self.coupling_grad_pipeline = Pipeline(self.require(CouplerSystem).run_couple_grad)
         # A scene simulating rigid entities alone advances the rigid solver directly, skipping the inputs, which only
         # feed the differentiable tape, and the coupler, which has nothing to exchange
         self.rigid_substep_pipeline = Pipeline(self.require(RigidSolverSystem).substep)

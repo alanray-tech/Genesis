@@ -708,7 +708,7 @@ class SAPCoupler(RBC):
             self.update_vel(i_step, dofs_state=self.rigid_solver.dyn_state.dofs)
 
     def couple_grad(self, i_step):
-        gs.raise_exception("couple_grad is not available for SAPCoupler. Please use LegacyCoupler instead.")
+        gs.raise_exception("couple_grad is not available for SAPCoupler. Please use PairwiseCoupler instead.")
 
     @qd.kernel
     def update_vel(self, i_step: qd.i32, dofs_state: array_class.DofsState):

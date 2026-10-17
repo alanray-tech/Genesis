@@ -52,6 +52,12 @@ class MPMSolverSystem(System):
         super().__init__(scene)
         self.solver = scene.sim.mpm_solver
 
+    def build(self) -> None:
+        # Imported here to avoid the pair System's reciprocal module dependency.
+        from .pairwise_coupling_systems import MPMRigidCouplingSystem
+
+        self.rigid_coupling = self.find(MPMRigidCouplingSystem)
+
     @System.action(kind="host")
     def initialize(self):
         return self.initialize_data
@@ -112,9 +118,8 @@ class MPMSolverSystem(System):
         """Update deformation gradients and transfer particle state to the grid."""
         rigid_system = self.rigid_sdf_system.rigid_solver_system
         coupler = self._scene.sim.coupler
-        cpic_active = self._enable_CPIC and coupler._rigid_mpm
-        cpic_flag = coupler.cpic_flag if cpic_active else None
-        mpm_rigid_normal = coupler.mpm_rigid_normal if cpic_active else None
+        cpic_active = self.rigid_coupling is not None and self.rigid_coupling.data is not None
+        mpm_rigid_coupling = self.rigid_coupling if cpic_active else None
         if self._sim.requires_grad:
             mpm_runtime.reset_grid_and_grad(self, f)
             mpm_runtime.compute_F_tmp(self, f)
@@ -133,28 +138,23 @@ class MPMSolverSystem(System):
             self.rigid_sdf_system.sdf._sdf_info,
             rigid_system.collider_data.collider_config,
             cpic_active,
-            cpic_flag,
-            mpm_rigid_normal,
+            mpm_rigid_coupling,
             rigid_system.n_geoms,
         )
 
     def substep_post_coupling(self, f: int) -> None:
         """Transfer the coupled grid velocity back to particles and clear the touched grid cells."""
         rigid_system = self.rigid_sdf_system.rigid_solver_system
-        coupler = self._scene.sim.coupler
-        cpic_active = self._enable_CPIC and coupler._rigid_mpm
-        cpic_flag = coupler.cpic_flag if cpic_active else None
-        mpm_rigid_normal = coupler.mpm_rigid_normal if cpic_active else None
+        cpic_active = self.rigid_coupling is not None and self.rigid_coupling.data is not None
+        mpm_rigid_coupling = self.rigid_coupling if cpic_active else None
         mpm_runtime.g2p(
             self,
             f,
             rigid_system.dyn_info.geoms,
             rigid_system.dyn_state.links,
             rigid_system.rigid_info,
-            coupler,
             cpic_active,
-            cpic_flag,
-            mpm_rigid_normal,
+            mpm_rigid_coupling,
         )
         if self.solver._constraints_initialized:
             mpm_runtime.apply_particle_constraints(self, f, rigid_system.dyn_state.links)

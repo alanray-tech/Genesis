@@ -11,7 +11,7 @@ from genesis.utils.array_class import DataItem, DataKind, iter_data
 from genesis.utils.misc import indices_to_mask
 from genesis.utils.tools import StepTimer
 
-from .couplers import IPCCoupler, LegacyCoupler, SAPCoupler
+from .couplers import IPCCoupler, PairwiseCoupler, SAPCoupler
 from .entities import HybridEntity
 from .sensors import SensorManager
 from .solvers import (
@@ -100,7 +100,7 @@ class Simulator(RBC):
         if isinstance(options.coupler, SAPCouplerOptions):
             self._coupler = SAPCoupler(self, options.coupler)
         elif isinstance(options.coupler, LegacyCouplerOptions):
-            self._coupler = LegacyCoupler(self, options.coupler)
+            self._coupler = PairwiseCoupler(self, options.coupler)
         elif isinstance(options.coupler, IPCCouplerOptions):
             self._coupler = IPCCoupler(self, options.coupler)
         else:
@@ -241,7 +241,8 @@ class Simulator(RBC):
             self._rigid_substep_pipeline = self._engine.rigid_substep_pipeline
 
         # A coupler exchanges state once per substep, so it is built once the rate that loop runs at is known.
-        self._coupler.build()
+        if not isinstance(self._coupler, PairwiseCoupler):
+            self._coupler.build()
 
         if self.n_envs > 0 and self.sf_solver.is_active:
             gs.raise_exception("Batching is not supported for SF solver as of now.")
@@ -270,7 +271,10 @@ class Simulator(RBC):
 
     def _restart(self, envs_idx=None):
         """Restart the coupler, the gradient tape and the sensors."""
-        self._coupler.reset(envs_idx=envs_idx)
+        if self._engine is None:
+            self._coupler.reset(envs_idx=envs_idx)
+        else:
+            self._engine.coupler_reset_pipeline.run(envs_idx)
 
         # TODO: keeping as is for now
         self.reset_grad()
@@ -432,7 +436,7 @@ class Simulator(RBC):
 
     def sub_step_grad(self, f):
         self.substep_post_coupling_grad(f)
-        self._coupler.couple_grad(f)
+        self._engine.coupling_grad_pipeline.run(f)
         self.substep_pre_coupling_grad(f)
 
     # -------------- pre coupling --------------

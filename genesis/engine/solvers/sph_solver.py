@@ -137,17 +137,16 @@ class SPHSolver(GravityMixin, TimeBasedMixin, Solver):
         )
 
     def _kernel_reorder_particles(self, f):
-        if self._coupler._rigid_sph:
+        if self._system.rigid_coupling is not None:
             sph_runtime._kernel_reorder_particles(
                 self._system,
                 f,
                 True,
-                self._coupler.sph_rigid_normal,
-                self._coupler.sph_rigid_normal_reordered,
-                self._coupler.rigid_solver.n_geoms,
+                self._system.rigid_coupling,
+                self._system.rigid_coupling.rigid.n_geoms,
             )
         else:
-            sph_runtime._kernel_reorder_particles(self._system, f, False, None, None, 0)
+            sph_runtime._kernel_reorder_particles(self._system, f, False, None, 0)
 
     def _kernel_compute_rho(self, f):
         sph_runtime._kernel_compute_rho(self._system, f)
