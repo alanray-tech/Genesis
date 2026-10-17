@@ -47,6 +47,9 @@ class SimOptions(Options):
         Height of the floor in meters. Defaults to 0.0.
     requires_grad : bool, optional
         Whether to enable differentiable mode. Defaults to False.
+    pipeline : {"host", "graph"}, optional
+        Whole-scene substep pipeline. ``"host"`` keeps the kernel-by-kernel fallback; ``"graph"`` freezes the active
+        System set at build and launches one device graph per substep. Defaults to ``"host"``.
     use_hydroelastic_contact : bool, optional
         Whether to use hydroelastic contact. Defaults to False.
     """
@@ -57,6 +60,7 @@ class SimOptions(Options):
     gravity: Vec3FType = (0.0, 0.0, -9.81)
     floor_height: float = 0.0
     requires_grad: StrictBool = False
+    pipeline: Literal["host", "graph"] = "host"
 
     _steps_local: int | None = PrivateAttr(default=None)
 

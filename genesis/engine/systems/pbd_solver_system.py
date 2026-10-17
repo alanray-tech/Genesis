@@ -55,7 +55,6 @@ PBD_MODEL = (
 )
 
 
-@qd.data_oriented
 class PBDSolverSystem(System):
     """System owning the particle and constraint data and simulation of the PBD solver of the scene."""
 
@@ -63,8 +62,12 @@ class PBDSolverSystem(System):
         super().__init__(scene)
         self.solver = scene.sim.pbd_solver
 
+    @System.data
+    def gravity_data(self):
+        return self._gravity
+
     def build(self) -> None:
-        from .pairwise_coupling_systems import PBDRigidCouplingSystem
+        from .pbd_rigid_coupling_system import PBDRigidCouplingSystem
 
         self.rigid_coupling = self.find(PBDRigidCouplingSystem)
 
@@ -108,6 +111,14 @@ class PBDSolverSystem(System):
     def post_coupling(self):
         return self.substep_post_coupling
 
+    @System.action(kind="stage")
+    def graph_pre_coupling(self):
+        return func_graph_pbd_pre, self
+
+    @System.action(kind="stage")
+    def graph_post_coupling(self):
+        return func_graph_pbd_post, self
+
     def substep_pre_coupling(self, f: int) -> None:
         """Apply external forces, solve the topology and spatial constraints, and compute effective velocity."""
         pbd_runtime.kernel_pre_coupling(self, f, self._sim.cur_t)
@@ -121,3 +132,26 @@ class PBDSolverSystem(System):
 def create_pbd_solver_system(scene: "Scene") -> PBDSolverSystem | None:
     """Create the System owning the PBD solver whenever it simulates an entity."""
     return PBDSolverSystem(scene) if scene.sim.pbd_solver.is_active else None
+
+
+@qd.func(requires_top_level=True)
+def func_graph_pbd_pre(system: qd.template(), f: int, t: float):
+    pbd_runtime.func_store_initial_pos(system, f)
+    pbd_runtime.func_apply_external_force(system, f, t)
+    if qd.static(system._n_edges > 0):
+        pbd_runtime.func_solve_stretch(system, f)
+    if qd.static(system._n_inner_edges > 0):
+        pbd_runtime.func_solve_bending(system, f)
+    if qd.static(system._n_elems > 0):
+        pbd_runtime.func_solve_volume(system, f)
+    pbd_runtime.func_reorder_particles(system, f)
+    pbd_runtime.func_solve_density(system, f)
+    pbd_runtime.func_solve_viscosity(system, f)
+    pbd_runtime.func_solve_collision(system, f)
+    pbd_runtime.func_compute_velocity(system, f)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_pbd_post(system: qd.template(), f: int, t: float):
+    pbd_runtime.func_copy_from_reordered(system, f)
+    pbd_runtime.func_solve_boundary_collision(system, f)

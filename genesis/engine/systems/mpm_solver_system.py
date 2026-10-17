@@ -6,7 +6,7 @@ import numpy as np
 import quadrants as qd
 
 import genesis as gs
-from genesis.engine import mpm_runtime
+from genesis.engine import mpm_graph_runtime, mpm_runtime
 from genesis.engine.core import Require, System, register_system
 from genesis.engine.mpm_data import MPMSolverData, get_mpm_material_config, get_mpm_particle_constraints
 from genesis.engine.solvers.base_solver import adopt_model
@@ -42,7 +42,6 @@ MPM_MODEL = (
 )
 
 
-@qd.data_oriented
 class MPMSolverSystem(System):
     """System owning the particle/grid data and simulation of the MPM solver of the scene."""
 
@@ -52,11 +51,17 @@ class MPMSolverSystem(System):
         super().__init__(scene)
         self.solver = scene.sim.mpm_solver
 
+    @System.data
+    def gravity_data(self):
+        return self._gravity
+
     def build(self) -> None:
         # Imported here to avoid the pair System's reciprocal module dependency.
-        from .pairwise_coupling_systems import MPMRigidCouplingSystem
+        from .mpm_rigid_coupling_system import MPMRigidCouplingSystem
 
         self.rigid_coupling = self.find(MPMRigidCouplingSystem)
+        # The graph specializes this build-time capability and compiles out the absent constraint stage.
+        self.has_particle_constraints = self.solver._constraints_initialized
 
     @System.action(kind="host")
     def initialize(self):
@@ -113,6 +118,20 @@ class MPMSolverSystem(System):
     @System.action(kind="host")
     def post_coupling(self):
         return self.substep_post_coupling
+
+    @System.action(kind="stage")
+    def graph_pre_coupling(self):
+        rigid = self.rigid_sdf_system.rigid_solver_system
+        if self.rigid_coupling is not None and self.solver.enable_CPIC:
+            return func_graph_mpm_pre_cpic, self, rigid, self.rigid_sdf_system, self.rigid_coupling
+        return func_graph_mpm_pre, self, rigid, self.rigid_sdf_system
+
+    @System.action(kind="stage")
+    def graph_post_coupling(self):
+        rigid = self.rigid_sdf_system.rigid_solver_system
+        if self.rigid_coupling is not None and self.solver.enable_CPIC:
+            return func_graph_mpm_post_cpic, self, rigid, self.rigid_coupling
+        return func_graph_mpm_post, self, rigid
 
     def substep_pre_coupling(self, f: int) -> None:
         """Update deformation gradients and transfer particle state to the grid."""
@@ -175,3 +194,92 @@ class MPMSolverSystem(System):
 def create_mpm_solver_system(scene: "Scene") -> MPMSolverSystem | None:
     """Create the System owning the MPM solver whenever it simulates an entity."""
     return MPMSolverSystem(scene) if scene.sim.mpm_solver.is_active else None
+
+
+@qd.func(requires_top_level=True)
+def func_graph_mpm_pre(system: qd.template(), rigid: qd.template(), rigid_sdf: qd.template(), f: int, t: float):
+    if qd.static(system.material_config.needs_svd):
+        mpm_graph_runtime.graph_compute_F_tmp_and_svd(system, f)
+    else:
+        mpm_graph_runtime.graph_compute_F_tmp_only(system, f)
+    mpm_graph_runtime.graph_p2g(
+        system,
+        f,
+        rigid.dyn_state.geoms,
+        rigid.dyn_info.geoms,
+        rigid.dyn_state.links,
+        rigid.rigid_info,
+        rigid_sdf.sdf._sdf_info,
+        rigid.collider_data.collider_config,
+        False,
+        None,
+        0,
+    )
+
+
+@qd.func(requires_top_level=True)
+def func_graph_mpm_pre_cpic(
+    system: qd.template(),
+    rigid: qd.template(),
+    rigid_sdf: qd.template(),
+    coupling: qd.template(),
+    f: int,
+    t: float,
+):
+    if qd.static(system.material_config.needs_svd):
+        mpm_graph_runtime.graph_compute_F_tmp_and_svd(system, f)
+    else:
+        mpm_graph_runtime.graph_compute_F_tmp_only(system, f)
+    mpm_graph_runtime.graph_p2g(
+        system,
+        f,
+        rigid.dyn_state.geoms,
+        rigid.dyn_info.geoms,
+        rigid.dyn_state.links,
+        rigid.rigid_info,
+        rigid_sdf.sdf._sdf_info,
+        rigid.collider_data.collider_config,
+        True,
+        coupling,
+        rigid.n_geoms,
+    )
+
+
+@qd.func(requires_top_level=True)
+def func_graph_mpm_post(system: qd.template(), rigid: qd.template(), f: int, t: float):
+    mpm_graph_runtime.graph_g2p(
+        system,
+        f,
+        rigid.dyn_info.geoms,
+        rigid.dyn_state.links,
+        rigid.rigid_info,
+        False,
+        None,
+    )
+    if qd.static(system.has_particle_constraints):
+        mpm_graph_runtime.graph_apply_particle_constraints(system, f, rigid.dyn_state.links)
+    mpm_graph_runtime.graph_reset_dirty_cells(system, f)
+    mpm_graph_runtime.graph_reset_dirty_count(system)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_mpm_post_cpic(
+    system: qd.template(),
+    rigid: qd.template(),
+    coupling: qd.template(),
+    f: int,
+    t: float,
+):
+    mpm_graph_runtime.graph_g2p(
+        system,
+        f,
+        rigid.dyn_info.geoms,
+        rigid.dyn_state.links,
+        rigid.rigid_info,
+        True,
+        coupling,
+    )
+    if qd.static(system.has_particle_constraints):
+        mpm_graph_runtime.graph_apply_particle_constraints(system, f, rigid.dyn_state.links)
+    mpm_graph_runtime.graph_reset_dirty_cells(system, f)
+    mpm_graph_runtime.graph_reset_dirty_count(system)

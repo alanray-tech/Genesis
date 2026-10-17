@@ -113,6 +113,7 @@ class Simulator(RBC):
         self._engine: SimulatorEngine | None = None
         self._input_pipeline: Pipeline | None = None
         self._substep_pipeline: Pipeline | None = None
+        self._split_substep_pipelines: tuple[Pipeline, ...] = ()
         self._rigid_substep_pipeline: Pipeline | None = None
 
         # states
@@ -234,9 +235,13 @@ class Simulator(RBC):
         self._engine = SimulatorEngine(self.scene)
         self._engine.build()
         self._engine.init_pipeline.run()
+        self._engine.finalize_device_data()
+        if self.options.pipeline == "graph":
+            self._rigid_only = False
         if not isinstance(self._coupler, IPCCoupler):
             self._input_pipeline = self._engine.input_pipeline
             self._substep_pipeline = self._engine.substep_pipeline
+            self._split_substep_pipelines = self._engine.split_substep_pipelines
         if self.rigid_solver.is_active:
             self._rigid_substep_pipeline = self._engine.rigid_substep_pipeline
 
@@ -426,8 +431,27 @@ class Simulator(RBC):
             solver.process_input_grad()
 
     def substep(self, f):
+        if self._split_substep_pipelines:
+            self._engine.prepare_graph_substep()
+            for pipeline in self._split_substep_pipelines:
+                pipeline.run(f, self.cur_t)
+            if self._engine.graph_rigid_system is not None:
+                self._engine.graph_rigid_system.mark_forward_updated()
+            if self._engine.graph_kinematic_system is not None:
+                self._engine.graph_kinematic_system._is_forward_pos_updated = True
+                self._engine.graph_kinematic_system._is_forward_vel_updated = True
+            return
         if self._substep_pipeline is not None:
-            self._substep_pipeline.run(f)
+            if self._engine.substep_takes_time:
+                self._engine.prepare_graph_substep()
+                self._substep_pipeline.run(f, self.cur_t)
+                if self._engine.graph_rigid_system is not None:
+                    self._engine.graph_rigid_system.mark_forward_updated()
+                if self._engine.graph_kinematic_system is not None:
+                    self._engine.graph_kinematic_system._is_forward_pos_updated = True
+                    self._engine.graph_kinematic_system._is_forward_vel_updated = True
+            else:
+                self._substep_pipeline.run(f)
             return
         self._coupler.preprocess(f)
         self.substep_pre_coupling(f)
