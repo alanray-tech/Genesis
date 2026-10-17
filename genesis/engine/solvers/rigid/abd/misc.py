@@ -858,8 +858,8 @@ def func_apply_coupling_force(
     links_state.cfrc_coupling_vel[link_idx, env_idx] -= force
 
 
-@qd.kernel(fastcache=True)
-def kernel_wakeup_coupled_links(
+@qd.func(requires_top_level=True)
+def func_wakeup_coupled_links(
     dyn_state: array_class.DynState,
     constraint_state: array_class.ConstraintState,
     dyn_info: array_class.DynInfo,
@@ -889,6 +889,17 @@ def kernel_wakeup_coupled_links(
                 rigid_info,
                 rigid_config,
             )
+
+
+@qd.kernel(fastcache=True)
+def kernel_wakeup_coupled_links(
+    dyn_state: array_class.DynState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+):
+    func_wakeup_coupled_links(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
 
 
 @qd.func

@@ -1,7 +1,7 @@
 """Engine of the simulator, with host fallback and whole-scene graph pipelines."""
 
 import genesis as gs
-from genesis.engine.core import Engine, Pipeline, make_stage_schedule
+from genesis.engine.core import Engine, Pipeline
 
 
 class SimulatorEngine(Engine):
@@ -17,7 +17,15 @@ class SimulatorEngine(Engine):
         from .coupler_system import CouplerSystem
         from .initializer import Initializer
         from .rigid_solver_system import RigidSolverSystem
-        from .substepper import Substepper, kernel_graph_substep
+        from .substepper import (
+            Substepper,
+            kernel_graph_couple_post,
+            kernel_graph_particle_pre,
+            kernel_graph_rigid_collision,
+            kernel_graph_rigid_dynamics,
+            kernel_graph_rigid_solve_post,
+            kernel_graph_substep,
+        )
 
         self.init_pipeline = Pipeline(self.require(Initializer).initialize)
         substepper = self.require(Substepper)
@@ -40,9 +48,36 @@ class SimulatorEngine(Engine):
                     "The whole-scene graph pipeline currently supports Rigid/Kinematic or Tool/MPM/SPH/PBD/SF scenes without "
                     f"{', '.join(unsupported)} Systems."
                 )
-            self.graph_kinematic_system = None
-            self.graph_schedule = make_stage_schedule(substepper)
-            self._graph_entries = (kernel_graph_substep,)
+            self.graph_rigid_system = substepper.rigid if substepper.rigid.is_active else None
+            self.graph_kinematic_system = substepper.kinematic if substepper.kinematic.is_active else None
+            has_rigid_graph = bool(substepper.graph_rigid_dynamics.actions)
+            has_particle_pre = bool(substepper.graph_particle_pre.actions)
+            has_couple_post = bool(
+                substepper.graph_solver_post.actions
+                or substepper.graph_mpm_grid_begin.actions
+                or substepper.graph_parallel_couplings.actions
+            )
+            # Keep immutable control topology separate from the GlobalDataContext built after Data initialization.
+            # Graph kernels therefore receive neither Substepper nor its dependency graph as a second data root.
+            self.graph_schedule = substepper.action_schedule()
+
+            if self.scene.options.sim.graph_partition == "single":
+                self._graph_entries = (kernel_graph_substep,)
+            else:
+                graph_entries = []
+                if has_rigid_graph:
+                    graph_entries.extend(
+                        (
+                            kernel_graph_rigid_dynamics,
+                            kernel_graph_rigid_collision,
+                            kernel_graph_rigid_solve_post,
+                        )
+                    )
+                if has_particle_pre:
+                    graph_entries.append(kernel_graph_particle_pre)
+                if has_couple_post:
+                    graph_entries.append(kernel_graph_couple_post)
+                self._graph_entries = tuple(graph_entries)
             self.substep_pipeline = None
             self.split_substep_pipelines = ()
         else:
@@ -58,7 +93,12 @@ class SimulatorEngine(Engine):
         if not self.substep_takes_time:
             return
         self.context = self.create_context()
-        self.substep_pipeline = Pipeline(self._graph_entries[0], self.context, self.graph_schedule)
+        if self.scene.options.sim.graph_partition == "single":
+            self.substep_pipeline = Pipeline(self._graph_entries[0], self.context, self.graph_schedule)
+        else:
+            self.split_substep_pipelines = tuple(
+                Pipeline(entry, self.context, self.graph_schedule) for entry in self._graph_entries
+            )
 
     def prepare_graph_substep(self) -> None:
         """Run host-only cache invalidation before the one device graph launch."""

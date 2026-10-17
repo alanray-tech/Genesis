@@ -120,6 +120,13 @@ class Substepper(System):
         # Resolve System admission once; absent Systems contribute no Action to the frozen device schedule.
         if self.mpm_rigid_coupling is not None and self.mpm_rigid_coupling.mpm.solver.enable_CPIC:
             self.graph_preprocess += self.mpm_rigid_coupling.graph_preprocess
+        if self.rigid.is_active:
+            self.graph_rigid_wakeup += self.rigid.graph_wakeup
+            self.graph_rigid_dynamics += self.rigid.graph_dynamics
+            self.graph_rigid_collision += self.rigid.graph_collision
+            self.graph_rigid_post += self.rigid.graph_post
+        if self.constraint is not None:
+            self.graph_rigid_solve += self.constraint.graph_solve
         for system in (self.tool, self.mpm, self.sph, self.pbd, self.sf):
             if system is not None:
                 self.graph_particle_pre += system.graph_pre_coupling
@@ -141,6 +148,8 @@ class Substepper(System):
         for system in (self.tool, self.mpm, self.sph, self.pbd):
             if system is not None:
                 self.graph_solver_post += system.graph_post_coupling
+        if self.kinematic.is_active:
+            self.graph_solver_post += self.kinematic.graph_post_coupling
 
     def process_input(self, in_backward: bool) -> None:
         """Apply the external commands of one step to every solver, each of which applies its own."""
@@ -216,65 +225,65 @@ def create_substepper(scene: "Scene") -> Substepper:
 @qd.kernel(graph=True)
 def kernel_graph_substep(context: qd.template(), schedule: qd.template(), f: qd.i32, t: qd.f32):
     """One graph containing the complete frozen lifecycle schedule."""
-    invoke_stage_actions(schedule.graph_preprocess, (f, t))
-    invoke_stage_actions(schedule.graph_rigid_wakeup, (f, t))
-    invoke_stage_actions(schedule.graph_rigid_dynamics, (f, t))
-    invoke_stage_actions(schedule.graph_rigid_collision, (f, t))
-    invoke_stage_actions(schedule.graph_rigid_solve, (f, t))
-    invoke_stage_actions(schedule.graph_rigid_post, (f, t))
-    invoke_stage_actions(schedule.graph_particle_pre, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_grid_begin, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_tool, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_rigid, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_sph, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_pbd, (f, t))
+    invoke_stage_actions(schedule.collections.graph_preprocess, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_wakeup, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_dynamics, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_collision, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_solve, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_post, (f, t))
+    invoke_stage_actions(schedule.collections.graph_particle_pre, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_grid_begin, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_tool, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_rigid, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_sph, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_pbd, (f, t))
     # qd_ext documents why this parallel unrolling must remain syntactically in the graph kernel. MPM grid
     # finalization and default pair couplers have no cross-branch reads/writes.
     with qd.graph.parallel_context():
-        for action in qd.static(schedule.graph_mpm_grid_end):
+        for action in qd.static(schedule.collections.graph_mpm_grid_end):
             with qd.graph.parallel():
                 action.invoke((f, t))
-        for action in qd.static(schedule.graph_parallel_couplings):
+        for action in qd.static(schedule.collections.graph_parallel_couplings):
             with qd.graph.parallel():
                 action.invoke((f, t))
-    invoke_stage_actions(schedule.graph_solver_post, (f, t))
+    invoke_stage_actions(schedule.collections.graph_solver_post, (f, t))
 
 
 @qd.kernel(graph=True)
 def kernel_graph_rigid_dynamics(context: qd.template(), schedule: qd.template(), f: qd.i32, t: qd.f32):
-    invoke_stage_actions(schedule.graph_preprocess, (f, t))
-    invoke_stage_actions(schedule.graph_rigid_wakeup, (f, t))
-    invoke_stage_actions(schedule.graph_rigid_dynamics, (f, t))
+    invoke_stage_actions(schedule.collections.graph_preprocess, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_wakeup, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_dynamics, (f, t))
 
 
 @qd.kernel(graph=True)
 def kernel_graph_rigid_collision(context: qd.template(), schedule: qd.template(), f: qd.i32, t: qd.f32):
-    invoke_stage_actions(schedule.graph_rigid_collision, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_collision, (f, t))
 
 
 @qd.kernel(graph=True)
 def kernel_graph_rigid_solve_post(context: qd.template(), schedule: qd.template(), f: qd.i32, t: qd.f32):
-    invoke_stage_actions(schedule.graph_rigid_solve, (f, t))
-    invoke_stage_actions(schedule.graph_rigid_post, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_solve, (f, t))
+    invoke_stage_actions(schedule.collections.graph_rigid_post, (f, t))
 
 
 @qd.kernel(graph=True)
 def kernel_graph_particle_pre(context: qd.template(), schedule: qd.template(), f: qd.i32, t: qd.f32):
-    invoke_stage_actions(schedule.graph_particle_pre, (f, t))
+    invoke_stage_actions(schedule.collections.graph_particle_pre, (f, t))
 
 
 @qd.kernel(graph=True)
 def kernel_graph_couple_post(context: qd.template(), schedule: qd.template(), f: qd.i32, t: qd.f32):
-    invoke_stage_actions(schedule.graph_mpm_grid_begin, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_tool, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_rigid, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_sph, (f, t))
-    invoke_stage_actions(schedule.graph_mpm_pbd, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_grid_begin, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_tool, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_rigid, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_sph, (f, t))
+    invoke_stage_actions(schedule.collections.graph_mpm_pbd, (f, t))
     with qd.graph.parallel_context():
-        for action in qd.static(schedule.graph_mpm_grid_end):
+        for action in qd.static(schedule.collections.graph_mpm_grid_end):
             with qd.graph.parallel():
                 action.invoke((f, t))
-        for action in qd.static(schedule.graph_parallel_couplings):
+        for action in qd.static(schedule.collections.graph_parallel_couplings):
             with qd.graph.parallel():
                 action.invoke((f, t))
-    invoke_stage_actions(schedule.graph_solver_post, (f, t))
+    invoke_stage_actions(schedule.collections.graph_solver_post, (f, t))

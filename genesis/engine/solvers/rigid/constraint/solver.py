@@ -5925,3 +5925,199 @@ def func_update_qacc(
 from genesis.utils.deprecated_module_wrapper import create_virtual_deprecated_module
 
 create_virtual_deprecated_module(__name__, "genesis.engine.solvers.rigid.constraint_solver_decomp")
+
+
+# Whole-scene graph form of the solve seed; generated mechanically from func_solve_init.
+@qd.func(requires_top_level=True)
+def func_solve_init_graph(
+    dyn_state: array_class.DynState,
+    constraint_state: array_class.ConstraintState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+    write_L: bool,
+):
+    # write_L is the one thing the two solve arms ask differently of this init, at runtime so that the kernel compiles
+    # once for both: the monolith reads L back from nt_H in its incremental iterations, so its seed persists the
+    # factor there, while the decomposed graph maintains the assembled Hessian in nt_H and re-factors every iteration.
+    _B = dyn_state.dofs.acc_smooth.shape[1]
+    n_dofs = dyn_state.dofs.acc_smooth.shape[0]
+
+    # The one arm whose factor, gradient and convergence certificate are all seeded inside its own body (see
+    # _kernel_solve_monolith) rather than here: the GPU monolith without the tiled factor seed self-inits per env, so
+    # every seed in this kernel routes around it (the block assembly stays here where the tiled seed is on). The
+    # decomposed arm only runs with the cooperative kernels, which imply the tiled seed, so the predicate holds for
+    # every arm this init can serve.
+    is_self_seeding = qd.static(
+        rigid_config.solver_type == gs.constraint_solver.Newton
+        and rigid_config.backend != gs.cpu
+        and (not rigid_config.enable_tiled_island_seed or rigid_config.has_scalar_seed_factor)
+    )
+    if qd.static(rigid_config.enable_signorini_contact):
+        # The first row update of the solve seeds every latch, see func_relatch_cone.
+        n_cones = constraint_state.cone_latch.shape[0]
+        qd.loop_config(name="reset_cone_latches", serialize=rigid_config.para_level < gs.PARA_LEVEL.PARTIAL)
+        for i_cone, i_b in qd.ndrange(n_cones, _B):
+            constraint_state.cone_latch[i_cone, i_b] = -1.0
+
+    if qd.static(rigid_config.enable_mujoco_compatibility):
+        # Compute cost for warmstart state (i.e. acceleration at previous timestep)
+        initialize_Ma(constraint_state.Ma_ws, constraint_state.qacc_ws, dyn_info, rigid_info, rigid_config)
+
+        # Keyword calls: passing a struct member positionally alongside its parent struct breaks quadrants'
+        # func-argument expansion (the member is duplicated in the flattened call).
+        initialize_Jaref(qacc=constraint_state.qacc_ws, constraint_state=constraint_state, rigid_config=rigid_config)
+        func_update_constraint(
+            qacc=constraint_state.qacc_ws,
+            Ma=constraint_state.Ma_ws,
+            cost=constraint_state.cost_ws,
+            dyn_state=dyn_state,
+            constraint_state=constraint_state,
+            rigid_config=rigid_config,
+        )
+
+        # Compute cost for current state (assuming constraint-free acceleration)
+        initialize_Ma(constraint_state.Ma, dyn_state.dofs.acc_smooth, dyn_info, rigid_info, rigid_config)
+
+        initialize_Jaref(dyn_state.dofs.acc_smooth, constraint_state, rigid_config)
+        # Keyword call: see the quadrants member-expansion note above.
+        func_update_constraint(
+            qacc=dyn_state.dofs.acc_smooth,
+            Ma=constraint_state.Ma,
+            cost=constraint_state.cost,
+            dyn_state=dyn_state,
+            constraint_state=constraint_state,
+            rigid_config=rigid_config,
+        )
+
+        # Pick the best starting point between current state and warmstart
+        qd.loop_config(name="solve_init_pick_warmstart", serialize=rigid_config.para_level < gs.PARA_LEVEL.PARTIAL)
+        for i_d, i_b in qd.ndrange(n_dofs, _B):
+            if constraint_state.cost_ws[i_b] < constraint_state.cost[i_b]:
+                constraint_state.qacc[i_d, i_b] = constraint_state.qacc_ws[i_d, i_b]
+                constraint_state.Ma[i_d, i_b] = constraint_state.Ma_ws[i_d, i_b]
+            else:
+                constraint_state.qacc[i_d, i_b] = dyn_state.dofs.acc_smooth[i_d, i_b]
+    else:
+        # Always initialize from warmstart.
+        # Under the DOF-vec flip, both qacc and qacc_ws are env-leading; swap the ndrange so adjacent lanes vary i_d
+        # to coalesce those writes/reads. The dofs_state.acc_smooth read remains canonical (small per-env working
+        # set, dominated by the qacc write).
+        qd.loop_config(name="from_warmstart", serialize=rigid_config.para_level < gs.PARA_LEVEL.PARTIAL)
+        for i_d, i_b in qd.ndrange(
+            n_dofs, _B, axes=qd.static((1, 0) if rigid_config.constraint_layout_batch_first else None)
+        ):
+            if constraint_state.n_constraints[i_b] > 0 and constraint_state.is_warmstart[i_b]:
+                constraint_state.qacc[i_d, i_b] = constraint_state.qacc_ws[i_d, i_b]
+            else:
+                constraint_state.qacc[i_d, i_b] = dyn_state.dofs.acc_smooth[i_d, i_b]
+
+        initialize_Ma(constraint_state.Ma, constraint_state.qacc, dyn_info, rigid_info, rigid_config)
+
+    # Initialize solver accordingly Keyword calls: see the quadrants member-expansion note in func_solve_init.
+    initialize_Jaref(qacc=constraint_state.qacc, constraint_state=constraint_state, rigid_config=rigid_config)
+    func_update_constraint(
+        qacc=constraint_state.qacc,
+        Ma=constraint_state.Ma,
+        cost=constraint_state.cost,
+        dyn_state=dyn_state,
+        constraint_state=constraint_state,
+        rigid_config=rigid_config,
+    )
+
+    # The island partition itself (links_island_idx / dof_id) is built earlier, in add_inequality_constraints, before
+    # the contact constraints are assembled; grouping the constraints by island needs the assembled jac, so it rides
+    # this per-env loop, ahead of every per-island consumer below: by the lanes of the env's block where the
+    # cooperative kernels run, serially otherwise.
+    if qd.static(rigid_config.enable_cooperative_constraint_kernels):
+        _K = qd.static(32)
+        qd.loop_config(name="init_improved", block_dim=_K)
+        for i_flat in range(_B * _K):
+            tid = i_flat % _K
+            i_b = i_flat // _K
+            sh_chunk = qd.simt.block.SharedArray((_K,), gs.qd_int)
+            if tid == 0:
+                constraint_state.improved[i_b] = constraint_state.n_constraints[i_b] > 0
+            func_group_constraints_by_island_coop(i_b, tid, sh_chunk, constraint_state, rigid_config)
+    else:
+        qd.loop_config(name="init_improved", serialize=rigid_config.para_level < gs.PARA_LEVEL.ALL)
+        for i_b in qd.ndrange(_B):
+            constraint_state.improved[i_b] = constraint_state.n_constraints[i_b] > 0
+            func_group_constraints_by_island(i_b, constraint_state, rigid_config)
+    constraint_state.solver_iter_counter[()] = 0
+
+    if qd.static(rigid_config.solver_type == gs.constraint_solver.Newton and rigid_config.enable_tiled_island_seed):
+        # The tiled seed: every island's Hessian block assembled into nt_H, then factored and solved in its shared
+        # tile, the same barrier-free factor the decomposed graph runs every iteration. The factor reads nt_H without
+        # consuming it, so the graph starts from the assembled Hessian and maintains it from its first iteration on
+        # (see _kernel_solve_graph), the coupled elliptic-cone block bracketed around the factor as the graph does. The
+        # monolith keeps the cone in the L it persists, so the removal runs for the graph's seed alone.
+        func_island_hessian_assemble_all(constraint_state, rigid_info, rigid_config)
+        func_wrap_cone_hessian(constraint_state, rigid_config, is_removal=False, is_enabled=True)
+        if qd.static(not rigid_config.has_scalar_seed_factor):
+            func_update_gradient_no_solve(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
+            func_island_tiled_factor_solve_all(constraint_state, dyn_info, rigid_info, rigid_config, write_L)
+            func_wrap_cone_hessian(constraint_state, rigid_config, is_removal=True, is_enabled=not write_L)
+    else:
+        if qd.static(rigid_config.solver_type == gs.constraint_solver.Newton and not is_self_seeding):
+            # Seed the initial Hessian factor. The decomposed arm has no self-init: its graph is linesearch-first, so
+            # its first linesearch consumes the search direction computed here (this kernel is its "iteration 0"; the
+            # graph then computes each subsequent direction at the end of an iteration). The monolith seeds it here
+            # except where its body self-inits the factor per env (is_self_seeding).
+            # compute_envelope=True computes each island's structural skyline envelope once, reused per iteration.
+            func_hessian_and_cholesky_factor_direct(
+                constraint_state, dyn_info, rigid_info, rigid_config, compute_envelope=True
+            )
+
+        if qd.static(not is_self_seeding):
+            # Initial gradient (Mgrad = H^-1 grad for Newton, grad for CG), the decomposed arm's first search direction
+            func_update_gradient(dyn_state, constraint_state, dyn_info, rigid_info, rigid_config)
+
+    qd.loop_config(name="assign_search", serialize=rigid_config.para_level < gs.PARA_LEVEL.PARTIAL)
+    for i_d, i_b in qd.ndrange(
+        n_dofs, _B, axes=qd.static((1, 0) if rigid_config.constraint_layout_batch_first else None)
+    ):
+        constraint_state.search[i_d, i_b] = -constraint_state.Mgrad[i_d, i_b]
+
+    if qd.static(
+        not rigid_config.requires_grad and not rigid_config.enable_mujoco_compatibility and not is_self_seeding
+    ):
+        # The certificate consumes the seed gradient, so the one arm that self-seeds it in its own body certifies
+        # there instead (see _kernel_solve_monolith). The differentiable path keeps its full iteration trace.
+        # TODO: Remove the MuJoCo compatibility gate once on MuJoCo 3.11, which carries this criterion natively.
+        if qd.static(rigid_config.enable_cooperative_constraint_kernels):
+            _K = qd.static(32)
+            qd.loop_config(name="certify_converged", block_dim=_K)
+            for i_flat in range(_B * _K):
+                tid = i_flat % _K
+                i_b = i_flat // _K
+                if constraint_state.n_constraints[i_b] > 0:
+                    improved = False
+                    if qd.static(rigid_config.is_single_island):
+                        improved = linesearch.func_exit_single_island(
+                            i_b, tid, _K, constraint_state, rigid_info, rigid_config, is_coop=True, certify=True
+                        )
+                    else:
+                        sh_acc = qd.simt.block.SharedArray((7 * _K,), gs.qd_float)
+                        sh_pending = qd.simt.block.SharedArray((_K,), gs.qd_int)
+                        sh_alpha = qd.simt.block.SharedArray((_K,), gs.qd_float)
+                        improved = linesearch.func_exit_islands_coop(
+                            i_b,
+                            tid,
+                            sh_acc,
+                            sh_pending,
+                            sh_alpha,
+                            constraint_state,
+                            rigid_info,
+                            rigid_config,
+                            certify=True,
+                        )
+                    if tid == 0:
+                        constraint_state.improved[i_b] = improved
+        else:
+            qd.loop_config(name="certify_converged", serialize=rigid_config.para_level < gs.PARA_LEVEL.ALL)
+            for i_b in qd.ndrange(_B):
+                if constraint_state.n_constraints[i_b] > 0:
+                    constraint_state.improved[i_b] = linesearch.func_exit_islands_serial(
+                        i_b, constraint_state, rigid_info, rigid_config, certify=True
+                    )

@@ -108,6 +108,22 @@ def kernel_forward_kinematics(
         func_update_kinematics_root(i_l_root, i_b, dyn_state, dyn_info, rigid_info, rigid_config)
 
 
+@qd.func(requires_top_level=True)
+def func_forward_kinematics(
+    envs_idx: qd.types.ndarray(),
+    dyn_state: array_class.DynState,
+    dyn_info: array_class.DynInfo,
+    rigid_info: array_class.RigidInfo,
+    rigid_config: qd.template(),
+):
+    """Whole-scene graph form of kinematic forward propagation."""
+    qd.loop_config(serialize=qd.static(rigid_config.para_level < gs.PARA_LEVEL.PARTIAL))
+    for i_r, i_b_ in qd.ndrange(rigid_info.roots_link_idx.shape[0], envs_idx.shape[0]):
+        i_b = qd.cast(envs_idx[i_b_], qd.i32)
+        i_l_root = rigid_info.roots_link_idx[i_r]
+        func_update_kinematics_root(i_l_root, i_b, dyn_state, dyn_info, rigid_info, rigid_config)
+
+
 @qd.kernel(fastcache=True)
 def kernel_masked_forward_kinematics(
     envs_mask: qd.types.ndarray(),

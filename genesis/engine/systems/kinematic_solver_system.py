@@ -9,6 +9,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 import numpy as np
+import quadrants as qd
 import torch
 
 import genesis as gs
@@ -17,6 +18,7 @@ from genesis.engine.core import System, register_system
 from genesis.engine.solvers.base_solver import adopt_model
 from genesis.engine.solvers.kinematic_solver import _balanced_variant_mapping
 from genesis.engine.solvers.rigid.abd.forward_kinematics import (
+    func_forward_kinematics,
     kernel_forward_kinematics,
     kernel_update_vgeoms,
     kernel_update_vverts_for_vgeoms,
@@ -114,6 +116,14 @@ class KinematicSolverSystem(System):
         # Whether the solver holds an entity to advance, known once the scene has added its entities
         self.is_active = self.solver.is_active
 
+    @System.data
+    def solver_data(self):
+        return self.data_manager
+
+    @System.data
+    def environment_indices(self):
+        return self.envs_idx
+
     @System.action(kind="host")
     def initialize(self):
         return self.initialize_data
@@ -130,6 +140,8 @@ class KinematicSolverSystem(System):
         self.constraint_solver = None
         build_kinematic_static_config(self)
         create_kinematic_data_manager(self)
+        self.envs_idx = array_class.V(dtype=gs.qd_int, shape=(self._B,))
+        self.envs_idx.from_numpy(np.arange(self._B, dtype=gs.np_int))
         init_dof_fields(self)
         init_vvert_fields(self)
         init_vgeom_fields(self)
@@ -150,6 +162,10 @@ class KinematicSolverSystem(System):
     @System.action(kind="host")
     def post_coupling(self):
         return self.substep_post_coupling
+
+    @System.action(kind="stage")
+    def graph_post_coupling(self):
+        return func_graph_kinematic_post, self
 
     def substep_pre_coupling(self, f: int) -> None:
         """The kinematic solver integrates nothing ahead of the coupling."""
@@ -172,6 +188,17 @@ class KinematicSolverSystem(System):
 def create_kinematic_solver_system(scene: "Scene") -> KinematicSolverSystem:
     """Create the System owning the data of the kinematic solver, which every scene has."""
     return KinematicSolverSystem(scene)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_kinematic_post(system: qd.template(), f: int, t: float):
+    func_forward_kinematics(
+        system.envs_idx,
+        system.dyn_state,
+        system.dyn_info,
+        system.rigid_info,
+        system.rigid_config,
+    )
 
 
 def build_kinematic_static_config(system):

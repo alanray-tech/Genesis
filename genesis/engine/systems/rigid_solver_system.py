@@ -27,6 +27,7 @@ from genesis.engine.solvers.rigid.abd.forward_dynamics import (
 )
 from genesis.engine.solvers.rigid.abd.forward_kinematics import kernel_update_cartesian_space
 from genesis.engine.solvers.rigid.abd.misc import (
+    func_wakeup_coupled_links,
     kernel_init_entity_fields,
     kernel_init_equality_fields,
     kernel_init_geom_fields,
@@ -45,6 +46,7 @@ from genesis.engine.solvers.rigid.rigid_solver import (
     kernel_step_2,
 )
 from genesis.utils.misc import get_gpu_core_count, get_gpu_shared_tile_sizes, qd_to_numpy
+from genesis.utils.qd_ext import invoke_stage_actions
 
 from .kinematic_solver_system import (
     KINEMATIC_MODEL,
@@ -110,12 +112,9 @@ RIGID_MODEL = (
 )
 
 
-# WORKAROUND: Quadrants discovers the tensors of the array_class structs reached from a kernel parameter only through a
-# @qd.data_oriented object, so the structs a substep reads and writes are gathered here rather than bound one by one.
 @qd.data_oriented
 class RigidSolverData(Data):
-    """The array_class structs of the rigid data, its collision detection and its constraint solve that a substep
-    reads and writes."""
+    """One System-owned root grouping the rigid, collision and constraint structs consumed by a substep."""
 
     def __init__(self, system: "RigidSolverSystem") -> None:
         collider, constraint_solver = system.collider_data, system.constraint_solver
@@ -345,6 +344,22 @@ class RigidSolverSystem(System):
     def post_coupling(self):
         return self.substep_post_coupling
 
+    @System.action(kind="stage")
+    def graph_wakeup(self):
+        return func_graph_rigid_wakeup, self
+
+    @System.action(kind="stage")
+    def graph_dynamics(self):
+        return func_graph_rigid_dynamics, self, self.equality_assemblies
+
+    @System.action(kind="stage")
+    def graph_collision(self):
+        return func_graph_rigid_collision, self, self.detections, self.inequality_assemblies
+
+    @System.action(kind="stage")
+    def graph_post(self):
+        return func_graph_rigid_post, self, self.force_updates
+
     def reset(self, envs_idx=None) -> None:
         """Restart what the given environments carry over from the previous substeps, once their configuration is
         set."""
@@ -498,6 +513,42 @@ def func_substep_integrate(rigid_data: qd.template(), rigid_config: qd.template(
         False,
         rigid_data.errno,
     )
+
+
+@qd.func(requires_top_level=True)
+def func_graph_rigid_wakeup(system: qd.template(), f: int, t: float):
+    if qd.static(system._use_hibernation and len(system.sim.active_solvers) > 1):
+        func_wakeup_coupled_links(
+            system.dyn_state,
+            system.constraint_solver.constraint_state,
+            system.dyn_info,
+            system.rigid_info,
+            system.rigid_config,
+        )
+
+
+@qd.func(requires_top_level=True)
+def func_graph_rigid_dynamics(system: qd.template(), equality_assemblies: qd.template(), f: int, t: float):
+    func_substep_forward_dynamics(system.data, system.rigid_config, False, False)
+    invoke_stage_actions(equality_assemblies.actions, ())
+
+
+@qd.func(requires_top_level=True)
+def func_graph_rigid_collision(
+    system: qd.template(),
+    detections: qd.template(),
+    inequality_assemblies: qd.template(),
+    f: int,
+    t: float,
+):
+    invoke_stage_actions(detections.actions, ())
+    invoke_stage_actions(inequality_assemblies.actions, ())
+
+
+@qd.func(requires_top_level=True)
+def func_graph_rigid_post(system: qd.template(), force_updates: qd.template(), f: int, t: float):
+    invoke_stage_actions(force_updates.actions, ())
+    func_substep_integrate(system.data, system.rigid_config)
 
 
 # Each graph is a kernel taking the System, since Quadrants discovers the Data of every Action through it, and unrolls
@@ -798,6 +849,9 @@ def rigid_build_static_config(system):
         and rigid_config["solver_type"] == gs.constraint_solver.Newton
         and jacobi_mass_spread_bound(system) > mass_spread_threshold
     )
+    # A whole-scene graph cannot defer the arm choice to host autotuning. Freeze the graph-native decomposed arm.
+    if system.sim.options.pipeline == "graph":
+        rigid_config["prefer_decomposed_solver"] = 1
     system.rigid_config = array_class.RigidSimStaticConfig(**rigid_config)
 
     if system.rigid_config.requires_grad:

@@ -11,6 +11,7 @@ from genesis.engine.solvers.rigid.constraint.solver import (
     func_resolve_post,
     func_solve_body,
 )
+from genesis.engine.solvers.rigid.constraint.solver_breakdown import func_solve_decomposed_graph
 
 from .rigid_solver_system import RigidSolverSystem
 from .simulator_engine import SimulatorEngine
@@ -50,6 +51,10 @@ class ConstraintSolverSystem(System):
     @System.action(kind="stage")
     def update_forces(self):
         return func_substep_resolve_post, self
+
+    @System.action(kind="stage")
+    def graph_solve(self):
+        return func_graph_constraint_solve, self, self.rigid_solver_system
 
     def build(self):
         self.rigid_solver_system.on_constrain(
@@ -140,4 +145,16 @@ def func_substep_resolve_post(constraint_solver_system: qd.template()):
         constraint_solver_system.rigid_solver_system.rigid_config,
         constraint_solver_system.noslip,
         rigid_data.errno,
+    )
+
+
+@qd.func(requires_top_level=True)
+def func_graph_constraint_solve(system: qd.template(), rigid: qd.template(), f: int, t: float):
+    func_solve_decomposed_graph(
+        rigid.dyn_state,
+        rigid.constraint_solver.constraint_state,
+        rigid.dyn_info,
+        rigid.rigid_info,
+        rigid.rigid_config,
+        system.n_iterations,
     )
