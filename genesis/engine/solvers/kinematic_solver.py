@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -28,7 +28,7 @@ from genesis.utils.misc import (
     sanitize_indexed_tensor,
 )
 
-from .base_solver import MutatedLinks, Solver, StateChange, mutates
+from .base_solver import MutatedLinks, Solver, StateChange, forward_to_system, mutates
 from .rigid.abd.accessor import (
     kernel_get_kinematic_state,
     kernel_get_links_vel,
@@ -146,25 +146,6 @@ def _fill_base_link_geom_offsets(offset_pos, offset_quat, entity, geoms, ranges)
 IS_OLD_TORCH = tuple(map(int, torch.__version__.split(".")[:2])) < (2, 8)
 
 
-def forward_to_system(name: str, default: Any = None, *, settable: bool = False) -> property:
-    """Attribute of a solver that forwards to the System owning its data, `default` before the engine builds it.
-
-    A settable attribute is state the user-facing API writes, such as the flags telling whether the cartesian space is
-    up to date, which only exists once the System does.
-    """
-
-    def get(solver):
-        system = solver._system
-        return default if system is None else getattr(system, name)
-
-    def set(solver, value):
-        if solver._system is None:
-            gs.raise_exception(f"{type(solver).__name__}.{name} is set only once the scene is built.")
-        setattr(solver._system, name, value)
-
-    return property(get, set if settable else None)
-
-
 class KinematicSolver(Solver):
     """
     Base solver for articulated kinematic entities (FK, rendering, state get/set).
@@ -203,9 +184,6 @@ class KinematicSolver(Solver):
         self._enable_mujoco_compatibility = False
         self._requires_grad = False
         self._enable_heterogeneous = False  # Set to True when any entity has heterogeneous morphs
-
-        # The System owning the data of this solver, which the engine builds once this solver has built its entities
-        self._system = None
 
     # ------------------------------------------------------------------------------------
     # ----------------------------------- add_entity -------------------------------------

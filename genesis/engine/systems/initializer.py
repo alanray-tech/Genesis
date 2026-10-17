@@ -10,6 +10,7 @@ from .mpm_solver_system import MPMSolverSystem
 from .rigid_rigid_contact_system import RigidRigidContactSystem
 from .rigid_sdf_system import RigidSdfSystem
 from .rigid_solver_system import RigidSolverSystem
+from .sf_solver_system import SFSolverSystem
 from .simulator_engine import SimulatorEngine
 
 if TYPE_CHECKING:
@@ -26,11 +27,14 @@ class Initializer(System):
     rigid_rigid_contact = Find(RigidRigidContactSystem)
     constraint = Find(ConstraintSolverSystem)
     mpm = Find(MPMSolverSystem)
+    sf = Find(SFSolverSystem)
 
     def initialize(self) -> None:
         """Initialize the data of every System."""
-        # The kinematic data depends on no other System
+        # The kinematic data and the stable fluid grid depend on no other System
         self.kinematic.initialize.invoke()
+        if self.sf is not None:
+            self.sf.initialize.invoke()
         # The signed distance fields of the rigid geoms are sized from the rigid model, and the collision detection
         # that the rigid data initialization constructs embeds them, so they are allocated in between
         self.rigid.initialize_model.invoke()

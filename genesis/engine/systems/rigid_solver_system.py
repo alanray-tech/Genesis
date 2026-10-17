@@ -17,6 +17,7 @@ import genesis.utils.array_class as array_class
 import genesis.utils.geom as gu
 from genesis.engine.core import Data, HostAction, Require, StageAction, System, register_system
 from genesis.engine.couplers import SAPCoupler
+from genesis.engine.solvers.base_solver import adopt_model
 from genesis.engine.solvers.kinematic_solver import _balanced_variant_mapping
 from genesis.engine.solvers.rigid.abd.diff import kernel_save_adjoint_cache
 from genesis.engine.solvers.rigid.abd.forward_dynamics import (
@@ -47,7 +48,6 @@ from genesis.utils.misc import get_gpu_core_count, get_gpu_shared_tile_sizes, qd
 
 from .kinematic_solver_system import (
     KINEMATIC_MODEL,
-    adopt_model,
     init_dof_fields,
     init_link_fields,
     init_tree_fields,
