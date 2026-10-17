@@ -1,13 +1,15 @@
-import quadrants as qd
 import numpy as np
 import trimesh
+
+import quadrants as qd
 
 import genesis as gs
 import genesis.utils.geom as gu
 from genesis.utils.mesh import compute_sdf_data, load_mesh
 
+from .data import ToolEntityData, ToolSolverInfo
 
-@qd.data_oriented
+
 class Mesh:
     def __init__(self, entity, material, morph):
         self.entity = entity
@@ -18,7 +20,6 @@ class Mesh:
         self.raw_file = morph.file
 
         self.load_file()
-        self.init_fields()
 
     def load_file(self):
         self.process_mesh()
@@ -58,155 +59,117 @@ class Mesh:
             self.sdf_res = self.sdf_voxels_np.shape[0]
             self.T_mesh_to_sdf_np = sdf_data["T_mesh_to_sdf"].astype(gs.np_float, order="C", copy=False)
 
-    def init_fields(self):
-        # init qd fields
-        self.init_vertices = qd.Vector.field(3, dtype=gs.qd_float, shape=(self.n_vertices))
-        self.init_vertex_normals = qd.Vector.field(3, dtype=gs.qd_float, shape=(self.n_vertices))
-        self.faces = qd.field(dtype=gs.qd_int, shape=(self.n_faces,))
 
-        self.init_vertices.from_numpy(self.raw_vertices)
-        self.init_vertex_normals.from_numpy(self.raw_vertex_normals)
-        self.faces.from_numpy(self.faces_np)
+@qd.func
+def func_sdf_voxels(pos_voxels: qd.types.vector(3), entity_data: ToolEntityData, mesh: qd.template()):
+    """Interpolate the signed distance field at a position in voxel coordinates."""
+    base = qd.floor(pos_voxels, gs.qd_int)
+    signed_dist = gs.qd_float(0.0)
+    if (base >= mesh.sdf_res - 1).any() or (base < 0).any():
+        signed_dist = 1.0
+    else:
+        signed_dist = 0.0
+        for offset in qd.static(qd.grouped(qd.ndrange(2, 2, 2))):
+            voxel_pos = base + offset
+            w_xyz = 1 - qd.abs(pos_voxels - voxel_pos)
+            w = w_xyz[0] * w_xyz[1] * w_xyz[2]
+            signed_dist += w * entity_data.mesh_info.sdf_voxels[voxel_pos]
+    return signed_dist
 
-        if self.collision:
-            self.sdf_voxels = qd.field(dtype=gs.qd_float, shape=self.sdf_voxels_np.shape)
-            self.T_mesh_to_sdf = qd.Matrix.field(4, 4, dtype=gs.qd_float, shape=())
 
-            self.sdf_voxels.from_numpy(self.sdf_voxels_np)
-            self.T_mesh_to_sdf.from_numpy(self.T_mesh_to_sdf_np)
+@qd.func
+def func_sdf(f: int, pos_world: qd.types.vector(3), i_b: int, entity_data: ToolEntityData, mesh: qd.template()):
+    """Evaluate the signed distance of a world-space position from a tool mesh."""
+    pos_mesh = gu.qd_inv_transform_by_trans_quat(
+        pos_world, entity_data.state.pos[f, i_b], entity_data.state.quat[f, i_b]
+    )
+    pos_voxels = gu.qd_transform_by_T(pos_mesh, entity_data.mesh_info.T_mesh_to_sdf[None])
+    return func_sdf_voxels(pos_voxels, entity_data, mesh)
 
-        self.vertices = qd.Vector.field(3, dtype=gs.qd_float, shape=(self.n_vertices))
-        self.vertex_normals = qd.Vector.field(3, dtype=gs.qd_float, shape=(self.n_vertices))
 
-    @qd.func
-    def sdf(self, f, pos_world, i_b):
-        # sdf value from world coordinate
-        pos_mesh = gu.qd_inv_transform_by_trans_quat(pos_world, self.entity.pos[f, i_b], self.entity.quat[f, i_b])
-        pos_voxels = gu.qd_transform_by_T(pos_mesh, self.T_mesh_to_sdf[None])
-
-        return self.sdf_(pos_voxels)
-
-    @qd.func
-    def sdf_(self, pos_voxels):
-        # sdf value from voxels coordinate
-        base = qd.floor(pos_voxels, gs.qd_int)
-        signed_dist = gs.qd_float(0.0)
-        if (base >= self.sdf_res - 1).any() or (base < 0).any():
-            signed_dist = 1.0
-        else:
-            signed_dist = 0.0
-            for offset in qd.static(qd.grouped(qd.ndrange(2, 2, 2))):
-                voxel_pos = base + offset
-                w_xyz = 1 - qd.abs(pos_voxels - voxel_pos)
-                w = w_xyz[0] * w_xyz[1] * w_xyz[2]
-                signed_dist += w * self.sdf_voxels[voxel_pos]
-
-        return signed_dist
-
-    @qd.func
-    def normal(self, f, pos_world, i_b):
-        # compute normal with finite difference
-        pos_mesh = gu.qd_inv_transform_by_trans_quat(pos_world, self.entity.pos[f, i_b], self.entity.quat[f, i_b])
-        pos_voxels = gu.qd_transform_by_T(pos_mesh, self.T_mesh_to_sdf[None])
-        normal_vec_voxels = self.normal_(pos_voxels)
-
-        R_voxels_to_mesh = self.T_mesh_to_sdf[None][:3, :3].inverse()
-        normal_vec_mesh = R_voxels_to_mesh @ normal_vec_voxels
-
-        normal_vec_world = gu.qd_transform_by_quat(normal_vec_mesh, self.entity.quat[f, i_b])
-        normal_vec_world = gu.qd_normalize(normal_vec_world, gs.EPS)
-
-        return normal_vec_world
-
-    @qd.func
-    def normal_(self, pos_voxels):
-        # since we are in voxels frame, delta can be a relatively big value
-        delta = gs.qd_float(1e-2)
-        normal_vec = qd.Vector([0, 0, 0], dt=gs.qd_float)
-
-        for i in qd.static(range(3)):
-            inc = pos_voxels
-            dec = pos_voxels
-            inc[i] += delta
-            dec[i] -= delta
-            normal_vec[i] = (self.sdf_(inc) - self.sdf_(dec)) / (2 * delta)
-
-        normal_vec = gu.qd_normalize(normal_vec, gs.EPS)
-
-        return normal_vec
-
-    @qd.func
-    def vel_collider(self, f, pos_world, i_b):
-        pos_mesh = gu.qd_inv_transform_by_trans_quat(pos_world, self.entity.pos[f, i_b], self.entity.quat[f, i_b])
-        pos_world_new = gu.qd_transform_by_trans_quat(
-            pos_mesh, self.entity.pos[f + 1, i_b], self.entity.quat[f + 1, i_b]
+@qd.func
+def func_normal_voxels(pos_voxels: qd.types.vector(3), entity_data: ToolEntityData, mesh: qd.template()):
+    """Compute the signed-distance normal in voxel coordinates by central finite differences."""
+    delta = gs.qd_float(1e-2)
+    normal_vec = qd.Vector([0, 0, 0], dt=gs.qd_float)
+    for i in qd.static(range(3)):
+        inc = pos_voxels
+        dec = pos_voxels
+        inc[i] += delta
+        dec[i] -= delta
+        normal_vec[i] = (func_sdf_voxels(inc, entity_data, mesh) - func_sdf_voxels(dec, entity_data, mesh)) / (
+            2 * delta
         )
-        vel_collider = (pos_world_new - pos_world) / self.entity.solver.substep_dt
-        return vel_collider
+    return gu.qd_normalize(normal_vec, gs.EPS)
 
-    @qd.func
-    def collide(self, f, pos_world, vel_mat, i_b):
-        if qd.static(self.collision):
-            signed_dist = self.sdf(f, pos_world, i_b)
-            # bigger coup_softness implies that the coupling influence extends further away from the object.
-            influence = qd.min(qd.exp(-signed_dist / max(gs.EPS, self.material.coup_softness)), 1)
-            if signed_dist <= 0.0 or influence > 0.1:
-                vel_collider = self.vel_collider(f, pos_world, i_b)
 
-                # v w.r.t collider
-                rel_v = vel_mat - vel_collider
-                normal_vec = self.normal(f, pos_world, i_b)
-                normal_component = rel_v.dot(normal_vec)
+@qd.func
+def func_normal(
+    f: int,
+    pos_world: qd.types.vector(3),
+    i_b: int,
+    entity_data: ToolEntityData,
+    mesh: qd.template(),
+):
+    """Compute the outward normal of a tool mesh at a world-space position."""
+    pos_mesh = gu.qd_inv_transform_by_trans_quat(
+        pos_world, entity_data.state.pos[f, i_b], entity_data.state.quat[f, i_b]
+    )
+    pos_voxels = gu.qd_transform_by_T(pos_mesh, entity_data.mesh_info.T_mesh_to_sdf[None])
+    normal_vec_voxels = func_normal_voxels(pos_voxels, entity_data, mesh)
+    R_voxels_to_mesh = entity_data.mesh_info.T_mesh_to_sdf[None][:3, :3].inverse()
+    normal_vec_mesh = R_voxels_to_mesh @ normal_vec_voxels
+    normal_vec_world = gu.qd_transform_by_quat(normal_vec_mesh, entity_data.state.quat[f, i_b])
+    return gu.qd_normalize(normal_vec_world, gs.EPS)
 
-                if normal_component < 0.0:
-                    # remove inward velocity
-                    rel_v_t = rel_v - normal_component * normal_vec
-                    rel_v_t_norm = rel_v_t.norm(gs.EPS)
 
-                    # tangential component after friction (if friction exists)
-                    rel_v_t_friction = (
-                        rel_v_t / rel_v_t_norm * qd.max(0, rel_v_t_norm + normal_component * self.friction)
-                    )
+@qd.func
+def func_velocity(
+    f: int,
+    pos_world: qd.types.vector(3),
+    i_b: int,
+    entity_data: ToolEntityData,
+    solver_info: ToolSolverInfo,
+):
+    """Compute the velocity of a material point fixed to a tool entity."""
+    pos_mesh = gu.qd_inv_transform_by_trans_quat(
+        pos_world, entity_data.state.pos[f, i_b], entity_data.state.quat[f, i_b]
+    )
+    pos_world_new = gu.qd_transform_by_trans_quat(
+        pos_mesh, entity_data.state.pos[f + 1, i_b], entity_data.state.quat[f + 1, i_b]
+    )
+    return (pos_world_new - pos_world) / solver_info.substep_dt[None]
 
-                    # tangential component after friction
-                    # FIXME: This formula could be simplified since flag = 1.0 systematically.
-                    flag = qd.cast(normal_component < 0.0, gs.qd_float)
-                    rel_v_t = rel_v_t_friction * flag + rel_v_t * (1.0 - flag)
-                    vel_mat = vel_collider + rel_v_t * influence + rel_v * (1.0 - influence)
 
-        return vel_mat
-
-    @qd.func
-    def is_collide(self, f, pos_world):
-        flag = 0
-        if qd.static(self.collision):
-            signed_dist = self.sdf(f, pos_world)
-            if signed_dist <= 0:
-                flag = 1
-
-        return flag
-
-    @qd.func
-    def pbd_collide(self, f, pos_world, thickness, dt):
-        return_pos_world = pos_world
-        if qd.static(self.collision):
-            pos_mesh = gu.qd_inv_transform_by_trans_quat(pos_world, self.entity.pos[f], self.entity.quat[f])
-            pos_voxels = gu.qd_transform_by_T(pos_mesh, self.T_mesh_to_sdf[None])
-
-            sdf_voxels = self.sdf_(pos_voxels)
-            normal_vec_voxels = self.normal_(pos_voxels)
-            normal_vec_voxels_ = gu.qd_normalize(normal_vec_voxels, gs.EPS)
-
-            vec_voxels = -sdf_voxels * normal_vec_voxels_
-            R_voxels_to_mesh = self.T_mesh_to_sdf[None][:3, :3].inverse()
-            vec_mesh = R_voxels_to_mesh @ vec_voxels
-            vec_world = gu.qd_transform_by_quat(vec_mesh, self.entity.quat[f])
-            vec_world_norm = vec_world.norm(gs.EPS)
-
-            if sdf_voxels < 0:
-                return_pos_world += vec_world / vec_world_norm * (vec_world_norm + thickness)
-
-            if sdf_voxels > 0 and sdf_voxels < 1 and vec_world_norm < thickness:
-                return_pos_world += vec_world / vec_world_norm * (vec_world_norm - thickness)
-
-        return return_pos_world
+@qd.func
+def func_collide(
+    f: int,
+    pos_world: qd.types.vector(3),
+    vel_mat: qd.types.vector(3),
+    i_b: int,
+    entity_data: ToolEntityData,
+    solver_info: ToolSolverInfo,
+    mesh: qd.template(),
+):
+    """Project inward material velocity against a tool mesh with friction and coupling softness."""
+    if qd.static(mesh.collision):
+        signed_dist = func_sdf(f, pos_world, i_b, entity_data, mesh)
+        influence = qd.min(qd.exp(-signed_dist / max(gs.EPS, entity_data.mesh_info.coup_softness[None])), 1)
+        if signed_dist <= 0.0 or influence > 0.1:
+            vel_collider = func_velocity(f, pos_world, i_b, entity_data, solver_info)
+            rel_v = vel_mat - vel_collider
+            normal_vec = func_normal(f, pos_world, i_b, entity_data, mesh)
+            normal_component = rel_v.dot(normal_vec)
+            if normal_component < 0.0:
+                rel_v_t = rel_v - normal_component * normal_vec
+                rel_v_t_norm = rel_v_t.norm(gs.EPS)
+                rel_v_t_friction = (
+                    rel_v_t
+                    / rel_v_t_norm
+                    * qd.max(0, rel_v_t_norm + normal_component * entity_data.mesh_info.friction[None])
+                )
+                # FIXME: The branch establishes that flag is always one, so this formula can be simplified
+                flag = qd.cast(normal_component < 0.0, gs.qd_float)
+                rel_v_t = rel_v_t_friction * flag + rel_v_t * (1.0 - flag)
+                vel_mat = vel_collider + rel_v_t * influence + rel_v * (1.0 - influence)
+    return vel_mat

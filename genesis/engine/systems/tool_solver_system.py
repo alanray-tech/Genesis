@@ -1,12 +1,26 @@
-"""System wrapping the tool solver, whose phases the Substepper calls.
-
-The tool solver keeps owning its data and running its own kernels; the System hands its phases to the Substepper as host
-Actions.
-"""
+"""System of the tool solver, which owns every entity's pose, mesh data, initialization and substep."""
 
 from typing import TYPE_CHECKING
 
+import quadrants as qd
+
 from genesis.engine.core import System, register_system
+from genesis.engine.entities.tool_entity.data import (
+    ToolSolverConfig,
+    ToolSolverData,
+    get_tool_entity_data,
+    get_tool_mesh_config,
+    get_tool_solver_info,
+)
+from genesis.engine.entities.tool_entity.tool_entity import (
+    func_advect,
+    func_update_latest_pos,
+    kernel_advect,
+    kernel_set_init_state,
+    kernel_update_latest_pos,
+)
+from genesis.engine.solvers.base_solver import adopt_model
+from genesis.engine.states.entities import ToolEntityState
 
 from .simulator_engine import SimulatorEngine
 
@@ -14,15 +28,40 @@ if TYPE_CHECKING:
     from genesis.engine.scene import Scene
 
 
-# FIXME: thin wrapper. The tool solver still owns its data and runs each phase as a host method launching its own
-# kernels. The System owns that data and exposes its phases as Actions over it, the solver forwarding to it, once the
-# solver is inverted as the rigid solver is (see RigidSolverSystem).
+TOOL_MODEL = ("_entities", "boundary", "_substep_dt", "substeps")
+
+
 class ToolSolverSystem(System):
-    """System wrapping the tool solver of the scene."""
+    """System owning the data and simulation of every tool entity of the scene."""
 
     def __init__(self, scene: "Scene") -> None:
         super().__init__(scene)
         self.solver = scene.sim.tool_solver
+
+    @System.data
+    def solver_info(self):
+        return self.info
+
+    @System.data
+    def solver_config(self):
+        return self.config
+
+    @System.action(kind="host")
+    def initialize(self):
+        return self.initialize_data
+
+    def initialize_data(self) -> None:
+        """Take over the model from the solver, then allocate and initialize every tool entity."""
+        adopt_model(self, TOOL_MODEL)
+        self.solver._system = self
+        self.info = get_tool_solver_info(self)
+        self.config = ToolSolverConfig(boundary=self.boundary)
+        entity_data = tuple(get_tool_entity_data(entity) for entity in self._entities)
+        self.data = ToolSolverData(entity_data, tuple(get_tool_mesh_config(entity.mesh) for entity in self._entities))
+        for entity, data in zip(self._entities, entity_data):
+            entity._data = data
+            entity.init_state = ToolEntityState(entity, 0)
+            kernel_set_init_state(entity._init_pos, entity._init_quat, data)
 
     @System.action(kind="host")
     def process_input(self):
@@ -30,14 +69,44 @@ class ToolSolverSystem(System):
 
     @System.action(kind="host")
     def pre_coupling(self):
-        return self.solver.substep_pre_coupling
+        return self.substep_pre_coupling
 
     @System.action(kind="host")
     def post_coupling(self):
-        return self.solver.substep_post_coupling
+        return self.substep_post_coupling
+
+    @System.action(kind="stage")
+    def graph_pre_coupling(self):
+        return func_graph_tool_pre_coupling, self
+
+    @System.action(kind="stage")
+    def graph_post_coupling(self):
+        return func_graph_tool_post_coupling, self
+
+    def substep_pre_coupling(self, f: int) -> None:
+        """Advect every tool entity through substep f."""
+        for entity_data in self.data.entities:
+            kernel_advect(f, entity_data, self.info, self.config)
+
+    def substep_post_coupling(self, f: int) -> None:
+        """Publish the unbatched render position of every tool entity after substep f."""
+        for entity_data in self.data.entities:
+            kernel_update_latest_pos(f, entity_data)
 
 
 @register_system(SimulatorEngine)
 def create_tool_solver_system(scene: "Scene") -> ToolSolverSystem | None:
-    """Create the System wrapping the tool solver whenever it simulates an entity."""
+    """Create the System owning the tool data whenever the solver holds an entity."""
     return ToolSolverSystem(scene) if scene.sim.tool_solver.is_active else None
+
+
+@qd.func(requires_top_level=True)
+def func_graph_tool_pre_coupling(system: qd.template(), f: int, t: float):
+    for i_e in qd.static(range(len(system.data.entities))):
+        func_advect(f, system.data.entities[i_e], system.info, system.config)
+
+
+@qd.func(requires_top_level=True)
+def func_graph_tool_post_coupling(system: qd.template(), f: int, t: float):
+    for i_e in qd.static(range(len(system.data.entities))):
+        func_update_latest_pos(f, system.data.entities[i_e])

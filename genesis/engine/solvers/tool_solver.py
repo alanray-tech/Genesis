@@ -1,21 +1,16 @@
 from typing import TYPE_CHECKING
 
-import quadrants as qd
-
-import genesis as gs
 from genesis.engine.boundaries import FloorBoundary
-from genesis.engine.entities.tool_entity.tool_entity import ToolEntity
+from genesis.engine.entities.tool_entity import ToolEntity
 from genesis.engine.materials import Tool
 from genesis.engine.states.solvers import ToolSolverState
-from genesis.utils.misc import *
 
-from .base_solver import Solver, TimeBasedMixin
+from .base_solver import Solver, TimeBasedMixin, forward_to_system
 
 if TYPE_CHECKING:
     from genesis.engine.entities import ToolEntity
 
 
-@qd.data_oriented
 class ToolSolver(TimeBasedMixin, Solver):
     """
     Note
@@ -24,6 +19,9 @@ class ToolSolver(TimeBasedMixin, Solver):
     """
 
     material_cls = Tool
+    data = forward_to_system("data")
+    info = forward_to_system("info")
+    config = forward_to_system("config")
 
     # ------------------------------------------------------------------------------------
     # --------------------------------- Initialization -----------------------------------
@@ -37,11 +35,6 @@ class ToolSolver(TimeBasedMixin, Solver):
 
         # boundary
         self.setup_boundary()
-
-    def build(self):
-        super().build()
-        for entity in self._entities:
-            entity.build()
 
     @property
     def is_active(self):
@@ -93,16 +86,14 @@ class ToolSolver(TimeBasedMixin, Solver):
             entity.process_input_grad()
 
     def substep_pre_coupling(self, f):
-        for entity in self._entities:
-            entity.substep_pre_coupling(f)
+        self._system.substep_pre_coupling(f)
 
     def substep_pre_coupling_grad(self, f):
         for entity in self._entities[::-1]:
             entity.substep_pre_coupling_grad(f)
 
     def substep_post_coupling(self, f):
-        for entity in self._entities:
-            entity.substep_post_coupling(f)
+        self._system.substep_post_coupling(f)
 
     def substep_post_coupling_grad(self, f):
         for entity in self._entities[::-1]:
@@ -127,9 +118,3 @@ class ToolSolver(TimeBasedMixin, Solver):
     def load_ckpt(self, ckpt_name):
         for entity in self._entities:
             entity.load_ckpt(ckpt_name=ckpt_name)
-
-    @qd.func
-    def pbd_collide(self, f, pos_world, thickness, dt):
-        for entity in qd.static(self._entities):
-            pos_world = entity.pbd_collide(f, pos_world, thickness, dt)
-        return pos_world
