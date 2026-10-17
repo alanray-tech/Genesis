@@ -5,7 +5,7 @@ import quadrants as qd
 
 import genesis as gs
 import genesis.utils.sdf as sdf
-from genesis.engine import sph_runtime
+from genesis.engine import fem_runtime, sph_runtime
 from genesis.engine.entities.tool_entity.data import ToolSolverInfo
 from genesis.engine.entities.tool_entity.mesh import func_collide
 from genesis.options.solvers import LegacyCouplerOptions
@@ -501,7 +501,9 @@ class LegacyCoupler(RBC):
 
     def fem_rigid_link_constraints(self):
         if self.fem_solver._constraints_initialized and self.rigid_solver.is_active:
-            self.fem_solver._kernel_update_linked_vertex_constraints(self.rigid_solver.dyn_state.links)
+            fem_runtime._kernel_update_linked_vertex_constraints(
+                self.fem_solver._system, self.rigid_solver.dyn_state.links
+            )
 
     @qd.kernel
     def fem_surface_force(
@@ -512,20 +514,21 @@ class LegacyCoupler(RBC):
         links_state: array_class.LinksState,
         rigid_info: array_class.RigidInfo,
         sdf_info: array_class.SDFInfo,
+        fem_system: qd.template(),
         mpm_system: qd.template(),
         sph_system: qd.template(),
         collider_static_config: qd.template(),
     ):
         # TODO: all collisions are on vertices instead of surface and edge
-        for i_s, i_b in qd.ndrange(self.fem_solver.n_surfaces, self.fem_solver._B):
-            if self.fem_solver.surface[i_s].active:
-                dt = self.fem_solver.substep_dt
-                iel = self.fem_solver.surface[i_s].tri2el
-                mass = self.fem_solver.elements_i[iel].mass_scaled / self.fem_solver.vol_scale
+        for i_s, i_b in qd.ndrange(fem_system.n_surfaces, fem_system._B):
+            if fem_system.surface.active[i_s]:
+                dt = fem_system.substep_dt
+                iel = fem_system.surface.tri2el[i_s]
+                mass = fem_system.elements_i.mass_scaled[iel] / fem_system.vol_scale
 
-                p1 = self.fem_solver.elements_v[f, self.fem_solver.surface[i_s].tri2v[0], i_b].pos
-                p2 = self.fem_solver.elements_v[f, self.fem_solver.surface[i_s].tri2v[1], i_b].pos
-                p3 = self.fem_solver.elements_v[f, self.fem_solver.surface[i_s].tri2v[2], i_b].pos
+                p1 = fem_system.elements_v.pos[f, fem_system.surface.tri2v[i_s][0], i_b]
+                p2 = fem_system.elements_v.pos[f, fem_system.surface.tri2v[i_s][1], i_b]
+                p3 = fem_system.elements_v.pos[f, fem_system.surface.tri2v[i_s][2], i_b]
                 u = p2 - p1
                 v = p3 - p1
                 surface_normal = qd.math.cross(u, v)
@@ -535,11 +538,11 @@ class LegacyCoupler(RBC):
                 if qd.static(self._rigid_fem):
                     # NOTE: collision only on surface vertices
                     for j in qd.static(range(3)):
-                        iv = self.fem_solver.surface[i_s].tri2v[j]
+                        iv = fem_system.surface.tri2v[i_s][j]
                         vel_fem_sv = self._func_collide_with_rigid(
                             f,
-                            self.fem_solver.elements_v[f, iv, i_b].pos,
-                            self.fem_solver.elements_v[f + 1, iv, i_b].vel,
+                            fem_system.elements_v.pos[f, iv, i_b],
+                            fem_system.elements_v.vel[f + 1, iv, i_b],
                             mass / 3.0,  # assume element mass uniformly distributed to vertices
                             i_b,
                             geoms_state,
@@ -549,16 +552,16 @@ class LegacyCoupler(RBC):
                             sdf_info,
                             collider_static_config,
                         )
-                        self.fem_solver.elements_v[f + 1, iv, i_b].vel = vel_fem_sv
+                        fem_system.elements_v.vel[f + 1, iv, i_b] = vel_fem_sv
 
                 # FEM <-> MPM (interact with MPM grid instead of particles)
                 # NOTE: not doing this in mpm_grid_op otherwise we need to search for fem surface for each particles
                 #       however, this function is called after mpm boundary conditions.
                 if qd.static(self._fem_mpm):
                     for j in qd.static(range(3)):
-                        iv = self.fem_solver.surface[i_s].tri2v[j]
-                        pos = self.fem_solver.elements_v[f, iv, i_b].pos
-                        vel_fem_sv = self.fem_solver.elements_v[f + 1, iv, i_b].vel
+                        iv = fem_system.surface.tri2v[i_s][j]
+                        pos = fem_system.elements_v.pos[f, iv, i_b]
+                        vel_fem_sv = fem_system.elements_v.vel[f + 1, iv, i_b]
                         mass_fem_sv = mass / 4.0  # assume element mass uniformly distributed
 
                         # follow MPM p2g scheme
@@ -602,15 +605,15 @@ class LegacyCoupler(RBC):
                         if mass_mpm > gs.EPS:
                             # delta_mv = (vel_mpm - vel_fem_sv) * mass_mpm
                             # delta_vel_fem_sv = delta_mv / mass_fem_sv
-                            # self.fem_solver.elements_v[f + 1, iv].vel += delta_vel_fem_sv
-                            self.fem_solver.elements_v[f + 1, iv, i_b].vel = new_vel_fem_sv
+                            # fem_system.elements_v[f + 1, iv].vel += delta_vel_fem_sv
+                            fem_system.elements_v.vel[f + 1, iv, i_b] = new_vel_fem_sv
 
                 # FEM <-> SPH TODO: this doesn't work well
                 if qd.static(self._fem_sph):
                     for j in qd.static(range(3)):
-                        iv = self.fem_solver.surface[i_s].tri2v[j]
-                        pos = self.fem_solver.elements_v[f, iv, i_b].pos
-                        vel_fem_sv = self.fem_solver.elements_v[f + 1, iv, i_b].vel
+                        iv = fem_system.surface.tri2v[i_s][j]
+                        pos = fem_system.elements_v.pos[f, iv, i_b]
+                        vel_fem_sv = fem_system.elements_v.vel[f + 1, iv, i_b]
                         mass_fem_sv = mass / 4.0
 
                         dx = sph_system.sh.cell_size
@@ -655,13 +658,13 @@ class LegacyCoupler(RBC):
                                             - delta_mv / sph_system.particles_info_reordered.mass[k, i_b]
                                         )
 
-                            self.fem_solver.elements_v[f + 1, iv, i_b].vel = vel_fem_sv
+                            fem_system.elements_v.vel[f + 1, iv, i_b] = vel_fem_sv
 
                 # boundary condition
                 for j in qd.static(range(3)):
-                    iv = self.fem_solver.surface[i_s].tri2v[j]
-                    _, self.fem_solver.elements_v[f + 1, iv, i_b].vel = self.fem_solver.boundary.impose_pos_vel(
-                        self.fem_solver.elements_v[f, iv, i_b].pos, self.fem_solver.elements_v[f + 1, iv, i_b].vel
+                    iv = fem_system.surface.tri2v[i_s][j]
+                    _, fem_system.elements_v.vel[f + 1, iv, i_b] = fem_system.boundary.impose_pos_vel(
+                        fem_system.elements_v.pos[f, iv, i_b], fem_system.elements_v.vel[f + 1, iv, i_b]
                     )
 
     def fem_hydroelastic(self, f: qd.i32):
@@ -960,6 +963,7 @@ class LegacyCoupler(RBC):
                 self.rigid_solver.dyn_state.links,
                 self.rigid_solver.rigid_info,
                 self.rigid_solver.sdf._sdf_info,
+                self.fem_solver._system,
                 self.mpm_solver._system,
                 self.sph_solver._system,
                 self.rigid_solver.collider.collider_config,
@@ -975,6 +979,7 @@ class LegacyCoupler(RBC):
                 self.rigid_solver.dyn_state.links,
                 self.rigid_solver.rigid_info,
                 self.rigid_solver.sdf._sdf_info,
+                self.fem_solver._system,
                 self.mpm_solver._system,
                 self.sph_solver._system,
                 self.rigid_solver.collider.collider_config,
