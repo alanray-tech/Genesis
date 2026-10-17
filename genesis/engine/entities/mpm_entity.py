@@ -4,6 +4,7 @@ import quadrants as qd
 import torch
 
 import genesis as gs
+from genesis.engine import mpm_runtime
 from genesis.engine.states.entities import MPMEntityState
 from genesis.utils.misc import to_gs_tensor
 
@@ -99,7 +100,8 @@ class MPMEntity(ParticleEntity):
             self.set_muscle_group(self.mesh_set_group_ids)
 
     def _add_particles_to_solver(self):
-        self._solver._kernel_add_particles(
+        mpm_runtime._kernel_add_particles(
+            self._solver._system,
             self._sim.cur_substep_local,
             self.active,
             self._particle_start,
@@ -114,10 +116,10 @@ class MPMEntity(ParticleEntity):
         """
         Clear all gradients for particle properties.
         """
-        self._reset_frame_grad(self._sim.cur_substep_local)
+        self._reset_frame_grad(self._solver._system, self._sim.cur_substep_local)
 
     @qd.kernel
-    def _reset_frame_grad(self, f: qd.i32):
+    def _reset_frame_grad(self, solver_system: qd.template(), f: qd.i32):
         """
         Clear all gradients for particle properties at the given substep.
 
@@ -128,16 +130,16 @@ class MPMEntity(ParticleEntity):
         """
         for i_p, i_b in qd.ndrange(self.n_particles, self._sim._B):
             i_global = i_p + self._particle_start
-            self._solver.particles.grad[f, i_global, i_b].pos = 0
-            self._solver.particles.grad[f, i_global, i_b].vel = 0
-            self._solver.particles.grad[f, i_global, i_b].C = 0
-            self._solver.particles.grad[f, i_global, i_b].F = 0
-            self._solver.particles.grad[f, i_global, i_b].F_tmp = 0
-            self._solver.particles.grad[f, i_global, i_b].Jp = 0
-            self._solver.particles.grad[f, i_global, i_b].U = 0
-            self._solver.particles.grad[f, i_global, i_b].V = 0
-            self._solver.particles.grad[f, i_global, i_b].S = 0
-            self._solver.particles.grad[f, i_global, i_b].actu = 0
+            solver_system.particles.pos.grad[f, i_global, i_b] = 0
+            solver_system.particles.vel.grad[f, i_global, i_b] = 0
+            solver_system.particles.C.grad[f, i_global, i_b] = 0
+            solver_system.particles.F.grad[f, i_global, i_b] = 0
+            solver_system.particles.F_tmp.grad[f, i_global, i_b] = 0
+            solver_system.particles.Jp.grad[f, i_global, i_b] = 0
+            solver_system.particles.U.grad[f, i_global, i_b] = 0
+            solver_system.particles.V.grad[f, i_global, i_b] = 0
+            solver_system.particles.S.grad[f, i_global, i_b] = 0
+            solver_system.particles.actu.grad[f, i_global, i_b] = 0
 
     def add_grad_from_state(self, state):
         """
@@ -150,26 +152,28 @@ class MPMEntity(ParticleEntity):
         """
         if state.pos.grad is not None:
             state.pos.assert_contiguous()
-            self._kernel_add_frame_particles_pos_grad(self._sim.cur_substep_local, state.pos.grad)
+            self._kernel_add_frame_particles_pos_grad(self._solver._system, self._sim.cur_substep_local, state.pos.grad)
 
         if state.vel.grad is not None:
             state.vel.assert_contiguous()
-            self._kernel_add_frame_particles_vel_grad(self._sim.cur_substep_local, state.vel.grad)
+            self._kernel_add_frame_particles_vel_grad(self._solver._system, self._sim.cur_substep_local, state.vel.grad)
 
         if state.C.grad is not None:
             state.C.assert_contiguous()
-            self._kernel_add_frame_particles_C_grad(self._sim.cur_substep_local, state.C.grad)
+            self._kernel_add_frame_particles_C_grad(self._solver._system, self._sim.cur_substep_local, state.C.grad)
 
         if state.F.grad is not None:
             state.F.assert_contiguous()
-            self._kernel_add_frame_particles_F_grad(self._sim.cur_substep_local, state.F.grad)
+            self._kernel_add_frame_particles_F_grad(self._solver._system, self._sim.cur_substep_local, state.F.grad)
 
         if state.Jp.grad is not None:
             state.Jp.assert_contiguous()
-            self._kernel_add_frame_particles_Jp_grad(self._sim.cur_substep_local, state.Jp.grad)
+            self._kernel_add_frame_particles_Jp_grad(self._solver._system, self._sim.cur_substep_local, state.Jp.grad)
 
     @qd.kernel
-    def _kernel_add_frame_particles_pos_grad(self, f: qd.i32, poss_grad: qd.types.ndarray()):
+    def _kernel_add_frame_particles_pos_grad(
+        self, solver_system: qd.template(), f: qd.i32, poss_grad: qd.types.ndarray()
+    ):
         """
         Accumulate gradients to particle positions at the given substep.
 
@@ -183,10 +187,12 @@ class MPMEntity(ParticleEntity):
         for i_p, i_b in qd.ndrange(self.n_particles, self._sim._B):
             i_global = i_p + self._particle_start
             for j in qd.static(range(3)):
-                self._solver.particles.grad[f, i_global, i_b].pos[j] += poss_grad[i_b, i_p, j]
+                solver_system.particles.pos.grad[f, i_global, i_b][j] += poss_grad[i_b, i_p, j]
 
     @qd.kernel
-    def _kernel_add_frame_particles_vel_grad(self, f: qd.i32, vels_grad: qd.types.ndarray()):
+    def _kernel_add_frame_particles_vel_grad(
+        self, solver_system: qd.template(), f: qd.i32, vels_grad: qd.types.ndarray()
+    ):
         """
         Accumulate gradients to particle velocities at the given substep.
 
@@ -200,10 +206,10 @@ class MPMEntity(ParticleEntity):
         for i_p, i_b in qd.ndrange(self.n_particles, self._sim._B):
             i_global = i_p + self._particle_start
             for j in qd.static(range(3)):
-                self._solver.particles.grad[f, i_global, i_b].vel[j] += vels_grad[i_b, i_p, j]
+                solver_system.particles.vel.grad[f, i_global, i_b][j] += vels_grad[i_b, i_p, j]
 
     @qd.kernel
-    def _kernel_add_frame_particles_C_grad(self, f: qd.i32, C_grad: qd.types.ndarray()):
+    def _kernel_add_frame_particles_C_grad(self, solver_system: qd.template(), f: qd.i32, C_grad: qd.types.ndarray()):
         """
         Accumulate gradients to affine matrices C at the given substep.
 
@@ -218,10 +224,10 @@ class MPMEntity(ParticleEntity):
             i_global = i_p + self._particle_start
             for j in qd.static(range(3)):
                 for k in qd.static(range(3)):
-                    self._solver.particles.grad[f, i_global, i_b].C[j, k] += C_grad[i_b, i_p, j, k]
+                    solver_system.particles.C.grad[f, i_global, i_b][j, k] += C_grad[i_b, i_p, j, k]
 
     @qd.kernel
-    def _kernel_add_frame_particles_F_grad(self, f: qd.i32, F_grad: qd.types.ndarray()):
+    def _kernel_add_frame_particles_F_grad(self, solver_system: qd.template(), f: qd.i32, F_grad: qd.types.ndarray()):
         """
         Accumulate gradients to deformation gradients F at the given substep.
 
@@ -236,10 +242,10 @@ class MPMEntity(ParticleEntity):
             i_global = i_p + self._particle_start
             for j in qd.static(range(3)):
                 for k in qd.static(range(3)):
-                    self._solver.particles.grad[f, i_global, i_b].F[j, k] += F_grad[i_b, i_p, j, k]
+                    solver_system.particles.F.grad[f, i_global, i_b][j, k] += F_grad[i_b, i_p, j, k]
 
     @qd.kernel
-    def _kernel_add_frame_particles_Jp_grad(self, f: qd.i32, Jp_grad: qd.types.ndarray()):
+    def _kernel_add_frame_particles_Jp_grad(self, solver_system: qd.template(), f: qd.i32, Jp_grad: qd.types.ndarray()):
         """
         Accumulate gradients to plastic volume ratios Jp at the given substep.
 
@@ -252,7 +258,7 @@ class MPMEntity(ParticleEntity):
         """
         for i_p, i_b in qd.ndrange(self.n_particles, self._sim._B):
             i_global = i_p + self._particle_start
-            self._solver.particles.grad[f, i_global, i_b].Jp += Jp_grad[i_b, i_p]
+            solver_system.particles.Jp.grad[f, i_global, i_b] += Jp_grad[i_b, i_p]
 
     def process_input(self, in_backward=False):
         if isinstance(self.material, gs.materials.MPM.Muscle) and self._tgt["actu"] is not None:
@@ -287,6 +293,7 @@ class MPMEntity(ParticleEntity):
         # TODO: merge with self._solver.get_state?!
         state = MPMEntityState(self, self._sim.cur_step_global)
         self.get_frame(
+            self._solver._system,
             f=self._sim.cur_substep_local,
             pos=state.pos,
             vel=state.vel,
@@ -304,6 +311,7 @@ class MPMEntity(ParticleEntity):
     @qd.kernel
     def get_frame(
         self,
+        solver_system: qd.template(),
         f: qd.i32,
         pos: qd.types.ndarray(),  # shape [B, n_particles, 3]
         vel: qd.types.ndarray(),  # shape [B, n_particles, 3]
@@ -336,15 +344,15 @@ class MPMEntity(ParticleEntity):
             i_global = i_p + self._particle_start
             # Copy pos, vel
             for j in qd.static(range(3)):
-                pos[i_b, i_p, j] = self._solver.particles[f, i_global, i_b].pos[j]
-                vel[i_b, i_p, j] = self._solver.particles[f, i_global, i_b].vel[j]
+                pos[i_b, i_p, j] = solver_system.particles.pos[f, i_global, i_b][j]
+                vel[i_b, i_p, j] = solver_system.particles.vel[f, i_global, i_b][j]
                 # Copy C, F
                 for k in qd.static(range(3)):
-                    C[i_b, i_p, j, k] = self._solver.particles[f, i_global, i_b].C[j, k]
-                    F[i_b, i_p, j, k] = self._solver.particles[f, i_global, i_b].F[j, k]
+                    C[i_b, i_p, j, k] = solver_system.particles.C[f, i_global, i_b][j, k]
+                    F[i_b, i_p, j, k] = solver_system.particles.F[f, i_global, i_b][j, k]
             # Copy Jp, active
-            Jp[i_b, i_p] = self._solver.particles[f, i_global, i_b].Jp
-            active[i_b, i_p] = self._solver.particles_ng[f, i_global, i_b].active
+            Jp[i_b, i_p] = solver_system.particles.Jp[f, i_global, i_b]
+            active[i_b, i_p] = solver_system.particles_ng.active[f, i_global, i_b]
 
     # ------------------------------------------------------------------------------------
     # ---------------------------------- io & control ------------------------------------
@@ -356,19 +364,21 @@ class MPMEntity(ParticleEntity):
         particles_idx_local = self._sanitize_particles_idx_local(particles_idx_local, envs_idx)
         particles_idx = particles_idx_local + self._particle_start
         poss = self._sanitize_particles_tensor(poss, gs.tc_float, particles_idx, envs_idx, (3,))
-        self.solver._kernel_set_particles_pos(self._sim.cur_substep_local, particles_idx, envs_idx, poss)
+        mpm_runtime._kernel_set_particles_pos(
+            self.solver._system, self._sim.cur_substep_local, particles_idx, envs_idx, poss
+        )
 
     @gs.assert_built
     def _set_particles_pos_grad(self, poss_grad):
-        self.solver._kernel_set_particles_pos_grad(
-            self._sim.cur_substep_local, self._particle_start, self._n_particles, poss_grad
+        mpm_runtime._kernel_set_particles_pos_grad(
+            self.solver._system, self._sim.cur_substep_local, self._particle_start, self._n_particles, poss_grad
         )
 
     def get_particles_pos(self, envs_idx=None):
         envs_idx = self._scene._sanitize_envs_idx(envs_idx)
         poss = self._sanitize_particles_tensor(None, gs.tc_float, None, envs_idx, (3,))
-        self.solver._kernel_get_particles_pos(
-            self._sim.cur_substep_local, self._particle_start, self.n_particles, envs_idx, poss
+        mpm_runtime._kernel_get_particles_pos(
+            self.solver._system, self._sim.cur_substep_local, self._particle_start, self.n_particles, envs_idx, poss
         )
         if self._scene.n_envs == 0:
             poss = poss[0]
@@ -380,19 +390,21 @@ class MPMEntity(ParticleEntity):
         particles_idx_local = self._sanitize_particles_idx_local(particles_idx_local, envs_idx)
         particles_idx = particles_idx_local + self._particle_start
         vels = self._sanitize_particles_tensor(vels, gs.tc_float, particles_idx, envs_idx, (3,))
-        self.solver._kernel_set_particles_vel(self._sim.cur_substep_local, particles_idx, envs_idx, vels)
+        mpm_runtime._kernel_set_particles_vel(
+            self.solver._system, self._sim.cur_substep_local, particles_idx, envs_idx, vels
+        )
 
     @gs.assert_built
     def _set_particles_vel_grad(self, vels_grad):
-        self.solver._kernel_set_particles_vel_grad(
-            self._sim.cur_substep_local, self._particle_start, self._n_particles, vels_grad
+        mpm_runtime._kernel_set_particles_vel_grad(
+            self.solver._system, self._sim.cur_substep_local, self._particle_start, self._n_particles, vels_grad
         )
 
     def get_particles_vel(self, envs_idx=None):
         envs_idx = self._scene._sanitize_envs_idx(envs_idx)
         vels = self._sanitize_particles_tensor(None, gs.tc_float, None, envs_idx, (3,))
-        self.solver._kernel_get_particles_vel(
-            self._sim.cur_substep_local, self._particle_start, self.n_particles, envs_idx, vels
+        mpm_runtime._kernel_get_particles_vel(
+            self.solver._system, self._sim.cur_substep_local, self._particle_start, self.n_particles, envs_idx, vels
         )
         if self._scene.n_envs == 0:
             vels = vels[0]
@@ -409,13 +421,15 @@ class MPMEntity(ParticleEntity):
         # if not torch.isin(actives, torch.Tensor([False, True], dtype=gs.tc_bool, device=gs.device)).all():
         #     gs.raise_exception("Elements of `actives' must be either True or False.")
 
-        self.solver._kernel_set_particles_active(self._sim.cur_substep_local, particles_idx, envs_idx, actives)
+        mpm_runtime._kernel_set_particles_active(
+            self.solver._system, self._sim.cur_substep_local, particles_idx, envs_idx, actives
+        )
 
     def get_particles_active(self, envs_idx=None):
         envs_idx = self._scene._sanitize_envs_idx(envs_idx)
         actives = self._sanitize_particles_tensor(None, gs.tc_bool, None, envs_idx)
-        self.solver._kernel_get_particles_active(
-            self._sim.cur_substep_local, self._particle_start, self.n_particles, envs_idx, actives
+        mpm_runtime._kernel_get_particles_active(
+            self.solver._system, self._sim.cur_substep_local, self._particle_start, self.n_particles, envs_idx, actives
         )
         if self._scene.n_envs == 0:
             actives = actives[0]
@@ -457,8 +471,8 @@ class MPMEntity(ParticleEntity):
         particles_idx_local = self._sanitize_particles_idx_local(particles_idx_local, envs_idx)
         particles_idx = particles_idx_local + self._particle_start
         actus = self._sanitize_particles_tensor(actus, gs.tc_float, particles_idx, envs_idx, (self.material.n_groups,))
-        self.solver._kernel_set_particles_actu(
-            self._sim.cur_substep_local, self.material.n_groups, particles_idx, envs_idx, actus
+        mpm_runtime._kernel_set_particles_actu(
+            self.solver._system, self._sim.cur_substep_local, self.material.n_groups, particles_idx, envs_idx, actus
         )
 
     @gs.assert_built
@@ -471,15 +485,15 @@ class MPMEntity(ParticleEntity):
         actu_grad : torch.Tensor
             A tensor containing gradients for actuation inputs.
         """
-        self.solver._kernel_set_particles_actu_grad(
-            self._sim.cur_substep_local, self._particle_start, self._n_particles, actu_grad
+        mpm_runtime._kernel_set_particles_actu_grad(
+            self.solver._system, self._sim.cur_substep_local, self._particle_start, self._n_particles, actu_grad
         )
 
     def get_particles_actu(self, envs_idx=None):
         envs_idx = self._scene._sanitize_envs_idx(envs_idx)
         actus = self._sanitize_particles_tensor(None, gs.tc_float, None, envs_idx, (self.material.n_groups,))
-        self.solver._kernel_get_particles_actu(
-            self._sim.cur_substep_local, self._particle_start, self.n_particles, envs_idx, actus
+        mpm_runtime._kernel_get_particles_actu(
+            self.solver._system, self._sim.cur_substep_local, self._particle_start, self.n_particles, envs_idx, actus
         )
         if self._scene.n_envs == 0:
             actus = actus[0]
@@ -503,7 +517,7 @@ class MPMEntity(ParticleEntity):
         # if not (0 <= muscle_group & muscle_group < self.material.n_groups).all():
         #     gs.raise_exception("Elements of `muscle_group' are out-of-range.")
 
-        self.solver._kernel_set_particles_muscle_group(particles_idx, muscle_group)
+        mpm_runtime._kernel_set_particles_muscle_group(self.solver._system, particles_idx, muscle_group)
 
     @assert_muscle
     @assert_active
@@ -517,7 +531,9 @@ class MPMEntity(ParticleEntity):
             A tensor containing the muscle group ID of each particle.
         """
         muscle_group = gs.zeros((self._n_particles,), dtype=gs.tc_int, requires_grad=False, scene=self._scene)
-        self.solver._kernel_get_particles_muscle_group(self._particle_start, self._n_particles, muscle_group)
+        mpm_runtime._kernel_get_particles_muscle_group(
+            self.solver._system, self._particle_start, self._n_particles, muscle_group
+        )
         return muscle_group
 
     @assert_muscle
@@ -541,7 +557,7 @@ class MPMEntity(ParticleEntity):
         # if not ((muscle_direction.norm(dim=-1) - 1.0).abs() < gs.EPS).all():
         #     gs.raise_exception("Last dimension of `muscle_direction' must be normalized.")
 
-        self.solver._kernel_set_particles_muscle_direction(particles_idx, muscle_direction)
+        mpm_runtime._kernel_set_particles_muscle_direction(self.solver._system, particles_idx, muscle_direction)
 
     def set_muscle(self, muscle_group=None, muscle_direction=None):
         """
@@ -578,7 +594,7 @@ class MPMEntity(ParticleEntity):
         # if not torch.isin(free, torch.Tensor([False, True], dtype=gs.tc_bool, device=gs.device)).all():
         #     gs.raise_exception("Elements of `free' must be either True or False.")
 
-        self.solver._kernel_set_particles_free(particles_idx, free)
+        mpm_runtime._kernel_set_particles_free(self.solver._system, particles_idx, free)
 
     @assert_active
     def get_free(self):
@@ -591,7 +607,7 @@ class MPMEntity(ParticleEntity):
             A tensor indicating free (1) or fixed (0) status.
         """
         free = self._sanitize_particles_tensor(None, gs.tc_bool)
-        self.solver._kernel_get_particles_free(self._particle_start, self._n_particles, free)
+        mpm_runtime._kernel_get_particles_free(self.solver._system, self._particle_start, self._n_particles, free)
         return free
 
     # ------------------------------------------------------------------------------------
@@ -660,7 +676,8 @@ class MPMEntity(ParticleEntity):
         link_pos = link_pos[:, 0, :]  # (n_envs, 3)
         link_quat = link_quat[:, 0, :]  # (n_envs, 4)
 
-        self._solver._kernel_set_particle_constraints(
+        mpm_runtime._kernel_set_particle_constraints(
+            self._solver._system,
             self._sim.cur_substep_local,
             particles_mask,
             self._particle_start,
@@ -687,7 +704,7 @@ class MPMEntity(ParticleEntity):
         if particles_mask is None:
             particles_mask = torch.ones((self._sim._B, self.n_particles), dtype=torch.bool, device=gs.device)
 
-        self._solver._kernel_remove_particle_constraints(particles_mask, self._particle_start)
+        mpm_runtime._kernel_remove_particle_constraints(self._solver._system, particles_mask, self._particle_start)
 
     # ------------------------------------------------------------------------------------
     # --------------------------------- naming methods -----------------------------------
