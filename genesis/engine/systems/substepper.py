@@ -56,12 +56,8 @@ class Substepper(System):
         if self.sf is not None:
             self.sf.process_input.invoke((in_backward,))
 
-    # FIXME: the substep runs on the host, since the phases it calls launch their own kernels around host logic. The
-    # DFSPH and implicit FEM iterations read their convergence back on the host every iteration, the rigid constraint
-    # solve selects its kernels on the host and one of them is a graph itself, the SAP coupler iterates Newton, PCG and
-    # line search on the host, and the phases of the legacy coupler are kernels rather than funcs. The substep becomes
-    # one graph once every phase is a stage Action whose loops run as device-side graph loops, and once quadrants#966
-    # lets such a graph use fastcache.
+    # The manager stays on the host while implicit FEM, rigid constraint dispatch, SAP and LegacyCoupler retain host
+    # phases. Each migrated participant may still run its own device graph inside these explicit lifecycle boundaries.
     def substep(self, f: int) -> None:
         """Advance every solver by substep f. A scene simulating rigid entities alone advances through
         SimulatorEngine.rigid_substep_pipeline instead."""
