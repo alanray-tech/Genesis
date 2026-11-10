@@ -746,6 +746,19 @@ def motion_cross_motion_grad(s_ang, s_vel, m_ang, m_vel, ang_grad, vel_grad):
 
 
 @qd.func
+def dof_motion(cdof_vel, cdof_ang, value):
+    """Spatial motion (linear, angular) along the motion subspace of a dof at a value of the dof, the velocity of a link
+    at the velocity of a dof of its chain."""
+    return cdof_vel * value, cdof_ang * value
+
+
+@qd.func
+def dof_force(cdof_vel, cdof_ang, force_vel, force_ang):
+    """Generalized force on a dof of a spatial force (linear, angular) on a link of its subtree."""
+    return cdof_ang.dot(force_ang) + cdof_vel.dot(force_vel)
+
+
+@qd.func
 def qd_orthogonals(a):
     """
     Returns orthogonal vectors `b` and `c`, given a normal vector `a`.
@@ -763,6 +776,31 @@ def qd_orthogonals(a):
         b[2] = 1.0 - a[2] ** 2
     b = b.normalized()
     return b.cross(a), b
+
+
+@qd.func
+def qd_orthogonals_backward(a: qd.types.vector(3), g_b_cross_a: qd.types.vector(3), g_b: qd.types.vector(3)):
+    """Reverse of `qd_orthogonals`, from the adjoints of the two orthogonal vectors to that of the normal."""
+    is_branch_a = qd.abs(a[1]) < 0.5
+    b_raw = qd.Vector.zero(gs.qd_float, 3)
+    if is_branch_a:
+        b_raw = qd.Vector([-a[0] * a[1], 1.0 - a[1] * a[1], -a[2] * a[1]], dt=gs.qd_float)
+    else:
+        b_raw = qd.Vector([-a[0] * a[2], -a[1] * a[2], 1.0 - a[2] * a[2]], dt=gs.qd_float)
+    b_raw_norm = b_raw.norm()
+    b = b_raw / b_raw_norm
+    g_b_total = g_b + a.cross(g_b_cross_a)
+    g_a = g_b_cross_a.cross(b)
+    g_b_raw = (g_b_total - g_b_total.dot(b) * b) / b_raw_norm
+    if is_branch_a:
+        g_a[0] += g_b_raw[0] * (-a[1])
+        g_a[1] += g_b_raw[0] * (-a[0]) + g_b_raw[1] * (-2.0 * a[1]) + g_b_raw[2] * (-a[2])
+        g_a[2] += g_b_raw[2] * (-a[1])
+    else:
+        g_a[0] += g_b_raw[0] * (-a[2])
+        g_a[1] += g_b_raw[1] * (-a[2])
+        g_a[2] += g_b_raw[0] * (-a[0]) + g_b_raw[1] * (-a[1]) + g_b_raw[2] * (-2.0 * a[2])
+    return g_a
 
 
 @qd.func

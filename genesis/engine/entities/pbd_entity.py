@@ -11,6 +11,22 @@ import genesis.utils.mesh as mu
 from genesis.engine.entities.particle_entity import ParticleEntity
 
 
+@qd.kernel
+def kernel_add_vverts_weighted(
+    vvert_start: int,
+    particle_start: int,
+    support_idxs_local: qd.types.ndarray(),
+    support_weights: qd.types.ndarray(),
+    pbd_solver: qd.template(),
+):
+    """Bind the given vverts to their supporting particles by given weights (see 'ParticleSolver.add_vverts')."""
+    for i_vv_ in range(support_idxs_local.shape[0]):
+        i_vv = i_vv_ + vvert_start
+        for j in range(pbd_solver.n_vvert_supports):
+            pbd_solver.vverts_info.support_idxs[i_vv][j] = support_idxs_local[i_vv_, j] + particle_start
+            pbd_solver.vverts_info.support_weights[i_vv][j] = support_weights[i_vv_, j]
+
+
 class PBDBaseEntity(ParticleEntity):
     """
     Base class for PBD entity.
@@ -329,6 +345,24 @@ class PBD2DEntity(PBDTetEntity):
             self._inner_edges,
             self._inner_edges_len_rest,
         )
+
+    def _add_vverts_to_solver(self):
+        """Embed every vvert in its nearest triangle of the simulation mesh at rest, so that the rendered cloth stays
+        one continuous surface as it bends, which the affine fit of 'ParticleEntity' creases."""
+        if self._solver.n_vvert_supports < 3:
+            super()._add_vverts_to_solver()
+            return
+        mesh = trimesh.Trimesh(vertices=self._particles, faces=self._mesh.faces, process=False)
+        vverts_closest_pos, _, vverts_face_idx = trimesh.proximity.closest_point(mesh, self._vverts)
+        vverts_barycentric = trimesh.triangles.points_to_barycentric(
+            mesh.triangles[vverts_face_idx], vverts_closest_pos
+        )
+        support_idxs = np.zeros((len(self._vverts), self._solver.n_vvert_supports), dtype=gs.np_int)
+        support_weights = np.zeros((len(self._vverts), self._solver.n_vvert_supports), dtype=gs.np_float)
+        support_idxs[:, :3] = self._mesh.faces[vverts_face_idx]
+        support_idxs[:, 3:] = self._mesh.faces[vverts_face_idx, :1]
+        support_weights[:, :3] = vverts_barycentric
+        kernel_add_vverts_weighted(self._vvert_start, self._particle_start, support_idxs, support_weights, self._solver)
 
     @property
     def n_inner_edges(self):

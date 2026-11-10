@@ -1,0 +1,334 @@
+"""Contact pairs of the material point method (MPM) with the implicit finite element method (FEM) in the joint Newton
+solve (see fem_newton.py for the FEM unknown and its stages)."""
+
+from collections.abc import Iterator
+
+import quadrants as qd
+
+import genesis as gs
+import genesis.utils.geom as gu
+from genesis.engine.solvers.fem_newton import FemNewtonParticipant
+from genesis.engine.solvers.mpm_data import PYRAMID_ROWS
+from genesis.engine.solvers.mpm_func import (
+    contact_band_width,
+    contact_friction,
+    contact_gap,
+    is_within_band,
+    particle_invweight,
+    particle_of_sorted,
+    penalty_rows,
+)
+from genesis.engine.solvers.mpm_solver import MpmNewtonParticipant
+from genesis.engine.solvers.newton_linear import PAIRS
+from genesis.utils.data import Data, DataItem, DataKind, field, iter_data
+
+from .contact_candidates import CouplingPairs, LeafTrees, pair_relative_displacement
+
+
+class MpmFemPairs(Data, kind=DataKind.SCRATCH):
+    """The pairs of the particles with their nearest FEM surface triangle (see MpmFemContact.build_pair)."""
+
+    n_pairs: qd.Tensor = field(int, ndarray=True)
+    sorted_idx: qd.Tensor = field(int, shape=(PAIRS,), ndarray=True)
+    i_b: qd.Tensor = field(int, shape=(PAIRS,), ndarray=True)
+    triangle_idx: qd.Tensor = field(int, shape=(PAIRS,), ndarray=True)
+    barycentric: qd.Tensor = field((float, 3), shape=(PAIRS,), ndarray=True)
+    normal: qd.Tensor = field((float, 3), shape=(PAIRS,), ndarray=True)
+    friction: qd.Tensor = field(float, shape=(PAIRS,), ndarray=True)
+    stiffness: qd.Tensor = field((float, PYRAMID_ROWS), shape=(PAIRS,), ndarray=True)
+    target: qd.Tensor = field((float, PYRAMID_ROWS), shape=(PAIRS,), ndarray=True)
+
+
+# =============================================== Layer 0: geometry ===============================================
+
+
+@qd.func
+def closest_point_barycentric(
+    p: qd.types.vector(3), a: qd.types.vector(3), b: qd.types.vector(3), c: qd.types.vector(3)
+):
+    """Barycentric coordinates of the closest point of a triangle to a point (Ericson 2005, Real-Time Collision
+    Detection, Sec. 5.1.5)."""
+    ab = b - a
+    ac = c - a
+    ap = p - a
+    d1 = ab.dot(ap)
+    d2 = ac.dot(ap)
+    barycentric = qd.Vector([1.0, 0.0, 0.0], dt=gs.qd_float)
+    if d1 > 0.0 or d2 > 0.0:
+        bp = p - b
+        d3 = ab.dot(bp)
+        d4 = ac.dot(bp)
+        if d3 >= 0.0 and d4 <= d3:
+            barycentric = qd.Vector([0.0, 1.0, 0.0], dt=gs.qd_float)
+        else:
+            vc = d1 * d4 - d3 * d2
+            if vc <= 0.0 and d1 >= 0.0 and d3 <= 0.0:
+                v = d1 / (d1 - d3)
+                barycentric = qd.Vector([1.0 - v, v, 0.0], dt=gs.qd_float)
+            else:
+                cp = p - c
+                d5 = ab.dot(cp)
+                d6 = ac.dot(cp)
+                if d6 >= 0.0 and d5 <= d6:
+                    barycentric = qd.Vector([0.0, 0.0, 1.0], dt=gs.qd_float)
+                else:
+                    vb = d5 * d2 - d1 * d6
+                    if vb <= 0.0 and d2 >= 0.0 and d6 <= 0.0:
+                        w = d2 / (d2 - d6)
+                        barycentric = qd.Vector([1.0 - w, 0.0, w], dt=gs.qd_float)
+                    else:
+                        va = d3 * d6 - d5 * d4
+                        if va <= 0.0 and d4 - d3 >= 0.0 and d5 - d6 >= 0.0:
+                            w = (d4 - d3) / ((d4 - d3) + (d5 - d6))
+                            barycentric = qd.Vector([0.0, 1.0 - w, w], dt=gs.qd_float)
+                        else:
+                            denom = 1.0 / (va + vb + vc)
+                            v = vb * denom
+                            w = vc * denom
+                            barycentric = qd.Vector([1.0 - v - w, v, w], dt=gs.qd_float)
+    return barycentric
+
+
+@qd.func
+def is_in_tetrahedron(x: qd.types.vector(3), vertices: qd.types.matrix(4, 3)):
+    """Whether a point lies in a tetrahedron, by its barycentric coordinates."""
+    v3 = vertices[3, :]
+    edges = qd.Matrix.cols([vertices[k, :] - v3 for k in qd.static(range(3))])
+    is_inside = False
+    if qd.abs(edges.determinant()) > gs.EPS:
+        barycentric = edges.inverse() @ (x - v3)
+        is_inside = (barycentric >= 0.0).all() and barycentric.sum() <= 1.0
+    return is_inside
+
+
+@qd.func
+def triangle_contact(x: qd.types.vector(3), a: qd.types.vector(3), b: qd.types.vector(3), c: qd.types.vector(3)):
+    """Whether a point lies behind a triangle, with its unsigned distance to the triangle, the alignment of the normal
+    of the triangle with the separation, the signed distance, the barycentric coordinates of the closest point, and
+    the contact normal, the separation on the front side and the normal of the triangle behind it."""
+    barycentric = closest_point_barycentric(x, a, b, c)
+    separation = x - (barycentric[0] * a + barycentric[1] * b + barycentric[2] * c)
+    distance = separation.norm()
+    n_tri = gu.qd_normalize((b - a).cross(c - a), gs.EPS)
+    side = gs.qd_float(1.0)
+    is_behind = separation.dot(n_tri) < 0.0
+    if is_behind:
+        side = -1.0
+    align = qd.abs(separation.dot(n_tri)) / qd.max(distance, gs.EPS)
+    normal = n_tri
+    if side > 0.0 and distance > gs.EPS:
+        normal = separation / distance
+    return is_behind, distance, align, side * distance, barycentric, normal
+
+
+@qd.func
+def swept_element_box(positions: qd.types.matrix(4, 3), velocities: qd.types.matrix(4, 3), thickness: float, dt: float):
+    """Box of a tetrahedral element, grown by the contact thickness and twice the substep travel of its fastest
+    vertex."""
+    lo = gu.qd_vec3(qd.math.inf)
+    hi = gu.qd_vec3(-qd.math.inf)
+    speed = gs.qd_float(0.0)
+    for k in qd.static(range(4)):
+        lo = qd.min(lo, positions[k, :])
+        hi = qd.max(hi, positions[k, :])
+        speed = qd.max(speed, velocities[k, :].norm())
+    margin = contact_band_width(speed, dt, thickness)
+    return lo - margin, hi + margin
+
+
+@qd.func
+def triangle_point_velocity(barycentric: qd.types.vector(3), velocities: qd.types.matrix(3, 3)):
+    """Velocity of a point of a triangle from the velocities of its vertices, row k of velocities."""
+    return velocities.transpose() @ barycentric
+
+
+@qd.func
+def triangle_point_inverse_mass(barycentric: qd.types.vector(3), masses: qd.types.vector(3)):
+    """Inverse mass of a point of a triangle in the displacement sum_k b_k dx_k of its vertices."""
+    inv_mass = gs.qd_float(0.0)
+    for k in qd.static(range(3)):
+        inv_mass += barycentric[k] * barycentric[k] / masses[k]
+    return inv_mass
+
+
+@qd.func
+def triangle_pair_weights(barycentric: qd.types.vector(3)):
+    """Weights of a particle and of the vertices of a triangle in the relative displacement dx_p - sum_k b_k dx_k."""
+    return qd.Vector([1.0, -barycentric[0], -barycentric[1], -barycentric[2]], dt=gs.qd_float)
+
+
+# ============================================== Layer 1: broad phase ==============================================
+
+
+class FemContactParams(Data, kind=DataKind.CONSTANT, shape=()):
+    """Scene values of the MPM-FEM contact pairs, as device scalars: the surface thickness in metres and the penalty
+    stiffness of a row per unit of its effective mass."""
+
+    thickness: qd.Tensor = field(float, ndarray=True)
+    stiffness: qd.Tensor = field(float, ndarray=True)
+
+
+@qd.data_oriented
+class FemTriangleQuery(LeafTrees):
+    """The linear bounding volume hierarchy (LBVH) over the finite element method (FEM) surface triangles of every
+    environment (see genesis.engine.bvh)."""
+
+    def __init__(self, fem, mpm_info, contact: FemContactParams, n_envs):
+        self.fem = fem
+        self.mpm_info = mpm_info
+        self.contact = contact
+        super().__init__(n_envs, fem.n_surfaces)
+
+    def build(self, f):
+        """Fit the leaf boxes to the triangles at the substep start and build the trees."""
+        kernel_fit_triangle_leaves(f, self)
+        self.build_trees()
+
+
+@qd.kernel
+def kernel_fit_triangle_leaves(f: int, query: qd.template()):
+    """The box of every surface triangle over the element behind it, so that a particle that penetrated the element
+    still finds the triangle, grown by the contact thickness and twice the substep travel of its fastest vertex."""
+    for i_b, i_s in qd.ndrange(query.leaves.aabbs_min.shape[0], query.leaves.aabbs_min.shape[1]):
+        el2v = query.fem.solver.elements_i[query.fem.solver.surface[i_s].tri2el].el2v
+        lo, hi = swept_element_box(
+            qd.Matrix.rows([query.fem.solver.elements_v[f, el2v[k], i_b].pos for k in qd.static(range(4))]),
+            qd.Matrix.rows([query.fem.solver.elements_v[f, el2v[k], i_b].vel for k in qd.static(range(4))]),
+            query.contact.thickness[()],
+            query.mpm_info.substep_dt[()],
+        )
+        query.leaves.aabbs_min[i_b, i_s] = lo
+        query.leaves.aabbs_max[i_b, i_s] = hi
+
+
+@qd.func
+def is_in_element(i_e: int, i_b: int, f: int, x: qd.types.vector(3), fem: qd.template()):
+    """Whether a point lies in a tetrahedral element."""
+    el2v = fem.solver.elements_i[i_e].el2v
+    return is_in_tetrahedron(
+        x, qd.Matrix.rows([fem.solver.elements_v[f, el2v[k], i_b].pos for k in qd.static(range(4))])
+    )
+
+
+@qd.func
+def triangle_closest_point(f: int, i_b: int, i_s: int, x: qd.types.vector(3), fem: qd.template()):
+    """The closest point of a FEM surface triangle to a position (see triangle_contact), valid for a point behind the
+    triangle within the element behind it alone."""
+    tri2v = fem.solver.surface[i_s].tri2v
+    is_behind, distance, align, signed_distance, barycentric, normal = triangle_contact(
+        x,
+        fem.solver.elements_v[f, tri2v[0], i_b].pos,
+        fem.solver.elements_v[f, tri2v[1], i_b].pos,
+        fem.solver.elements_v[f, tri2v[2], i_b].pos,
+    )
+    is_valid = True
+    if is_behind:
+        is_valid = is_in_element(fem.solver.surface[i_s].tri2el, i_b, f, x, fem)
+    return is_valid, distance, align, signed_distance, barycentric, normal
+
+
+# ============================================== Layer 2: pair kind ===============================================
+
+
+@qd.data_oriented
+class MpmFemContact(CouplingPairs):
+    """Pair kind of the contacts between the material point method (MPM) and the finite element method (FEM), the pair
+    of a particle and its nearest surface triangle, over the particle and the vertices of the triangle."""
+
+    n_doublets = 4
+    n_triplets = 10
+    pairs_type = MpmFemPairs
+    # Distances to two triangles within this fraction of the grid spacing are those to a closest point they share
+    tie_ratio = 1e-6
+
+    def __init__(self, mpm: MpmNewtonParticipant, fem: FemNewtonParticipant, query: FemTriangleQuery):
+        self.fem = fem
+        self.query = query
+        super().__init__(mpm)
+
+    @property
+    def data(self) -> Iterator[DataItem]:
+        yield from super().data
+        yield from iter_data(self.query, "contact")
+
+    def build_query(self, f: int) -> None:
+        self.query.build(f)
+
+    @qd.func
+    def candidate_score(self, f: int, i_b: int, i_s: int, i_ps: int):
+        """Unsigned distance of a sorted particle to a triangle, infinite for a triangle that cannot hold the particle,
+        and the alignment of the normal of the triangle.
+
+        The alignment breaks the ties, since the sign of the distance to a triangle sharing the closest edge or vertex
+        may be wrong on a closed surface."""
+        i_p, _, _ = particle_of_sorted(i_ps, self.mpm.grid, self.mpm.mpm_info)
+        is_valid, distance, align, signed_distance, barycentric, normal = triangle_closest_point(
+            f, i_b, i_s, self.mpm.particles.pos[f, i_p, i_b], self.fem
+        )
+        score = qd.math.inf
+        if is_valid:
+            score = distance
+        return score, align
+
+    @qd.func
+    def build_pair(self, f: int, i_b: int, i_s: int, i_ps: int, score: float):
+        """Pair a sorted particle with its nearest FEM surface triangle if it lies within its contact range or short of
+        it by less than `contact_band_width`."""
+        i_p, _, _ = particle_of_sorted(i_ps, self.mpm.grid, self.mpm.mpm_info)
+        is_valid, distance, align, signed_distance, barycentric, normal = triangle_closest_point(
+            f, i_b, i_s, self.mpm.particles.pos[f, i_p, i_b], self.fem
+        )
+        phi = contact_gap(signed_distance, self.query.contact.thickness[()])
+        tri2v = self.fem.solver.surface[i_s].tri2v
+        v_q = triangle_point_velocity(
+            barycentric,
+            qd.Matrix.rows([self.fem.solver.elements_v[f, tri2v[k], i_b].vel for k in qd.static(range(3))]),
+        )
+        if is_within_band(
+            phi,
+            normal,
+            self.mpm.particles.vel[f, i_p, i_b],
+            v_q,
+            self.mpm.mpm_info.substep_dt[()],
+            self.mpm.mpm_info.dx[()],
+        ):
+            inv_mass_q = triangle_point_inverse_mass(
+                barycentric,
+                qd.Vector(
+                    [self.fem.solver.elements_v_info[tri2v[k]].mass for k in qd.static(range(3))], dt=gs.qd_float
+                ),
+            )
+            stiffness, target = penalty_rows(
+                self.query.contact.stiffness[()],
+                particle_invweight(f, i_p, i_b, normal, self.mpm.particles, self.mpm.particles_info),
+                inv_mass_q,
+                phi,
+            )
+            friction = contact_friction(
+                self.fem.solver.elements_i[self.fem.solver.surface[i_s].tri2el].friction_mu,
+                1.0,
+                self.mpm.mpm_info.contact_min_friction[()],
+            )
+            i_pair = self.add_pair(i_ps, i_b, normal, friction, stiffness, target)
+            if i_pair >= 0:
+                self.pairs.triangle_idx[i_pair] = i_s
+                self.pairs.barycentric[i_pair] = barycentric
+
+    @qd.func
+    def pair_vertices(self, f: int, i_pair: int):
+        """The particle then the vertices of the triangle of a pair, of weights 1 and -b_k in the relative displacement
+        u_rel = dx_p - sum_k b_k dx_k, with u_rel at the current iterate."""
+        i_b = self.pairs.i_b[i_pair]
+        tri2v = self.fem.solver.surface[self.pairs.triangle_idx[i_pair]].tri2v
+        verts_fem = qd.Vector([i_b * self.fem.n_vertices + tri2v[i_v_] for i_v_ in qd.static(range(3))], dt=gs.qd_int)
+        i_v_mpm = self.mpm.vertex_range.offset[()] + self.pairs.sorted_idx[i_pair]
+        verts = qd.Vector(
+            [i_v_mpm] + [self.fem.vertex_range.offset[()] + verts_fem[i_v_] for i_v_ in qd.static(range(3))],
+            dt=gs.qd_int,
+        )
+        weights = triangle_pair_weights(self.pairs.barycentric[i_pair])
+        values = qd.Matrix.rows(
+            [self.mpm.func_vertex_value(f, self.pairs.sorted_idx[i_pair])]
+            + [self.fem.func_vertex_value(f, verts_fem[i_v_]) for i_v_ in qd.static(range(3))]
+        )
+        return verts, weights, pair_relative_displacement(weights, values)

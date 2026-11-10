@@ -7,15 +7,24 @@ import genesis as gs
 @pytest.mark.parametrize("n_envs", [0, pytest.param(2, marks=pytest.mark.required)])
 @pytest.mark.parametrize("muscle_material", [gs.materials.MPM.Muscle, gs.materials.FEM.Muscle])
 def test_muscle(n_envs, muscle_material, show_viewer):
-    scene = gs.Scene(
-        sim_options=gs.options.SimOptions(
+    mpm_options = gs.options.MPMOptions(
+        lower_bound=(-1.0, -1.0, -0.2),
+        upper_bound=(1.0, 1.0, 1.0),
+    )
+    plane_material = gs.materials.Rigid(
+        coup_friction=5.0,
+    )
+    # The implicit MPM takes one large step, while the explicit FEM needs small substeps to stay stable
+    if muscle_material is gs.materials.MPM.Muscle:
+        sim_options = gs.options.SimOptions()
+    else:
+        sim_options = gs.options.SimOptions(
             dt=5e-4,
             substeps=10,
-        ),
-        mpm_options=gs.options.MPMOptions(
-            lower_bound=(-1.0, -1.0, -0.2),
-            upper_bound=(1.0, 1.0, 1.0),
-        ),
+        )
+    scene = gs.Scene(
+        sim_options=sim_options,
+        mpm_options=mpm_options,
         viewer_options=gs.options.ViewerOptions(
             camera_pos=(1.0, -0.6, 0.5),
             camera_lookat=(0.0, 0.0, 0.05),
@@ -25,15 +34,18 @@ def test_muscle(n_envs, muscle_material, show_viewer):
     )
     scene.add_entity(
         morph=gs.morphs.Plane(),
-        material=gs.materials.Rigid(
-            coup_friction=5.0,
-        ),
+        material=plane_material,
     )
+    # The body rests on the plane from the start: the plane holds MPM particles, which lie half a particle size inside
+    # the surface of the body, by their centers at its coupling softness
+    height = 0.05
+    if muscle_material is gs.materials.MPM.Muscle:
+        height -= 0.5 * mpm_options.particle_size - plane_material.coup_softness
     # The tetrahedralization is refined, surface included, so that every muscle group spans many tetrahedra. Its
-    # well-shaped tetrahedra keep the explicit FEM integration stable at the substep MPM needs.
+    # well-shaped tetrahedra keep the explicit FEM integration stable.
     box = scene.add_entity(
         morph=gs.morphs.Box(
-            pos=(0.0, 0.0, 0.05),
+            pos=(0.0, 0.0, height),
             size=(0.1, 0.5, 0.1),
             nobisect=False,
             maxvolume=2e-5,

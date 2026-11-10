@@ -38,6 +38,26 @@ class ForceField(RBC):
             acc = self._get_acc(pos, vel, t, i)
         return acc
 
+    @qd.func
+    def get_acc_grad_vel(
+        self, pos: qd.types.vector(3), vel: qd.types.vector(3), t: float, i: int, acc_bar: qd.types.vector(3)
+    ):
+        """
+        Return the velocity adjoint (d acc / d vel)^T acc_bar from the acceleration adjoint, for a solver
+        differentiating through the velocity.
+        """
+        vel_bar = qd.Vector.zero(gs.qd_float, 3)
+        if self._active[None]:
+            vel_bar = self._get_acc_grad_vel(pos, vel, t, i, acc_bar)
+        return vel_bar
+
+    @property
+    def differentiable(self):
+        """
+        Whether the field provides the velocity adjoint of 'get_acc_grad_vel'.
+        """
+        return True
+
     @property
     def active(self):
         """
@@ -72,6 +92,12 @@ class Constant(ForceField):
     @qd.func
     def _get_acc(self, pos, vel, t, i):
         return self._acc_qd
+
+    @qd.func
+    def _get_acc_grad_vel(
+        self, pos: qd.types.vector(3), vel: qd.types.vector(3), t: float, i: int, acc_bar: qd.types.vector(3)
+    ):
+        return qd.Vector.zero(gs.qd_float, 3)
 
     @property
     def direction(self):
@@ -126,6 +152,12 @@ class Wind(ForceField):
         if dist > self._radius:
             acc = qd.Vector.zero(gs.qd_float, 3)
         return acc
+
+    @qd.func
+    def _get_acc_grad_vel(
+        self, pos: qd.types.vector(3), vel: qd.types.vector(3), t: float, i: int, acc_bar: qd.types.vector(3)
+    ):
+        return qd.Vector.zero(gs.qd_float, 3)
 
     @property
     def direction(self):
@@ -189,6 +221,14 @@ class Point(ForceField):
 
         return acc
 
+    @qd.func
+    def _get_acc_grad_vel(
+        self, pos: qd.types.vector(3), vel: qd.types.vector(3), t: float, i: int, acc_bar: qd.types.vector(3)
+    ):
+        radius = (pos - self._position_qd).norm(gs.EPS)
+        falloff = 1 / (radius + 1.0) ** self._falloff_pow
+        return -(falloff * self._flow) * acc_bar
+
     @property
     def strength(self):
         return self._strength
@@ -219,6 +259,17 @@ class Drag(ForceField):
     @qd.func
     def _get_acc(self, pos, vel, t, i):
         return -self._linear * vel - self._quadratic * vel.norm() * vel
+
+    @qd.func
+    def _get_acc_grad_vel(
+        self, pos: qd.types.vector(3), vel: qd.types.vector(3), t: float, i: int, acc_bar: qd.types.vector(3)
+    ):
+        # d(|v| v) / dv = |v| I + v v^T / |v|, which vanishes with v
+        speed = vel.norm()
+        vel_bar = -self._linear * acc_bar - self._quadratic * speed * acc_bar
+        if speed > 0.0:
+            vel_bar -= (self._quadratic * vel.dot(acc_bar) / speed) * vel
+        return vel_bar
 
     @property
     def linear(self):
@@ -254,6 +305,16 @@ class Noise(ForceField):
             - 1
         )
         return noise * self._strength
+
+    @qd.func
+    def _get_acc_grad_vel(
+        self, pos: qd.types.vector(3), vel: qd.types.vector(3), t: float, i: int, acc_bar: qd.types.vector(3)
+    ):
+        return qd.Vector.zero(gs.qd_float, 3)
+
+    @property
+    def differentiable(self):
+        return False
 
     @property
     def strength(self):
@@ -336,6 +397,12 @@ class Vortex(ForceField):
 
         return acceleration
 
+    @qd.func
+    def _get_acc_grad_vel(
+        self, pos: qd.types.vector(3), vel: qd.types.vector(3), t: float, i: int, acc_bar: qd.types.vector(3)
+    ):
+        return -self._damping * acc_bar
+
     @property
     def direction(self):
         return self._direction
@@ -412,6 +479,12 @@ class Turbulence(ForceField):
         acc += (acc - vel) * self._flow
         return acc
 
+    @qd.func
+    def _get_acc_grad_vel(
+        self, pos: qd.types.vector(3), vel: qd.types.vector(3), t: float, i: int, acc_bar: qd.types.vector(3)
+    ):
+        return -self._flow * acc_bar
+
     @property
     def strength(self):
         return self._strength
@@ -435,6 +508,10 @@ class Custom(ForceField):
         super().__init__()
 
         self.get_acc = func
+
+    @property
+    def differentiable(self):
+        return False
 
 
 @qd.data_oriented
