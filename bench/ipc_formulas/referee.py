@@ -2,25 +2,28 @@
 
     python bench/ipc_formulas/referee.py --summary acceptance-noreferee
 
-Reads the failing rows of results/summary_<summary>.json (every backend), evaluates the formula of their case on the
-float64 inputs in 50-digit arithmetic (mpmath), and writes data/referee.npz with '<case>/<set>/rows' and
-'<case>/<set>/exact' (NaN for the discrete outputs). The edge-edge barrier cases (barrier_ee, barrier_ee_unprefixed) are
-evaluated, plain or mollified as CGQ's production dispatch decides (its flag and mollifier test, which the row must
-already match); a failing row of another case is reported and left without referee.
+Reads the failing rows of summary_<summary>.json in cases.RESULTS (every backend), evaluates the formula of their case
+on the float64 inputs in high-precision arithmetic (mpmath, 120 digits, at least 50 of them exact), and writes
+referee.npz to cases.DATA with '<case>/<set>/rows' and '<case>/<set>/exact' (NaN for the discrete outputs). The
+edge-edge barrier rows are evaluated plain or mollified as CGQ's production dispatch decides (its flag and mollifier
+test, which the row must already match). A mollified row is the product rule of m(I1) b(D) (ee_mollified_barrier.h)
+projected onto the positive semi-definite cone through a 120-digit eigendecomposition. Every derivative of the
+distance, the cross norm and the barrier is a central difference of its plain formula, independent of the analytic
+derivatives of either side. A failing row of another case is reported and left without referee.
 """
 
 import argparse
 import json
-from pathlib import Path
 
 import mpmath as mp
 import numpy as np
 
-from cases import CASES, HESSIAN_CLAMP_RATIO, MOLLIFIER_RATIO
+from cases import CASES, DATA, HESSIAN_CLAMP_RATIO, MOLLIFIER_RATIO, RESULTS
 
-HERE = Path(__file__).resolve().parent
-mp.mp.dps = 50
-FD_STEP = mp.mpf("1e-25")
+mp.mp.dps = 120
+# Central differences of step h lose the digits of h (gradient) and of h^2 (Hessian) to cancellation and are exact to
+# h^2: 1e-30 leaves 60 exact digits of 120
+FD_STEP = mp.mpf("1e-30")
 
 
 def cross(a, b):
@@ -35,16 +38,33 @@ def sub(a, b):
     return [s - t for s, t in zip(a, b)]
 
 
+def shifted(xs, steps):
+    out = [list(x) for x in xs]
+    for i, step in steps:
+        out[i // 3][i % 3] += step
+    return out
+
+
 def gradient(f, xs):
-    """Gradient over the 12 coordinates by central differences, exact to ~FD_STEP^2 at 50 digits."""
-    out = []
+    """Gradient over the 12 coordinates by central differences."""
+    h = FD_STEP
+    return mp.matrix([(f(shifted(xs, [(i, h)])) - f(shifted(xs, [(i, -h)]))) / (2 * h) for i in range(12)])
+
+
+def hessian(f, xs):
+    """Hessian over the 12 coordinates by central differences of central differences, exactly symmetric."""
+    h = FD_STEP
+    H = mp.matrix(12, 12)
     for i in range(12):
-        plus = [list(x) for x in xs]
-        minus = [list(x) for x in xs]
-        plus[i // 3][i % 3] += FD_STEP
-        minus[i // 3][i % 3] -= FD_STEP
-        out.append((f(plus) - f(minus)) / (2 * FD_STEP))
-    return mp.matrix(out)
+        for j in range(i, 12):
+            value = (
+                f(shifted(xs, [(i, h), (j, h)]))
+                - f(shifted(xs, [(i, h), (j, -h)]))
+                - f(shifted(xs, [(i, -h), (j, h)]))
+                + f(shifted(xs, [(i, -h), (j, -h)]))
+            ) / (4 * h * h)
+            H[i, j] = H[j, i] = value
+    return H
 
 
 def flagged_distance2(flag):
@@ -89,36 +109,35 @@ def barrier_ee_exact(row, flag, is_mollified):
     D = distance2(xs)
     gD = gradient(distance2, xs)
     dH = d_hat * d_hat + 2 * d_hat * xi
-    dt = D - xi * xi
-    r = dt / dH
-    log_r = mp.log(r)
-    log_term = log_r + (r - 1) / r
-    clamped = r if dt >= mp.mpf(HESSIAN_CLAMP_RATIO) * dH else mp.mpf(HESSIAN_CLAMP_RATIO)
+
+    def barrier(D):
+        r = (D - xi * xi) / dH
+        return kappa * (r - 1) ** 2 * mp.log(r) ** 2
+
     if not is_mollified:
-        first = 2 * kappa * (r - 1) * log_r * log_term / dH
-        g = first * gD
+        dt = D - xi * xi
+        r = dt / dH
+        clamped = r if dt >= mp.mpf(HESSIAN_CLAMP_RATIO) * dH else mp.mpf(HESSIAN_CLAMP_RATIO)
+        g = mp.diff(barrier, D) * gD
         H = curvature_eigenvalue(clamped, kappa) / (4 * dt * dH) * gD * gD.T
         return g, H
+    b, b1, b2 = barrier(D), mp.diff(barrier, D), mp.diff(barrier, D, 2)
+    HD = hessian(distance2, xs)
     I1 = cross_norm2(xs)
     gI = gradient(cross_norm2, xs)
+    HI = hessian(cross_norm2, xs)
     eps = mp.mpf(MOLLIFIER_RATIO) * dot(sub(rest[0], rest[1]), sub(rest[0], rest[1])) * dot(
         sub(rest[2], rest[3]), sub(rest[2], rest[3])
     )
-    c = mp.sqrt(I1)
-    ratio_sqrt = mp.sqrt(dt) / mp.sqrt(dH)
-    mollifier = I1 * (2 * eps - I1) / eps**2
-    stress_cross = 4 * kappa * (eps - I1) / eps**2 * (r - 1) ** 2 * log_r**2
-    stress_distance = 4 * kappa * mollifier * (r - 1) * log_r * log_term
-    c4 = gI / (2 * c)
-    c8 = gD / (2 * mp.sqrt(dH) * mp.sqrt(dt))
-    g = stress_cross * c * c4 + stress_distance * ratio_sqrt * c8
-    l10 = 4 * kappa * (eps - 3 * I1) / eps**2 * (r - 1) ** 2 * log_r**2
-    l20 = mollifier * curvature_eigenvalue(clamped, kappa)
-    lg = 16 * kappa * (eps - I1) * (r - 1) * log_r * log_term * c * ratio_sqrt / eps**2
-    eigenvalues, Q = mp.eigsy(mp.matrix([[l10, lg], [lg, l20]]))
-    B = Q * mp.diag([max(e, 0) for e in eigenvalues]) * Q.T
-    H = B[0, 0] * c4 * c4.T + B[0, 1] * (c4 * c8.T + c8 * c4.T) + B[1, 1] * c8 * c8.T
-    return g, H
+    m = 2 * I1 / eps - (I1 / eps) ** 2
+    m1 = 2 / eps - 2 * I1 / eps**2
+    m2 = -2 / eps**2
+    gm = m1 * gI
+    Hm = m2 * gI * gI.T + m1 * HI
+    g = b * gm + m * b1 * gD
+    H = b * Hm + b1 * (gm * gD.T + gD * gm.T) + m * (b2 * gD * gD.T + b1 * HD)
+    eigenvalues, Q = mp.eigsy((H + H.T) / 2)
+    return g, Q * mp.diag([max(e, 0) for e in eigenvalues]) * Q.T
 
 
 def main() -> None:
@@ -126,20 +145,18 @@ def main() -> None:
     parser.add_argument("--summary", default="acceptance-noreferee")
     parser.add_argument("--reference", default="fmad-true")
     args = parser.parse_args()
-    summary = json.loads((HERE / "results" / f"summary_{args.summary}.json").read_text())
+    summary = json.loads((RESULTS / f"summary_{args.summary}.json").read_text())
     failing = {}
     for results in summary.values():
         for key, result in results.items():
             failing.setdefault(key, set()).update(result["failed_rows"])
     arrays = {}
-    with np.load(HERE / "data" / "inputs.npz") as inputs, np.load(
-        HERE / "data" / f"out_cgq_{args.reference}.npz"
-    ) as reference:
+    with np.load(DATA / "inputs.npz") as inputs, np.load(DATA / f"out_cgq_{args.reference}.npz") as reference:
         for key, rows in sorted(failing.items()):
             if not rows:
                 continue
             case = CASES[key.split("/")[0]]
-            if case.name not in ("barrier_ee", "barrier_ee_unprefixed"):
+            if case.name != "barrier_ee":
                 print(f"{key}: {len(rows)} failing rows, no referee for this case")
                 continue
             rows = np.array(sorted(rows))
@@ -151,9 +168,9 @@ def main() -> None:
                 exact[i, 14:] = [float(H[a, b]) for a in range(12) for b in range(12)]
             arrays[f"{key}/rows"] = rows
             arrays[f"{key}/exact"] = exact
-            print(f"{key}: {len(rows)} rows evaluated")
-    np.savez(HERE / "data" / "referee.npz", **arrays)
-    print(f"wrote {HERE / 'data' / 'referee.npz'}")
+            print(f"{key}: {len(rows)} rows evaluated", flush=True)
+    np.savez(DATA / "referee.npz", **arrays)
+    print(f"wrote {DATA / 'referee.npz'}")
 
 
 if __name__ == "__main__":

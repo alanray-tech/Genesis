@@ -5,13 +5,10 @@
 
 import argparse
 import json
-from pathlib import Path
 
 import numpy as np
 
-from cases import CASES
-
-HERE = Path(__file__).resolve().parent
+from cases import CASES, DATA, RESULTS
 
 
 def main() -> None:
@@ -23,12 +20,12 @@ def main() -> None:
     parser.add_argument("-n", type=int, default=5)
     args = parser.parse_args()
     np.set_printoptions(precision=17, linewidth=200)
-    summary = json.loads((HERE / "results" / f"summary_{args.label}.json").read_text())
+    summary = json.loads((RESULTS / f"summary_{args.label}.json").read_text())
     result = summary[args.run][args.key]
     print(json.dumps({k: v for k, v in result["outputs"].items()}, indent=1))
     case = CASES[args.key.split("/")[0]]
-    with np.load(HERE / "data" / "inputs.npz") as i, np.load(HERE / "data" / f"out_cgq_{args.reference}.npz") as c:
-        with np.load(HERE / "data" / f"out_genesis_{args.run}.npz") as g:
+    with np.load(DATA / "inputs.npz") as i, np.load(DATA / f"out_cgq_{args.reference}.npz") as c:
+        with np.load(DATA / f"out_genesis_{args.run}.npz") as g:
             rows, ref, gen = i[args.key], c[args.key], g[args.key]
     for i_r in result["failed_rows"][: args.n]:
         print(f"--- row {i_r}\ninput {rows[i_r]!r}")

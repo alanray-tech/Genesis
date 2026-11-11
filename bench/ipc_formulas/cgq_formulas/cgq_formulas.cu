@@ -3,8 +3,8 @@
 //
 // Each case composes the CGQ functions the way production does (consistent_ipc_contact.cu, contact_kernels.cu,
 // halfplane_contact_kernels.cu, ccd_kernels.h): the distance flag and its dispatch to the per-primitive barrier, the
-// mollifier dispatch of the edge-edge barrier with its vertex permutations (undone here so that outputs are in stencil
-// order), the rank-one fast path of the edge-edge barrier, the bound dispatch of the CCD. Constants are CGQ's
+// mollifier dispatch of the edge-edge barrier, the rank-one fast path of the edge-edge barrier, the bound dispatch of
+// the CCD. Constants are CGQ's
 // production values. The rows a case reads and writes are documented in cases.py.
 
 #include <ATen/cuda/CUDAContext.h>
@@ -14,11 +14,11 @@
 #include <solver/contact_function/codim_thickness.h>
 #include <solver/contact_function/directional_ccd.h>
 #include <solver/contact_function/distance_flag.h>
+#include <solver/contact_function/ee_mollified_barrier.h>
 #include <solver/contact_function/friction_contact_function.h>
 #include <solver/contact_function/gipc_accd.h>
 #include <solver/contact_function/gipc_barrier.h>
 #include <solver/contact_function/gipc_barrier_gradient_hessian.h>
-#include <solver/contact_function/gipc_barrier_gradient_hessian_rank2.h>
 #include <solver/contact_function/gipc_distance.h>
 #include <solver/contact_function/gipc_distance_type.h>
 #include <solver/contact_function/halfplane_contact.h>
@@ -294,11 +294,7 @@ __device__ void case_barrier_pt(const Row& r)
     r.put<12>(13, H);
 }
 
-// cipc_filter_assemble_ee_kernel without the filter, the area weight and the scatter, outputs in stencil order. With
-// Rank2 false (diagnostic), the mollified rows go through the un-prefixed mollified functions of
-// gipc_barrier_gradient_hessian.h instead of production's gipc_rank2 ones with kappa / dH_tilde^2: the same barrier,
-// a different algebra.
-template <bool Rank2>
+// cipc_filter_assemble_ee_kernel without the filter, the area weight and the scatter, outputs in stencil order
 __device__ void case_barrier_ee(const Row& r)
 {
     Vec3     verts[4] = {r.v(0), r.v(3), r.v(6), r.v(9)};
@@ -308,7 +304,6 @@ __device__ void case_barrier_ee(const Row& r)
     uint32_t flag = ee_distance_flag(p0, p1, p2, p3);
     double   d2   = ee_flagged_distance2(flag, verts);
     int32_t  pc   = __popc(flag);
-    double   xi_sq = xi * xi, d_hat_xi = d_hat + xi, d_hat_xi_sq = d_hat_xi * d_hat_xi;
     double   I1    = (p1 - p0).cross(p3 - p2).squaredNorm();
     double   eps_x = gipc_compute_eps_x(rest_v[0], rest_v[1], rest_v[2], rest_v[3]);
     Vec12    G;
@@ -316,109 +311,8 @@ __device__ void case_barrier_ee(const Row& r)
     bool     is_mollified = I1 < eps_x;
     if(is_mollified)
     {
-        double  dH_tilde = d_hat * d_hat + 2.0 * d_hat * xi;
-        double  kappa_r2 = kappa / (dH_tilde * dH_tilde);
-        Vec12   g;
-        Mat12   h;
-        int32_t ids_m[4];
-        if(pc == 4)
-        {
-            double d2_ee = gipc_d_EE(p0, p1, p2, p3);
-            if(!(d2_ee > xi_sq && d2_ee < d_hat_xi_sq))
-                d2_ee = d2;
-            if constexpr(Rank2)
-                gipc_rank2::gipc_barrier_grad_hess_ee_mollified(
-                    p0, p1, p2, p3, rest_v[0], rest_v[1], rest_v[2], rest_v[3], d_hat, xi, kappa_r2, d2_ee, g, h);
-            else
-                gipc_barrier_grad_hess_ee_mollified(
-                    p0, p1, p2, p3, rest_v[0], rest_v[1], rest_v[2], rest_v[3], d_hat, xi, kappa, g, h);
-            for(int k = 0; k < 4; ++k)
-                ids_m[k] = k;
-        }
-        else if(pc == 3)
-        {
-            int32_t offs[4];
-            bool    is_pt_on_A;
-            flag_active_offsets_for_ee(flag, offs, is_pt_on_A);
-            int32_t miss = 6 - offs[0] - offs[1] - offs[2];
-            if constexpr(Rank2)
-                gipc_rank2::gipc_barrier_grad_hess_pe_mollified(verts[offs[0]],
-                                                                verts[offs[1]],
-                                                                verts[offs[2]],
-                                                                verts[miss],
-                                                                rest_v[offs[0]],
-                                                                rest_v[offs[1]],
-                                                                rest_v[offs[2]],
-                                                                rest_v[miss],
-                                                                d_hat,
-                                                                xi,
-                                                                kappa_r2,
-                                                                g,
-                                                                h);
-            else
-                gipc_barrier_grad_hess_pe_mollified(verts[offs[0]],
-                                                    verts[offs[1]],
-                                                    verts[offs[2]],
-                                                    verts[miss],
-                                                    rest_v[offs[0]],
-                                                    rest_v[offs[1]],
-                                                    rest_v[offs[2]],
-                                                    rest_v[miss],
-                                                    d_hat,
-                                                    xi,
-                                                    kappa,
-                                                    g,
-                                                    h);
-            ids_m[0] = offs[0];
-            ids_m[1] = offs[1];
-            ids_m[2] = offs[2];
-            ids_m[3] = miss;
-        }
-        else
-        {
-            int32_t offs[4];
-            flag_active_offsets(flag, offs);
-            int32_t a_other = offs[0] ^ 1;
-            int32_t b_other = 5 - offs[1];
-            if constexpr(Rank2)
-                gipc_rank2::gipc_barrier_grad_hess_pp_mollified(verts[offs[0]],
-                                                                verts[offs[1]],
-                                                                verts[a_other],
-                                                                verts[b_other],
-                                                                rest_v[offs[0]],
-                                                                rest_v[offs[1]],
-                                                                rest_v[a_other],
-                                                                rest_v[b_other],
-                                                                d_hat,
-                                                                xi,
-                                                                kappa_r2,
-                                                                g,
-                                                                h);
-            else
-                gipc_barrier_grad_hess_pp_mollified(verts[offs[0]],
-                                                    verts[offs[1]],
-                                                    verts[a_other],
-                                                    verts[b_other],
-                                                    rest_v[offs[0]],
-                                                    rest_v[offs[1]],
-                                                    rest_v[a_other],
-                                                    rest_v[b_other],
-                                                    d_hat,
-                                                    xi,
-                                                    kappa,
-                                                    g,
-                                                    h);
-            ids_m[0] = offs[0];
-            ids_m[1] = offs[1];
-            ids_m[2] = a_other;
-            ids_m[3] = b_other;
-        }
-        for(int i = 0; i < 4; ++i)
-        {
-            G.segment<3>(ids_m[i] * 3) = g.segment<3>(i * 3);
-            for(int j = 0; j < 4; ++j)
-                H.block<3, 3>(ids_m[i] * 3, ids_m[j] * 3) = h.block<3, 3>(i * 3, j * 3);
-        }
+        double D = ee_mollified_distance2(p0, p1, p2, p3, flag, d2, xi, d_hat);
+        ee_mollified_barrier_grad_hess(verts, flag, D, eps_x, d_hat, xi, kappa, G, H);
     }
     else if(pc == 4)
     {
@@ -854,8 +748,7 @@ const std::unordered_map<std::string, Launcher>& launchers()
         {"pair_pe", launch<case_pair<2>>},
         {"pair_pp", launch<case_pair<3>>},
         {"barrier_pt", launch<case_barrier_pt>},
-        {"barrier_ee", launch<case_barrier_ee<true>>},
-        {"barrier_ee_unprefixed", launch<case_barrier_ee<false>>},
+        {"barrier_ee", launch<case_barrier_ee>},
         {"barrier_pe", launch<case_barrier_pe>},
         {"barrier_pp", launch<case_barrier_pp>},
         {"barrier_ph", launch<case_barrier_ph>},

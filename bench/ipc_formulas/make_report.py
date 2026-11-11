@@ -2,21 +2,19 @@
 
     python bench/ipc_formulas/make_report.py [--label acceptance]
 
-Reads results/summary_<label>.json and data/inputs.npz, writes results/clauses_<label>.md: per case (all input sets),
-the rows, the rows passing by pass1, by order and by referee (compare.py), the largest |g - c| / s of the last two, the
-failing rows, and for the order and referee clauses the 3 rows of largest error with their inputs. One table per
-backend.
+Reads summary_<label>.json of cases.RESULTS and inputs.npz of cases.DATA, writes clauses_<label>.md to cases.RESULTS:
+per case (all input sets), the rows, the rows passing by pass1, by order and by referee (compare.py), the largest
+|g - c| / s of the last two, the failing rows, and for the order and referee clauses the 3 rows of largest error with
+their inputs. One table per backend.
 """
 
 import argparse
 import json
-from pathlib import Path
 
 import numpy as np
 
-from cases import CASES
+from cases import CASES, DATA, RESULTS
 
-HERE = Path(__file__).resolve().parent
 N_EXAMPLES = 3
 
 
@@ -24,9 +22,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--label", default="acceptance")
     args = parser.parse_args()
-    summary = json.loads((HERE / "results" / f"summary_{args.label}.json").read_text())
+    summary = json.loads((RESULTS / f"summary_{args.label}.json").read_text())
     lines = [f"# Clauses of the parity rule per function: {args.label}", ""]
-    with np.load(HERE / "data" / "inputs.npz") as inputs:
+    with np.load(DATA / "inputs.npz") as inputs:
         for run, results in summary.items():
             lines += [f"## {run}", ""]
             lines.append("| case | function | rows | pass1 | order | order max err / s | referee | referee max err / s "
@@ -63,7 +61,7 @@ def main() -> None:
                     values = ", ".join(f"{v:.17g}" for v in inputs[key][i_r])
                     lines.append(f"- {case_name} / {clause}: {key.split('/', 1)[1]} row {i_r}: [{values}]")
             lines.append("")
-    path = HERE / "results" / f"clauses_{args.label}.md"
+    path = RESULTS / f"clauses_{args.label}.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     print(path.read_text(encoding="utf-8"))
 

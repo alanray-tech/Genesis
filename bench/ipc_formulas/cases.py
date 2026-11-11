@@ -5,7 +5,15 @@ reference side is cgq_formulas/cgq_formulas.cu, the Genesis side genesis_side.py
 lists side A then side B: (p, t0, t1, t2), (ea0, ea1, eb0, eb1), (p, e0, e1), (p0, p1).
 """
 
+from pathlib import Path
 from typing import NamedTuple
+
+HERE = Path(__file__).resolve().parent
+# The CGQ commit taken as ground truth. Its inputs and outputs go to data/<commit>, its tables to results/<commit>. The
+# tables of the previous ground truth, 0496c4fa, stay in results/.
+GROUND_TRUTH = "aeb58956"
+DATA = HERE / "data" / GROUND_TRUTH
+RESULTS = HERE / "results" / GROUND_TRUTH
 
 # Production constants of CGQ (contact_function headers and scene config defaults)
 HESSIAN_CLAMP_RATIO = 1e-6
@@ -16,6 +24,11 @@ INTERSECTION_TOLERANCE = 1e-12
 CCD_MAX_ITERS = 50000
 CCD_ETA = 0.5
 CANDIDATE_REACH_SCALE = 1.0
+# PSD projection of the mollified edge-edge Hessian (make_pd_lowrank_scalar.h): range tolerance relative to the
+# Frobenius norm, Jacobi convergence (off-diagonal norm relative to the Frobenius norm) and sweep budget
+PROJECTION_RANK_TOLERANCE = 1e-12
+PROJECTION_EIGEN_TOLERANCE = 1e-15
+PROJECTION_MAX_SWEEPS = 12
 
 STENCIL_VERTS = {"pt": (1, 3), "ee": (2, 2), "pe": (1, 2), "pp": (1, 1)}
 
@@ -71,9 +84,6 @@ def _build_cases():
         Case("barrier_pt", "PT barrier gradient/Hessian (flag dispatch)", 15,
              (_discrete("flag"), _real("gradient", 12), _real("hessian", 144))),
         Case("barrier_ee", "EE barrier gradient/Hessian (mollifier and flag dispatch)", 27,
-             (_discrete("flag"), _discrete("is_mollified"), _real("gradient", 12), _real("hessian", 144))),
-        # Diagnostic: the rows of barrier_ee, the mollified ones through CGQ's un-prefixed mollified algebra
-        Case("barrier_ee_unprefixed", "EE barrier, mollified rows by the un-prefixed algebra (diagnostic)", 27,
              (_discrete("flag"), _discrete("is_mollified"), _real("gradient", 12), _real("hessian", 144))),
         Case("barrier_pe", "PE barrier gradient/Hessian (flag dispatch)", 12,
              (_discrete("flag"), _real("gradient", 9), _real("hessian", 81))),

@@ -1,0 +1,9734 @@
+{
+ "cuda_fast-math-false": {
+  "barrier/degenerate": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.306783139167791e-05,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 44886768.440248765,
+     "max_error": 8.655626416307917e-07,
+     "fail": 0
+    },
+    "first": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9.259410359172106e+23,
+     "max_error": 4.306783139167791e-05,
+     "fail": 0
+    },
+    "second": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8.363752297457795e+43,
+     "max_error": 3.9975014432845756e-05,
+     "fail": 0
+    },
+    "normal_force": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.635303323216892e+20,
+     "max_error": 4.023243668816094e-05,
+     "fail": 0
+    }
+   }
+  },
+  "barrier/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.0302495325938125e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4517170.2684033625,
+     "max_error": 1.5463041892562921e-16,
+     "fail": 0
+    },
+    "first": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 255159366402141.84,
+     "max_error": 3.6741743531470475e-16,
+     "fail": 0
+    },
+    "second": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8.956537720302012e+22,
+     "max_error": 1.0302495325938125e-15,
+     "fail": 0
+    },
+    "normal_force": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 91513825367.79639,
+     "max_error": 3.3347505693646922e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/degenerate": {
+   "rows": 5280,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.901838764635125e-12,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2122584484253.9202,
+     "max_error": 3.901838764635125e-12,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 6.328371709619682e+19,
+     "max_error": 3.7610129575385485e-13,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/mollifier_sweep": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.7124995126588577e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1476343193.1138508,
+     "max_error": 7.024930408656123e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3081184762845.698,
+     "max_error": 1.7124995126588577e-13,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/parallel": {
+   "rows": 576,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.046718985033696696,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 6.537299022684371e-06,
+     "max_error": 0.046718985033696696,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 141178625028.57297,
+     "max_error": 8.646515184242257e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.0459963862569762e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 72612336.0239413,
+     "max_error": 2.0459963862569762e-13,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 162047137804.06717,
+     "max_error": 1.5423843224306358e-13,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.405214539650843e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3772973.367464613,
+     "max_error": 7.405214539650843e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 79994893209.58061,
+     "max_error": 6.390025826455252e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/real_cloth_stack_mollified": {
+   "rows": 18457,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.0144026184494678e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 849534.8522596605,
+     "max_error": 2.0144026184494678e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 36009217127.31732,
+     "max_error": 1.9068604168336578e-14,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.021781168907097e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2397660787.392158,
+     "max_error": 1.9887598809244494e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 38641669633431.0,
+     "max_error": 2.021781168907097e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/real_kimono_mollified": {
+   "rows": 514,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.467400985910547e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2900539029.085015,
+     "max_error": 1.5206634591537596e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 88656039796172.2,
+     "max_error": 2.467400985910547e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.17459325492449e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 14401622642.497314,
+     "max_error": 1.4306284213909369e-11,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8891317930934806.0,
+     "max_error": 2.17459325492449e-11,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.250238746677196e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9040915.637781432,
+     "max_error": 2.47228739723717e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 127718430.73755987,
+     "max_error": 5.250238746677196e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pe/real_cloth_stack": {
+   "rows": 17883,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.839410105598447e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1253131.8411036872,
+     "max_error": 1.839410105598447e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 38185047780.87019,
+     "max_error": 1.3386638574532144e-14,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pe/real_kimono": {
+   "rows": 12741,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.7515183079922645e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 209215104.19153318,
+     "max_error": 3.561205882201955e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1138861811869.0544,
+     "max_error": 3.7515183079922645e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.896040043196255e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 173819468.56564355,
+     "max_error": 1.7145560640372316e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 100596432003.47086,
+     "max_error": 1.896040043196255e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.207224584761547e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 312207139.8374793,
+     "max_error": 8.972947594669517e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 161421147204.133,
+     "max_error": 2.207224584761547e-14,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.0786899029271334e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 10343549552.558619,
+     "max_error": 1.0523144291582788e-11,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 7034180981401618.0,
+     "max_error": 1.0786899029271334e-11,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.1916492203296096e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 38155007.19495629,
+     "max_error": 2.3188475404131506e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1137588412.4331114,
+     "max_error": 4.1916492203296096e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pp/real_cloth_stack": {
+   "rows": 1404,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.410312602100138e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 249207.45133178768,
+     "max_error": 7.357489950543649e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 12869555815.17535,
+     "max_error": 7.410312602100138e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pp/real_kimono": {
+   "rows": 882,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.021781168907097e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2397660787.392158,
+     "max_error": 1.9887598809244494e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 38641669633431.0,
+     "max_error": 2.021781168907097e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.2673979657995461e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 889222589730.3007,
+     "max_error": 1.2673979657995461e-11,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 5.496520089476552e+19,
+     "max_error": 9.090866072820739e-13,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.150666033251288e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 640126568.7294348,
+     "max_error": 5.717189955844274e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1240624345948.988,
+     "max_error": 9.150666033251288e-14,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.092381738756178e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 20848942.39136458,
+     "max_error": 5.092381738756178e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 262913557311.34738,
+     "max_error": 4.1786845217684134e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.529700836226488e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 197379408.47671366,
+     "max_error": 4.529700836226488e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1218550882034.0676,
+     "max_error": 4.007064926045073e-16,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ee/degenerate": {
+   "rows": 1280,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_kept": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_kept": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_ee/degenerate": {
+   "rows": 4560,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.6389156698437546e-10,
+   "order": {
+    "rows": 19,
+    "max_error": 4.4782455521641396e-11,
+    "examples": [
+     2094,
+     2966,
+     2397
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 19,
+     "scale": 1.0,
+     "max_error": 1.6389156698437546e-10,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.1991796444732472e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.1991796444732472e-13,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.5543122344752192e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.5543122344752192e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pe/degenerate": {
+   "rows": 512,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.2326806242413113e-12,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.2326806242413113e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.551115123125783e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 5.551115123125783e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pp/degenerate": {
+   "rows": 128,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.5879966492634594e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 4.5879966492634594e-14,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.7755575615628914e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.7755575615628914e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pt/degenerate": {
+   "rows": 4096,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.9110936711495015e-12,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.9110936711495015e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.1018963519404679e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.1018963519404679e-13,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.88418203051333e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 5.88418203051333e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_ee/degenerate": {
+   "rows": 4560,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.877837647831456e-08,
+   "order": {
+    "rows": 99,
+    "max_error": 9.877837647831456e-08,
+    "examples": [
+     2894,
+     2646,
+     2929
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 99,
+     "scale": 1.0,
+     "max_error": 9.877837647831456e-08,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.279576693022591e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 4.279576693022591e-11,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.366662835295301e-12,
+   "order": {
+    "rows": 1,
+    "max_error": 6.5496497114736485e-12,
+    "examples": [
+     1203
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 1,
+     "scale": 1.0,
+     "max_error": 7.366662835295301e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pe/degenerate": {
+   "rows": 512,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.5754064719430971e-12,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.5754064719430971e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.547918011776346e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 9.547918011776346e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pp/degenerate": {
+   "rows": 128,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 6.966649479522857e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 6.966649479522857e-14,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 8.326672684688674e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 8.326672684688674e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pt/degenerate": {
+   "rows": 4096,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.8778312238509898e-12,
+   "order": {
+    "rows": 1,
+    "max_error": 1.7976731214730535e-12,
+    "examples": [
+     3455
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 1,
+     "scale": 1.0,
+     "max_error": 1.8778312238509898e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 6.28127549973101e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 6.28127549973101e-11,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.3200101102219005,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.3200101102219005,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 345.6511655710117,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "is_active": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.990395428641882e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 538.4632353766101,
+     "max_error": 3.990395428641882e-14,
+     "fail": 0
+    },
+    "is_active": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_ph_screw/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.992007221626409e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 9.992007221626409e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_ph_screw/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.275957200481571e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.275957200481571e-14,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_ee/degenerate": {
+   "rows": 1280,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.19259527654062675,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.19259527654062675,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.40156335269468013,
+   "order": {
+    "rows": 20,
+    "max_error": 0.301572678340427,
+    "examples": [
+     3302,
+     1979,
+     1409
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 20,
+     "scale": 1.0,
+     "max_error": 0.40156335269468013,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_interval_ee/degenerate": {
+   "rows": 1280,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.3183898417423734e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "t": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.3183898417423734e-14,
+     "fail": 0
+    },
+    "iters": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "status": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_interval_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.29328852413439455,
+   "order": {
+    "rows": 7,
+    "max_error": 0.20822939456869266,
+    "examples": [
+     3102,
+     2343,
+     2156
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "t": {
+     "is_discrete": false,
+     "pass1_fail": 7,
+     "scale": 1.0,
+     "max_error": 0.29328852413439455,
+     "fail": 0
+    },
+    "iters": {
+     "is_discrete": true,
+     "pass1_fail": 7,
+     "fail": 0
+    },
+    "status": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_interval_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.569577801063815e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "t": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.569577801063815e-14,
+     "fail": 0
+    },
+    "iters": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "status": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_interval_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.3564970237598154,
+   "order": {
+    "rows": 1,
+    "max_error": 0.3564970237598154,
+    "examples": [
+     198
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "t": {
+     "is_discrete": false,
+     "pass1_fail": 1,
+     "scale": 1.0,
+     "max_error": 0.3564970237598154,
+     "fail": 0
+    },
+    "iters": {
+     "is_discrete": true,
+     "pass1_fail": 1,
+     "fail": 0
+    },
+    "status": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.55351295663786e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.55351295663786e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 6.050715484207103e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 6.050715484207103e-14,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.220446049250313e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.220446049250313e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.992007221626409e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 9.992007221626409e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.251323762775038,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.251323762775038,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.3564970237598154,
+   "order": {
+    "rows": 3,
+    "max_error": 0.3564970237598154,
+    "examples": [
+     198,
+     3801,
+     1974
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 3,
+     "scale": 1.0,
+     "max_error": 0.3564970237598154,
+     "fail": 0
+    }
+   }
+  },
+  "closest_ee/degenerate": {
+   "rows": 3632,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.15513007382763241,
+   "order": {
+    "rows": 179,
+    "max_error": 0.07771525650240925,
+    "examples": [
+     2017,
+     1791,
+     1645
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.224744871391589,
+     "max_error": 2.2894267401961605e-15,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 178,
+     "scale": 3.0,
+     "max_error": 0.15513007382763241,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 178,
+     "scale": 3.25,
+     "max_error": 0.14319699140806497,
+     "fail": 0
+    }
+   }
+  },
+  "closest_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 6.666935820731074e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.1075883324450952,
+     "max_error": 2.1070965473359658e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9991836259145708,
+     "max_error": 6.644558132326796e-14,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999930166033901,
+     "max_error": 6.666935820731074e-14,
+     "fail": 0
+    }
+   }
+  },
+  "closest_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.170806261873814e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.003535323536984027,
+     "max_error": 4.170806261873814e-15,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.24999999999999997,
+     "max_error": 4.440892098500627e-16,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.25058577407299176,
+     "max_error": 4.4305109846409947e-16,
+     "fail": 0
+    }
+   }
+  },
+  "closest_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.024632147942489e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.28632951052713196,
+     "max_error": 3.816846499172952e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.7592829240733215,
+     "max_error": 8.407646463781383e-16,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.7584732909251156,
+     "max_error": 1.024632147942489e-15,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pe/degenerate": {
+   "rows": 336,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.224744871391589,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.551445829842609e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0957063139711707,
+     "max_error": 1.434532752173074e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.4998708643382845,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999404287230818,
+     "max_error": 5.551445829842609e-16,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pt/degenerate": {
+   "rows": 2580,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.1726039399558574,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.25,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.1108591219022097e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.1229005212890684,
+     "max_error": 1.422040845754356e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.499894604606668,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.999427382586584,
+     "max_error": 1.1108591219022097e-15,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.282479941930087e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0033418647304530205,
+     "max_error": 4.282479941930087e-15,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.25041293369450746,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.2503510821300259,
+     "max_error": 6.097663512661536e-16,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.8660442261457766e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.2759551819171322,
+     "max_error": 3.8660442261457766e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.7620451975181397,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.7618547493929634,
+     "max_error": 2.91452675332081e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance/degenerate": {
+   "rows": 3632,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.1269995273697226e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.5,
+     "max_error": 3.342233897048648e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.0,
+     "max_error": 3.1269995273697226e-13,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.6425470951290565e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4.441928579058698,
+     "max_error": 2.999299979362821e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.6971763472863417,
+     "max_error": 2.6425470951290565e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.895323260955744e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.2498512511153252e-05,
+     "max_error": 6.777070043322648e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.006589909639337588,
+     "max_error": 1.895323260955744e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.8265471659726116e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.08198458859870697,
+     "max_error": 4.231828214611951e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.552352759994331,
+     "max_error": 2.8265471659726116e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance_type/degenerate": {
+   "rows": 3632,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 140,
+    "max_error": 0.0,
+    "examples": [
+     1834,
+     1837,
+     1862
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 140,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance_type/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance_type/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance_type/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ee/degenerate": {
+   "rows": 868,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.0938806244430452e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 6.557254739192331e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0,
+     "max_error": 2.0938806244430452e-13,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ee/random": {
+   "rows": 3998,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.4791200565731413e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999806633680889,
+     "max_error": 3.8858557255498723e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 60.56087508470353,
+     "max_error": 2.4791200565731413e-13,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ee/real_cloth_stack": {
+   "rows": 19905,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.460909502374991e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.3306690738754696e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999999999996,
+     "max_error": 5.460909502374991e-15,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ee/real_kimono": {
+   "rows": 19902,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.603016557301492e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999930646783,
+     "max_error": 3.330669096974731e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999930703691381,
+     "max_error": 4.603016557301492e-13,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.5,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.1137332732769894e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.999963364926901,
+     "max_error": 1.1137332732769894e-15,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 22.200094392609543,
+     "max_error": 1.6003146725282423e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pe/real_cloth_stack": {
+   "rows": 17883,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.551400245361141e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.551400245361141e-14,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.3306690738754696e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pe/real_kimono": {
+   "rows": 12741,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.6486812525911585e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999629869017,
+     "max_error": 1.6486812525911585e-14,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 4.440892098500626e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 8.881784197762105e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999999143356,
+     "max_error": 8.881784197762105e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.440892098500626e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 4.440892098500626e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.992007297414256e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.999999992415153,
+     "max_error": 9.992007297414256e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pp/real_cloth_stack": {
+   "rows": 1404,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 8.88178434231433e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999836392023,
+     "max_error": 8.88178434231433e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pp/real_kimono": {
+   "rows": 882,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 8.881784199794216e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999996855403,
+     "max_error": 8.881784199794216e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.6135347813540989e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9998677644382218,
+     "max_error": 5.551849275033575e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 150.95680157210612,
+     "max_error": 1.6135347813540989e-13,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pt/real_cloth_stack": {
+   "rows": 20807,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.362625290379782e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.3306690738754696e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.362625290379782e-15,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pt/real_kimono": {
+   "rows": 26473,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.7763568394002505e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.3306690738754696e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.7763568394002505e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ee/degenerate": {
+   "rows": 868,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.999979179873591e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 111493685.2882848,
+     "max_error": 1.3369203617388153e-14,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 78712552.7321345,
+     "max_error": 5.999979179873591e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 12546033845280.984,
+     "max_error": 1.3446573949619512e-14,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ee/random": {
+   "rows": 3998,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.670093536737277e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 5632916473.1213045,
+     "max_error": 1.6930382705955538e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 339009695.2208571,
+     "max_error": 9.670093536737277e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 253045612021241.06,
+     "max_error": 6.884875363314967e-14,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ee/real_cloth_stack": {
+   "rows": 19905,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.271936130761861e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 311.1064175140084,
+     "max_error": 3.0376160225572368e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1863268.8918120328,
+     "max_error": 3.592546966497648e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 22834033286.723164,
+     "max_error": 9.271936130761861e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ee/real_kimono": {
+   "rows": 19902,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.6603397239198398e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4573.93185888179,
+     "max_error": 1.6603397239198398e-14,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 44648239.171211675,
+     "max_error": 1.0262682587631829e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 904300978711.2799,
+     "max_error": 1.0022902680080824e-14,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.988735882128944e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1505352.348150309,
+     "max_error": 1.9333566983500462e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4682987.736000905,
+     "max_error": 1.988735882128944e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 359360647565.504,
+     "max_error": 4.246093490166766e-17,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.5678466705200565e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2094168009.328692,
+     "max_error": 2.2769766135238607e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 27564151.895580843,
+     "max_error": 2.5678466705200565e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1010363858398.2384,
+     "max_error": 4.49764516011087e-16,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pe/real_cloth_stack": {
+   "rows": 17883,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.8162534595425124e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 99.36820983593621,
+     "max_error": 1.8162534595425124e-14,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 546429.8268794857,
+     "max_error": 1.6298107609935918e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 12184836071.086712,
+     "max_error": 1.1427026952435201e-14,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pe/real_kimono": {
+   "rows": 12741,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.368210743313352e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 6191.662666238213,
+     "max_error": 3.158139766680507e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 47757827.85507933,
+     "max_error": 4.368210743313352e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2079031593627.2937,
+     "max_error": 1.4972321624603594e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.428455349729134e-17,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 44631773.94568983,
+     "max_error": 2.0866806140144875e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 25074461.130050074,
+     "max_error": 7.428455349729134e-17,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1789710657946.1907,
+     "max_error": 1.7051682622274208e-17,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.1297613864927344e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 225364858.87810338,
+     "max_error": 7.934419554864575e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 114649339.689879,
+     "max_error": 2.5994325364898893e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2987332162114.8213,
+     "max_error": 2.1297613864927344e-13,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.055511212765563e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 14737541.434208525,
+     "max_error": 5.055511212765563e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1526057.780597352,
+     "max_error": 1.5257000528691099e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9346761251.00558,
+     "max_error": 1.0203259618979227e-16,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.874543854676831e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 26605763.53451903,
+     "max_error": 2.800363382639722e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 17885744.631958663,
+     "max_error": 1.874543854676831e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 363551378068.39844,
+     "max_error": 1.6788591635737622e-16,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pp/real_cloth_stack": {
+   "rows": 1404,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.0426975158198103e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 24.095894973351914,
+     "max_error": 8.10923406456258e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 115835.02843629787,
+     "max_error": 1.0426975158198103e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1073261405.3151484,
+     "max_error": 7.441823921318651e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pp/real_kimono": {
+   "rows": 882,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.444258570368525e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 118250.87807114933,
+     "max_error": 2.4611936022346044e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1038330489.2642794,
+     "max_error": 3.444258570368525e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8917360686936.81,
+     "max_error": 2.1902500847152736e-16,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.2237184626372705e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 307739802.98364,
+     "max_error": 9.68425991657623e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 176486461.72678256,
+     "max_error": 1.1579416741424446e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2477122416400.527,
+     "max_error": 2.2237184626372705e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.376386707238966e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 167039897.68907464,
+     "max_error": 3.264983439525271e-14,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 370721024.8161344,
+     "max_error": 3.376386707238966e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 50021471508192.97,
+     "max_error": 2.3284068501460604e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pt/real_cloth_stack": {
+   "rows": 20807,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.967059258216005e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1252.6487336977511,
+     "max_error": 4.53785784726811e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8650447.195434868,
+     "max_error": 4.629456697868713e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 159743822250.06555,
+     "max_error": 4.967059258216005e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pt/real_kimono": {
+   "rows": 26473,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.329359606440934e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3392.246762893227,
+     "max_error": 4.021647444939526e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 11184203.95263887,
+     "max_error": 5.329359606440934e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1888738769162.9622,
+     "max_error": 1.0987201334463369e-15,
+     "fail": 0
+    }
+   }
+  },
+  "intersect/degenerate": {
+   "rows": 800,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "intersect/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "mollified_barrier/degenerate": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.829842026501872e-07,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 37843069.504175045,
+     "max_error": 7.829842026501872e-07,
+     "fail": 0
+    }
+   }
+  },
+  "mollified_barrier/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.8149957405124965e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3848449.42261064,
+     "max_error": 1.8149957405124965e-16,
+     "fail": 0
+    }
+   }
+  },
+  "mollifier/degenerate": {
+   "rows": 3632,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.2682006830266833e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "threshold": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0009560019804233078,
+     "max_error": 2.2682006830266833e-16,
+     "fail": 0
+    },
+    "cross_norm2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.25,
+     "max_error": 8.673617379884035e-18,
+     "fail": 0
+    }
+   }
+  },
+  "mollifier/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.380678928879011e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "threshold": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.03361753226573875,
+     "max_error": 2.0640699766588728e-16,
+     "fail": 0
+    },
+    "cross_norm2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 29.84622273674985,
+     "max_error": 2.380678928879011e-16,
+     "fail": 0
+    }
+   }
+  },
+  "mollifier/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.4815418376590818e-20,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "threshold": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 6.400000000000004e-06,
+     "max_error": 2.4233807008389468e-20,
+     "fail": 0
+    },
+    "cross_norm2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.006400000000000003,
+     "max_error": 2.4815418376590818e-20,
+     "fail": 0
+    }
+   }
+  },
+  "mollifier/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.844229095077551e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "threshold": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.6853789583833522e-08,
+     "max_error": 1.2321249631761556e-16,
+     "fail": 0
+    },
+    "cross_norm2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.0982482800782738e-05,
+     "max_error": 4.844229095077551e-16,
+     "fail": 0
+    }
+   }
+  },
+  "pair_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "d_hat": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.09314506837796926,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "thickness": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0199056762602064,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "area_weight": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0010000822478969302,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pair_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "d_hat": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.09314506837796926,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "thickness": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0199056762602064,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "area_weight": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0010000822478969302,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pair_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "d_hat": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.09314506837796926,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "thickness": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.018744070287517112,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "area_weight": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0010000822478969302,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pair_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "d_hat": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.09314506837796926,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "thickness": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0199056762602064,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "area_weight": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0010000822478969302,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pe_distance/degenerate": {
+   "rows": 336,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.5,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pe_distance/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.8074302127348286e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9.583397582360973,
+     "max_error": 3.70715463724427e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4.878585929979488,
+     "max_error": 4.8074302127348286e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pe_distance/real_cloth_stack": {
+   "rows": 17883,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.0817934561887527e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8.999994318711392e-06,
+     "max_error": 7.52918650620284e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.005999638912257471,
+     "max_error": 2.0817934561887527e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pe_distance/real_kimono": {
+   "rows": 12741,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.199781603733336e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9.999997844279357e-07,
+     "max_error": 7.199781603733336e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0019996195983988806,
+     "max_error": 6.235348460060523e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pt_distance/degenerate": {
+   "rows": 2580,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.375,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.5,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pt_distance/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.9482490313322187e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9.752507665867533,
+     "max_error": 2.732153975562502e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4.672826037901868,
+     "max_error": 1.9482490313322187e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pt_distance/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.9186217823580225e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.1168059876645831e-05,
+     "max_error": 7.584423405766112e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.006509885972253765,
+     "max_error": 1.9186217823580225e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pt_distance/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.1481297567532554e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.07615126242691753,
+     "max_error": 4.555994006380718e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.5519103638342644,
+     "max_error": 2.1481297567532554e-16,
+     "fail": 0
+    }
+   }
+  }
+ },
+ "cpu_fast-math-false": {
+  "barrier/degenerate": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.306783139167791e-05,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 44886768.440248765,
+     "max_error": 8.655626416307917e-07,
+     "fail": 0
+    },
+    "first": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9.259410359172106e+23,
+     "max_error": 4.306783139167791e-05,
+     "fail": 0
+    },
+    "second": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8.363752297457795e+43,
+     "max_error": 3.9975014432845756e-05,
+     "fail": 0
+    },
+    "normal_force": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.635303323216892e+20,
+     "max_error": 4.023243668816094e-05,
+     "fail": 0
+    }
+   }
+  },
+  "barrier/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.0302495325938125e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4517170.2684033625,
+     "max_error": 1.5463041892562921e-16,
+     "fail": 0
+    },
+    "first": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 255159366402141.84,
+     "max_error": 3.6741743531470475e-16,
+     "fail": 0
+    },
+    "second": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8.956537720302012e+22,
+     "max_error": 1.0302495325938125e-15,
+     "fail": 0
+    },
+    "normal_force": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 91513825367.79639,
+     "max_error": 3.3347505693646922e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/degenerate": {
+   "rows": 5280,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.901838764635125e-12,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2122584484253.9202,
+     "max_error": 3.901838764635125e-12,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 6.328371709619682e+19,
+     "max_error": 3.7610129575385485e-13,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/mollifier_sweep": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.7124995126588577e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1476343193.1138508,
+     "max_error": 7.024930408656123e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3081184762845.698,
+     "max_error": 1.7124995126588577e-13,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/parallel": {
+   "rows": 576,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.046718985033696696,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 6.537299022684371e-06,
+     "max_error": 0.046718985033696696,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 141178625028.57297,
+     "max_error": 8.646515184242257e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.0459963862569762e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 72612336.0239413,
+     "max_error": 2.0459963862569762e-13,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 162047137804.06717,
+     "max_error": 1.5423843224306358e-13,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.405214539650843e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3772973.367464613,
+     "max_error": 7.405214539650843e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 79994893209.58061,
+     "max_error": 6.390025826455252e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/real_cloth_stack_mollified": {
+   "rows": 18457,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.0144026184494678e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 849534.8522596605,
+     "max_error": 2.0144026184494678e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 36009217127.31732,
+     "max_error": 1.9068604168336578e-14,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.021781168907097e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2397660787.392158,
+     "max_error": 1.9887598809244494e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 38641669633431.0,
+     "max_error": 2.021781168907097e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ee/real_kimono_mollified": {
+   "rows": 514,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.467400985910547e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "is_mollified": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2900539029.085015,
+     "max_error": 1.5206634591537596e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 88656039796172.2,
+     "max_error": 2.467400985910547e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.17459325492449e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 14401622642.497314,
+     "max_error": 1.4306284213909369e-11,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8891317930934806.0,
+     "max_error": 2.17459325492449e-11,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.250238746677196e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9040915.637781432,
+     "max_error": 2.47228739723717e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 127718430.73755987,
+     "max_error": 5.250238746677196e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pe/real_cloth_stack": {
+   "rows": 17883,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.839410105598447e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1253131.8411036872,
+     "max_error": 1.839410105598447e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 38185047780.87019,
+     "max_error": 1.3386638574532144e-14,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pe/real_kimono": {
+   "rows": 12741,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.7515183079922645e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 209215104.19153318,
+     "max_error": 3.561205882201955e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1138861811869.0544,
+     "max_error": 3.7515183079922645e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.896040043196255e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 173819468.56564355,
+     "max_error": 1.7145560640372316e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 100596432003.47086,
+     "max_error": 1.896040043196255e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.207224584761547e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 312207139.8374793,
+     "max_error": 8.972947594669517e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 161421147204.133,
+     "max_error": 2.207224584761547e-14,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.0786899029271334e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 10343549552.558619,
+     "max_error": 1.0523144291582788e-11,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 7034180981401618.0,
+     "max_error": 1.0786899029271334e-11,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.1916492203296096e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 38155007.19495629,
+     "max_error": 2.3188475404131506e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1137588412.4331114,
+     "max_error": 4.1916492203296096e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pp/real_cloth_stack": {
+   "rows": 1404,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.410312602100138e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 249207.45133178768,
+     "max_error": 7.357489950543649e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 12869555815.17535,
+     "max_error": 7.410312602100138e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pp/real_kimono": {
+   "rows": 882,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.021781168907097e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2397660787.392158,
+     "max_error": 1.9887598809244494e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 38641669633431.0,
+     "max_error": 2.021781168907097e-16,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.2673979657995461e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 889222589730.3007,
+     "max_error": 1.2673979657995461e-11,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 5.496520089476552e+19,
+     "max_error": 9.090866072820739e-13,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.150666033251288e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 640126568.7294348,
+     "max_error": 5.717189955844274e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1240624345948.988,
+     "max_error": 9.150666033251288e-14,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.092381738756178e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 20848942.39136458,
+     "max_error": 5.092381738756178e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 262913557311.34738,
+     "max_error": 4.1786845217684134e-15,
+     "fail": 0
+    }
+   }
+  },
+  "barrier_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.529700836226488e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 197379408.47671366,
+     "max_error": 4.529700836226488e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1218550882034.0676,
+     "max_error": 4.007064926045073e-16,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ee/degenerate": {
+   "rows": 1280,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_kept": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_kept": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "candidate_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "verdict": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_ee/degenerate": {
+   "rows": 4560,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.6389156698437546e-10,
+   "order": {
+    "rows": 19,
+    "max_error": 4.4782455521641396e-11,
+    "examples": [
+     2094,
+     2966,
+     2397
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 19,
+     "scale": 1.0,
+     "max_error": 1.6389156698437546e-10,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.1991796444732472e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.1991796444732472e-13,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.5543122344752192e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.5543122344752192e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pe/degenerate": {
+   "rows": 512,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.2326806242413113e-12,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.2326806242413113e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.551115123125783e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 5.551115123125783e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pp/degenerate": {
+   "rows": 128,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.5879966492634594e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 4.5879966492634594e-14,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.7755575615628914e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.7755575615628914e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pt/degenerate": {
+   "rows": 4096,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.9110936711495015e-12,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.9110936711495015e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.1018963519404679e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.1018963519404679e-13,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_additive_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.88418203051333e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 5.88418203051333e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_ee/degenerate": {
+   "rows": 4560,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.877837647831456e-08,
+   "order": {
+    "rows": 99,
+    "max_error": 9.877837647831456e-08,
+    "examples": [
+     2894,
+     2646,
+     2929
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 99,
+     "scale": 1.0,
+     "max_error": 9.877837647831456e-08,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.279576693022591e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 4.279576693022591e-11,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.366662835295301e-12,
+   "order": {
+    "rows": 1,
+    "max_error": 6.5496497114736485e-12,
+    "examples": [
+     1203
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 1,
+     "scale": 1.0,
+     "max_error": 7.366662835295301e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pe/degenerate": {
+   "rows": 512,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.5754064719430971e-12,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.5754064719430971e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.547918011776346e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 9.547918011776346e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pp/degenerate": {
+   "rows": 128,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 6.966649479522857e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 6.966649479522857e-14,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 8.326672684688674e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 8.326672684688674e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pt/degenerate": {
+   "rows": 4096,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.8778312238509898e-12,
+   "order": {
+    "rows": 1,
+    "max_error": 1.7976731214730535e-12,
+    "examples": [
+     3455
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 1,
+     "scale": 1.0,
+     "max_error": 1.8778312238509898e-12,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 6.28127549973101e-11,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 6.28127549973101e-11,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_directional_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.3200101102219005,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.3200101102219005,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 345.6511655710117,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "is_active": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.990395428641882e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 538.4632353766101,
+     "max_error": 3.990395428641882e-14,
+     "fail": 0
+    },
+    "is_active": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_ph_screw/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.992007221626409e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 9.992007221626409e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_ph_screw/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.275957200481571e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.275957200481571e-14,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_ee/degenerate": {
+   "rows": 1280,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.19259527654062675,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.19259527654062675,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.40156335269468013,
+   "order": {
+    "rows": 20,
+    "max_error": 0.301572678340427,
+    "examples": [
+     3302,
+     1979,
+     1409
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 20,
+     "scale": 1.0,
+     "max_error": 0.40156335269468013,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_interval_ee/degenerate": {
+   "rows": 1280,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.3183898417423734e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "t": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.3183898417423734e-14,
+     "fail": 0
+    },
+    "iters": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "status": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_interval_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.29328852413439455,
+   "order": {
+    "rows": 7,
+    "max_error": 0.20822939456869266,
+    "examples": [
+     3102,
+     2343,
+     2156
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "t": {
+     "is_discrete": false,
+     "pass1_fail": 7,
+     "scale": 1.0,
+     "max_error": 0.29328852413439455,
+     "fail": 0
+    },
+    "iters": {
+     "is_discrete": true,
+     "pass1_fail": 7,
+     "fail": 0
+    },
+    "status": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_interval_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.569577801063815e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "t": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.569577801063815e-14,
+     "fail": 0
+    },
+    "iters": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "status": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_interval_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.3564970237598154,
+   "order": {
+    "rows": 1,
+    "max_error": 0.3564970237598154,
+    "examples": [
+     198
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "t": {
+     "is_discrete": false,
+     "pass1_fail": 1,
+     "scale": 1.0,
+     "max_error": 0.3564970237598154,
+     "fail": 0
+    },
+    "iters": {
+     "is_discrete": true,
+     "pass1_fail": 1,
+     "fail": 0
+    },
+    "status": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.55351295663786e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.55351295663786e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 6.050715484207103e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 6.050715484207103e-14,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.220446049250313e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.220446049250313e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.992007221626409e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 9.992007221626409e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.251323762775038,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.251323762775038,
+     "fail": 0
+    }
+   }
+  },
+  "ccd_screw_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.3564970237598154,
+   "order": {
+    "rows": 3,
+    "max_error": 0.3564970237598154,
+    "examples": [
+     198,
+     3801,
+     1974
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "toi": {
+     "is_discrete": false,
+     "pass1_fail": 3,
+     "scale": 1.0,
+     "max_error": 0.3564970237598154,
+     "fail": 0
+    }
+   }
+  },
+  "closest_ee/degenerate": {
+   "rows": 3632,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.15513007382763241,
+   "order": {
+    "rows": 179,
+    "max_error": 0.07771525650240925,
+    "examples": [
+     2017,
+     1791,
+     1645
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.224744871391589,
+     "max_error": 2.2894267401961605e-15,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 178,
+     "scale": 3.0,
+     "max_error": 0.15513007382763241,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 178,
+     "scale": 3.25,
+     "max_error": 0.14319699140806497,
+     "fail": 0
+    }
+   }
+  },
+  "closest_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 6.666935820731074e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.1075883324450952,
+     "max_error": 2.1070965473359658e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9991836259145708,
+     "max_error": 6.644558132326796e-14,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999930166033901,
+     "max_error": 6.666935820731074e-14,
+     "fail": 0
+    }
+   }
+  },
+  "closest_ee/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.170806261873814e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.003535323536984027,
+     "max_error": 4.170806261873814e-15,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.24999999999999997,
+     "max_error": 4.440892098500627e-16,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.25058577407299176,
+     "max_error": 4.4305109846409947e-16,
+     "fail": 0
+    }
+   }
+  },
+  "closest_ee/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.024632147942489e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.28632951052713196,
+     "max_error": 3.816846499172952e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.7592829240733215,
+     "max_error": 8.407646463781383e-16,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.7584732909251156,
+     "max_error": 1.024632147942489e-15,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pe/degenerate": {
+   "rows": 336,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.224744871391589,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.551445829842609e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0957063139711707,
+     "max_error": 1.434532752173074e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.4998708643382845,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999404287230818,
+     "max_error": 5.551445829842609e-16,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pt/degenerate": {
+   "rows": 2580,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.1726039399558574,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.25,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.1108591219022097e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.1229005212890684,
+     "max_error": 1.422040845754356e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.499894604606668,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.999427382586584,
+     "max_error": 1.1108591219022097e-15,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pt/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.282479941930087e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0033418647304530205,
+     "max_error": 4.282479941930087e-15,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.25041293369450746,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.2503510821300259,
+     "max_error": 6.097663512661536e-16,
+     "fail": 0
+    }
+   }
+  },
+  "closest_pt/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.8660442261457766e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "distance": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.2759551819171322,
+     "max_error": 3.8660442261457766e-16,
+     "fail": 0
+    },
+    "closest_a": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.7620451975181397,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "closest_b": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.7618547493929634,
+     "max_error": 2.91452675332081e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance/degenerate": {
+   "rows": 3632,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.1269995273697226e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.5,
+     "max_error": 3.342233897048648e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.0,
+     "max_error": 3.1269995273697226e-13,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.6425470951290565e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4.441928579058698,
+     "max_error": 2.999299979362821e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.6971763472863417,
+     "max_error": 2.6425470951290565e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.895323260955744e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.2498512511153252e-05,
+     "max_error": 6.777070043322648e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.006589909639337588,
+     "max_error": 1.895323260955744e-15,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.8265471659726116e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.08198458859870697,
+     "max_error": 4.231828214611951e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.552352759994331,
+     "max_error": 2.8265471659726116e-16,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance_type/degenerate": {
+   "rows": 3632,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 140,
+    "max_error": 0.0,
+    "examples": [
+     1834,
+     1837,
+     1862
+    ]
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 140,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance_type/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance_type/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "ee_distance_type/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ee/degenerate": {
+   "rows": 868,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.0938806244430452e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 6.557254739192331e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3.0,
+     "max_error": 2.0938806244430452e-13,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ee/random": {
+   "rows": 3998,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.4791200565731413e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999806633680889,
+     "max_error": 3.8858557255498723e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 60.56087508470353,
+     "max_error": 2.4791200565731413e-13,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ee/real_cloth_stack": {
+   "rows": 19905,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.460909502374991e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.3306690738754696e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999999999996,
+     "max_error": 5.460909502374991e-15,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ee/real_kimono": {
+   "rows": 19902,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.603016557301492e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999930646783,
+     "max_error": 3.330669096974731e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999930703691381,
+     "max_error": 4.603016557301492e-13,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.5,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.1137332732769894e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.999963364926901,
+     "max_error": 1.1137332732769894e-15,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 22.200094392609543,
+     "max_error": 1.6003146725282423e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pe/real_cloth_stack": {
+   "rows": 17883,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.551400245361141e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 2.551400245361141e-14,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.3306690738754696e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pe/real_kimono": {
+   "rows": 12741,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.6486812525911585e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999629869017,
+     "max_error": 1.6486812525911585e-14,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 4.440892098500626e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "frame_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 8.881784197762105e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999999143356,
+     "max_error": 8.881784197762105e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.440892098500626e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 4.440892098500626e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.992007297414256e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.999999992415153,
+     "max_error": 9.992007297414256e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pp/real_cloth_stack": {
+   "rows": 1404,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 8.88178434231433e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999836392023,
+     "max_error": 8.88178434231433e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pp/real_kimono": {
+   "rows": 882,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 8.881784199794216e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "projector": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9999999996855403,
+     "max_error": 8.881784199794216e-16,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.6135347813540989e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.9998677644382218,
+     "max_error": 5.551849275033575e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 150.95680157210612,
+     "max_error": 1.6135347813540989e-13,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pt/real_cloth_stack": {
+   "rows": 20807,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.362625290379782e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.3306690738754696e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.362625290379782e-15,
+     "fail": 0
+    }
+   }
+  },
+  "frame_pt/real_kimono": {
+   "rows": 26473,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.7763568394002505e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "basis": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 3.3306690738754696e-16,
+     "fail": 0
+    },
+    "weights": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.0,
+     "max_error": 1.7763568394002505e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ee/degenerate": {
+   "rows": 868,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.999979179873591e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 111493685.2882848,
+     "max_error": 1.3369203617388153e-14,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 78712552.7321345,
+     "max_error": 5.999979179873591e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 12546033845280.984,
+     "max_error": 1.3446573949619512e-14,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ee/random": {
+   "rows": 3998,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.670093536737277e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 5632916473.1213045,
+     "max_error": 1.6930382705955538e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 339009695.2208571,
+     "max_error": 9.670093536737277e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 253045612021241.06,
+     "max_error": 6.884875363314967e-14,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ee/real_cloth_stack": {
+   "rows": 19905,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 9.271936130761861e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 311.1064175140084,
+     "max_error": 3.0376160225572368e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1863268.8918120328,
+     "max_error": 3.592546966497648e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 22834033286.723164,
+     "max_error": 9.271936130761861e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ee/real_kimono": {
+   "rows": 19902,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.6603397239198398e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4573.93185888179,
+     "max_error": 1.6603397239198398e-14,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 44648239.171211675,
+     "max_error": 1.0262682587631829e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 904300978711.2799,
+     "max_error": 1.0022902680080824e-14,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pe/degenerate": {
+   "rows": 256,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.988735882128944e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1505352.348150309,
+     "max_error": 1.9333566983500462e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4682987.736000905,
+     "max_error": 1.988735882128944e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 359360647565.504,
+     "max_error": 4.246093490166766e-17,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.5678466705200565e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2094168009.328692,
+     "max_error": 2.2769766135238607e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 27564151.895580843,
+     "max_error": 2.5678466705200565e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1010363858398.2384,
+     "max_error": 4.49764516011087e-16,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pe/real_cloth_stack": {
+   "rows": 17883,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.8162534595425124e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 99.36820983593621,
+     "max_error": 1.8162534595425124e-14,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 546429.8268794857,
+     "max_error": 1.6298107609935918e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 12184836071.086712,
+     "max_error": 1.1427026952435201e-14,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pe/real_kimono": {
+   "rows": 12741,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.368210743313352e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 6191.662666238213,
+     "max_error": 3.158139766680507e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 47757827.85507933,
+     "max_error": 4.368210743313352e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2079031593627.2937,
+     "max_error": 1.4972321624603594e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ph/degenerate": {
+   "rows": 1476,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.428455349729134e-17,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 44631773.94568983,
+     "max_error": 2.0866806140144875e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 25074461.130050074,
+     "max_error": 7.428455349729134e-17,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1789710657946.1907,
+     "max_error": 1.7051682622274208e-17,
+     "fail": 0
+    }
+   }
+  },
+  "friction_ph/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.1297613864927344e-13,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 225364858.87810338,
+     "max_error": 7.934419554864575e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 114649339.689879,
+     "max_error": 2.5994325364898893e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2987332162114.8213,
+     "max_error": 2.1297613864927344e-13,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pp/degenerate": {
+   "rows": 64,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.055511212765563e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 14737541.434208525,
+     "max_error": 5.055511212765563e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1526057.780597352,
+     "max_error": 1.5257000528691099e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9346761251.00558,
+     "max_error": 1.0203259618979227e-16,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.874543854676831e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 26605763.53451903,
+     "max_error": 2.800363382639722e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 17885744.631958663,
+     "max_error": 1.874543854676831e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 363551378068.39844,
+     "max_error": 1.6788591635737622e-16,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pp/real_cloth_stack": {
+   "rows": 1404,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.0426975158198103e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 24.095894973351914,
+     "max_error": 8.10923406456258e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 115835.02843629787,
+     "max_error": 1.0426975158198103e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1073261405.3151484,
+     "max_error": 7.441823921318651e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pp/real_kimono": {
+   "rows": 882,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.444258570368525e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 118250.87807114933,
+     "max_error": 2.4611936022346044e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1038330489.2642794,
+     "max_error": 3.444258570368525e-16,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8917360686936.81,
+     "max_error": 2.1902500847152736e-16,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pt/degenerate": {
+   "rows": 2048,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.2237184626372705e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 307739802.98364,
+     "max_error": 9.68425991657623e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 176486461.72678256,
+     "max_error": 1.1579416741424446e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2477122416400.527,
+     "max_error": 2.2237184626372705e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 3.376386707238966e-14,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 167039897.68907464,
+     "max_error": 3.264983439525271e-14,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 370721024.8161344,
+     "max_error": 3.376386707238966e-14,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 50021471508192.97,
+     "max_error": 2.3284068501460604e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pt/real_cloth_stack": {
+   "rows": 20807,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.967059258216005e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1252.6487336977511,
+     "max_error": 4.53785784726811e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8650447.195434868,
+     "max_error": 4.629456697868713e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 159743822250.06555,
+     "max_error": 4.967059258216005e-15,
+     "fail": 0
+    }
+   }
+  },
+  "friction_pt/real_kimono": {
+   "rows": 26473,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 5.329359606440934e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3392.246762893227,
+     "max_error": 4.021647444939526e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 11184203.95263887,
+     "max_error": 5.329359606440934e-15,
+     "fail": 0
+    },
+    "hessian": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1888738769162.9622,
+     "max_error": 1.0987201334463369e-15,
+     "fail": 0
+    }
+   }
+  },
+  "intersect/degenerate": {
+   "rows": 800,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "intersect/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "mollified_barrier/degenerate": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.829842026501872e-07,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 37843069.504175045,
+     "max_error": 7.829842026501872e-07,
+     "fail": 0
+    }
+   }
+  },
+  "mollified_barrier/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.8149957405124965e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "energy": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 3848449.42261064,
+     "max_error": 1.8149957405124965e-16,
+     "fail": 0
+    }
+   }
+  },
+  "mollifier/degenerate": {
+   "rows": 3632,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.2682006830266833e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "threshold": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0009560019804233078,
+     "max_error": 2.2682006830266833e-16,
+     "fail": 0
+    },
+    "cross_norm2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.25,
+     "max_error": 8.673617379884035e-18,
+     "fail": 0
+    }
+   }
+  },
+  "mollifier/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.380678928879011e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "threshold": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.03361753226573875,
+     "max_error": 2.0640699766588728e-16,
+     "fail": 0
+    },
+    "cross_norm2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 29.84622273674985,
+     "max_error": 2.380678928879011e-16,
+     "fail": 0
+    }
+   }
+  },
+  "mollifier/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.4815418376590818e-20,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "threshold": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 6.400000000000004e-06,
+     "max_error": 2.4233807008389468e-20,
+     "fail": 0
+    },
+    "cross_norm2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.006400000000000003,
+     "max_error": 2.4815418376590818e-20,
+     "fail": 0
+    }
+   }
+  },
+  "mollifier/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.844229095077551e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "threshold": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.6853789583833522e-08,
+     "max_error": 1.2321249631761556e-16,
+     "fail": 0
+    },
+    "cross_norm2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.0982482800782738e-05,
+     "max_error": 4.844229095077551e-16,
+     "fail": 0
+    }
+   }
+  },
+  "pair_ee/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "d_hat": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.09314506837796926,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "thickness": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0199056762602064,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "area_weight": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0010000822478969302,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pair_pe/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "d_hat": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.09314506837796926,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "thickness": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0199056762602064,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "area_weight": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0010000822478969302,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pair_pp/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "d_hat": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.09314506837796926,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "thickness": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.018744070287517112,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "area_weight": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0010000822478969302,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pair_pt/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "d_hat": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.09314506837796926,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "thickness": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0199056762602064,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "area_weight": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0010000822478969302,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pe_distance/degenerate": {
+   "rows": 336,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.5,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 2.0,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pe_distance/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 4.8074302127348286e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9.583397582360973,
+     "max_error": 3.70715463724427e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4.878585929979488,
+     "max_error": 4.8074302127348286e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pe_distance/real_cloth_stack": {
+   "rows": 17883,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.0817934561887527e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 8.999994318711392e-06,
+     "max_error": 7.52918650620284e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.005999638912257471,
+     "max_error": 2.0817934561887527e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pe_distance/real_kimono": {
+   "rows": 12741,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 7.199781603733336e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9.999997844279357e-07,
+     "max_error": 7.199781603733336e-15,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.0019996195983988806,
+     "max_error": 6.235348460060523e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pt_distance/degenerate": {
+   "rows": 2580,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.375,
+     "max_error": 0.0,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.5,
+     "max_error": 0.0,
+     "fail": 0
+    }
+   }
+  },
+  "pt_distance/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.9482490313322187e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 9.752507665867533,
+     "max_error": 2.732153975562502e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 4.672826037901868,
+     "max_error": 1.9482490313322187e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pt_distance/real_cloth_stack": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 1.9186217823580225e-15,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 1.1168059876645831e-05,
+     "max_error": 7.584423405766112e-16,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.006509885972253765,
+     "max_error": 1.9186217823580225e-15,
+     "fail": 0
+    }
+   }
+  },
+  "pt_distance/real_kimono": {
+   "rows": 30000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 2.1481297567532554e-16,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "flag": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    },
+    "distance2": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.07615126242691753,
+     "max_error": 4.555994006380718e-17,
+     "fail": 0
+    },
+    "gradient": {
+     "is_discrete": false,
+     "pass1_fail": 0,
+     "scale": 0.5519103638342644,
+     "max_error": 2.1481297567532554e-16,
+     "fail": 0
+    }
+   }
+  }
+ }
+}

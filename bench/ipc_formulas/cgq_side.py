@@ -2,20 +2,22 @@
 
     <cgq>/.venv/Scripts/python.exe bench/ipc_formulas/cgq_side.py --cgq <cgq> [--fmad true|false]
 
-Reads data/inputs.npz (inputs.py) and writes data/out_cgq_fmad-<fmad>.npz, one array per case and input set, named
-'<case>/<set>'. '--fmad' is nvcc's contraction of multiplies and adds into fused multiply-adds: true is nvcc's default
-and CGQ's production build, false evaluates every operation with its own rounding.
+'<cgq>' is a checkout of the ground truth commit (cases.GROUND_TRUTH). Reads <data>/inputs.npz (inputs.py) and writes
+<data>/out_cgq_fmad-<fmad>.npz, <data> being cases.DATA, one array per case and input set, named '<case>/<set>'.
+'--fmad' is nvcc's contraction of multiplies and adds into fused multiply-adds: true is nvcc's default and CGQ's
+production build, false evaluates every operation with its own rounding.
 """
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
 import torch
 
-from cases import CANDIDATE_REACH_SCALE, CASES, n_outputs
+from cases import CANDIDATE_REACH_SCALE, CASES, DATA, GROUND_TRUTH, n_outputs
 
 HERE = Path(__file__).resolve().parent
 
@@ -30,7 +32,7 @@ def load_extension(cgq: Path, is_fmad: bool):
     os.environ.setdefault("TORCH_CUDA_ARCH_LIST", "{}.{}".format(*torch.cuda.get_device_capability()))
     native = cgq / "qipc" / "_src" / "native"
     external = cgq / "external"
-    build_dir = HERE / "data" / f"cgq_build_fmad-{str(is_fmad).lower()}"
+    build_dir = DATA / f"cgq_build_fmad-{str(is_fmad).lower()}"
     build_dir.mkdir(parents=True, exist_ok=True)
     defines = ["-DNOMINMAX", "-DQIPC_RUNTIME_CHECK=0", "-DFMT_HEADER_ONLY", "-DFMT_UNICODE=0", "-DSPDLOG_HEADER_ONLY", "-DSPDLOG_FMT_EXTERNAL"]
     return load(
@@ -67,6 +69,9 @@ def main() -> None:
     parser.add_argument("--fmad", choices=("true", "false"), default="true")
     parser.add_argument("--build-only", action="store_true")
     args = parser.parse_args()
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=args.cgq, capture_output=True, text=True, check=True)
+    if not head.stdout.startswith(GROUND_TRUTH):
+        raise SystemExit(f"{args.cgq} is at {head.stdout.strip()}, the ground truth is {GROUND_TRUTH}")
     ext = load_extension(args.cgq.resolve(), args.fmad == "true")
     print(f"[cgq] extension loaded, {len(ext.case_names())} cases", flush=True)
     if args.build_only:
@@ -74,7 +79,7 @@ def main() -> None:
 
     ext.set_candidate_context(0.0, CANDIDATE_REACH_SCALE)
     outputs = {}
-    with np.load(HERE / "data" / "inputs.npz") as inputs:
+    with np.load(DATA / "inputs.npz") as inputs:
         for key in inputs.files:
             case = CASES[key.split("/")[0]]
             rows = torch.as_tensor(inputs[key], dtype=torch.float64, device="cuda").contiguous()
@@ -83,7 +88,7 @@ def main() -> None:
             torch.cuda.synchronize()
             outputs[key] = out.cpu().numpy()
             print(f"[cgq] {key}: {rows.shape[0]} rows", flush=True)
-    path = HERE / "data" / f"out_cgq_fmad-{args.fmad}.npz"
+    path = DATA / f"out_cgq_fmad-{args.fmad}.npz"
     np.savez(path, **outputs)
     print(f"[cgq] wrote {path}")
 

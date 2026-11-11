@@ -2,26 +2,26 @@
 
     python bench/ipc_formulas/inputs.py [--scenes cloth_stack kimono] [--seed 0]
 
-Writes data/inputs.npz with one array per case and set, named '<case>/<set>'. The sets are:
+Writes <data>/inputs.npz (cases.DATA) with one array per case and set, named '<case>/<set>'. The sets are:
 - random: random geometry in the unit box, barrier parameters spread over the whole active band;
 - degenerate: exact dyadic coordinates (axis-aligned, coplanar, parallel, collinear, coincident, on the boundaries of
   the distance-type regions), band extremes (r below the Hessian clamp, r near 1, squared distance near xi^2), near
   parallel edges in the mollifier region, the three friction regimes, CCD pairs approaching, grazing, inside their
   thickness or at rest, screw motions with rotation;
 - real_<scene>: the candidate and active stencils of T0's captured frames (bench/ipc_bvh/data/<scene>), their
-  trajectories to the step end, their per-vertex d_hat and thickness.
+  trajectories to the step end, their per-vertex d_hat and thickness; real_<scene>_mollified: every active edge-edge
+  pair of those frames below the mollifier threshold;
+- parallel, mollifier_sweep: edge-edge barrier rows of exactly parallel edges, and of I1 / eps_x swept over 1e-6..1.
 The barrier parameters (d_hat, xi) of a row are set from the true distance of its closest features, so that the pair
 lies inside the active band.
 """
 
 import argparse
-from pathlib import Path
 
 import numpy as np
 
-from cases import CASES, CCD_ETA, STENCIL_VERTS
+from cases import CASES, CCD_ETA, DATA, HERE, MOLLIFIER_RATIO, STENCIL_VERTS
 
-HERE = Path(__file__).resolve().parent
 T0_DATA = HERE.parent / "ipc_bvh" / "data"
 
 
@@ -255,8 +255,6 @@ class Builder:
         if len(rows):
             key = f"{case}/{name}"
             self.arrays[key] = np.concatenate([self.arrays[key], rows]) if key in self.arrays else rows
-            if case == "barrier_ee":
-                self.add("barrier_ee_unprefixed", name, rows)
 
     def distances(self, name, stencils):
         for kind, x in stencils.items():
@@ -571,6 +569,39 @@ def build_degenerate(builder):
     builder.intersections("degenerate", 0, exact=True)
 
 
+def build_mollified(builder, n):
+    """Edge pairs of the mollified edge-edge barrier: exactly parallel, then I1 / eps_x swept over 1e-6..1."""
+    rng = builder.rng
+    # Exactly parallel edges in exact dyadic coordinates: overlapping, sticking out of each other and apart, at every
+    # offset of the grid, then the same pairs rotated (parallel to the rounding of the rotation)
+    rows = []
+    for start in np.arange(-3, 6) / 4.0:
+        for length in (0.25, 0.5, 1.0, -0.5):
+            for offset_y, offset_z in ((1 / 16, 0.0), (0.0, 1 / 8), (1 / 32, 1 / 16), (1 / 4, 1 / 4)):
+                eb0 = np.array([start, offset_y, offset_z])
+                rows.append(np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], eb0, eb0 + [length, 0.0, 0.0]]))
+    x = np.array(rows)
+    x = np.concatenate([x, exact_transform(rng, x)])
+    rotation = unit(rng.normal(size=(len(x), 3))) * rng.uniform(0.1, 3.0, (len(x), 1))
+    rotated = np.stack([rodrigues(rotation, x[:, k]) for k in range(4)], axis=1)
+    builder.barriers("parallel", {"ee": np.concatenate([x, rotated])})
+    # I1 / eps_x log-uniform over 1e-6..1 for rest edges equal to the current ones, where I1 / eps_x is
+    # sin(angle)^2 / MOLLIFIER_RATIO
+    ratio = log_uniform(rng, 1e-6, 1.0, n)
+    angle = np.arcsin(np.sqrt(MOLLIFIER_RATIO * ratio))
+    ea0 = rng.uniform(-1, 1, (n, 3))
+    direction = unit(rng.normal(size=(n, 3)))
+    length_a = rng.uniform(0.2, 1.0, n)
+    ea1 = ea0 + direction * length_a[:, None]
+    normal = unit(np.cross(direction, rng.normal(size=(n, 3))))
+    side = unit(np.cross(direction, normal))
+    direction_b = direction * np.cos(angle)[:, None] + side * np.sin(angle)[:, None]
+    along = rng.choice([0.2, 0.7, 1.3], n) * length_a
+    eb0 = ea0 + direction * along[:, None] + normal * (10.0 ** rng.uniform(-3, -1, n))[:, None]
+    eb1 = eb0 + direction_b * rng.uniform(0.2, 1.0, n)[:, None]
+    builder.barriers("mollifier_sweep", {"ee": np.stack([ea0, ea1, eb0, eb1], axis=1)})
+
+
 def gather_feature(stencils, flags, kind):
     """The point-edge or point-point sub-stencil of each PT or EE stencil, from its distance flag."""
     rows_pe, rows_pp = [], []
@@ -662,6 +693,22 @@ def build_real(builder, scene, cap):
             builder.add("barrier_pt", name, np.column_stack([flat(x[act]), params]))
         else:
             builder.add("barrier_ee", name, np.column_stack([flat(x[act]), flat(rest[all_stencil[act]]), params]))
+            # Every active pair below the mollifier threshold, the first 'cap' of them, without drawing from the
+            # generator so that the sets after this one stay the same
+            rest_ee = rest[all_stencil]
+            threshold = MOLLIFIER_RATIO * dot(rest_ee[:, 1] - rest_ee[:, 0], rest_ee[:, 1] - rest_ee[:, 0]) * dot(
+                rest_ee[:, 3] - rest_ee[:, 2], rest_ee[:, 3] - rest_ee[:, 2]
+            )
+            cross = np.cross(x[:, 1] - x[:, 0], x[:, 3] - x[:, 2])
+            mollified = np.flatnonzero(active & (dot(cross, cross) < threshold))[:cap]
+            builder.add(
+                "barrier_ee",
+                f"{name}_mollified",
+                np.column_stack(
+                    [flat(x[mollified]), flat(rest_ee[mollified]), d_hat[mollified], xi[mollified],
+                     np.full(len(mollified), kappa)]
+                ),
+            )
         full = act[flag[act] == 0xF]
         if kind == "ee":
             full = full[~near_parallel_for_friction(x[full])]
@@ -703,10 +750,11 @@ def main() -> None:
     build_degenerate(builder)
     for scene in args.scenes:
         build_real(builder, scene, args.cap)
+    build_mollified(builder, args.n_random)
     missing = {case for case in CASES} - {key.split("/")[0] for key in builder.arrays}
     assert not missing, missing
-    path = HERE / "data" / "inputs.npz"
-    path.parent.mkdir(exist_ok=True)
+    path = DATA / "inputs.npz"
+    path.parent.mkdir(parents=True, exist_ok=True)
     np.savez(path, **builder.arrays)
     for key, rows in builder.arrays.items():
         print(f"{key}: {rows.shape[0]} rows")

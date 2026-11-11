@@ -2,8 +2,9 @@
 
     python bench/ipc_formulas/genesis_side.py --backend cuda|cpu --fast-math true|false
 
-Needs the library worktree on PYTHONPATH (genesis.engine.ipc). Reads data/inputs.npz (inputs.py) and writes
-data/out_genesis_<backend>_fast-math-<bool>.npz, one array per case and input set as cgq_side.py does. '--fast-math'
+Needs the library worktree on PYTHONPATH (genesis.engine.ipc). Reads <data>/inputs.npz (inputs.py) and writes
+<data>/out_genesis_<backend>_fast-math-<bool>.npz, <data> being cases.DATA, one array per case and input set as
+cgq_side.py does. '--fast-math'
 is the global compile flag of Quadrants, which Genesis turns on outside debug mode: it lets the compiler contract
 multiplies and adds into fused multiply-adds and reassociate them. It is switched off after gs.init, before any kernel
 compiles, so give each setting its own offline cache (QD_OFFLINE_CACHE_FILE_PATH).
@@ -11,7 +12,6 @@ compiles, so give each setting its own offline cache (QD_OFFLINE_CACHE_FILE_PATH
 
 import argparse
 import time
-from pathlib import Path
 
 import numpy as np
 import torch
@@ -44,7 +44,6 @@ from genesis.engine.ipc.ccd import (
 from genesis.engine.ipc.distance import (
     func_closest_points,
     func_edge_edge_closest_points,
-    func_edge_edge_cross_norm2,
     func_edge_edge_distance2,
     func_edge_edge_distance_flag,
     func_edge_edge_distance_type,
@@ -73,16 +72,18 @@ from cases import (
     CANDIDATE_REACH_SCALE,
     CASES,
     CCD_MAX_ITERS,
+    DATA,
     EE_PARALLEL_TOLERANCE,
     EE_TYPE_PARALLEL_TOLERANCE,
     HESSIAN_CLAMP_RATIO,
     INTERSECTION_TOLERANCE,
     MOLLIFIER_RATIO,
+    PROJECTION_EIGEN_TOLERANCE,
+    PROJECTION_MAX_SWEEPS,
+    PROJECTION_RANK_TOLERANCE,
     STENCIL_VERTS,
     n_outputs,
 )
-
-HERE = Path(__file__).resolve().parent
 
 
 @pyfunc
@@ -235,8 +236,7 @@ def k_mollifier(rows: qd.types.ndarray(), out: qd.types.ndarray(), mollifier_rat
     for i_r in range(rows.shape[0]):
         x0, x1, x2, x3 = v3(rows, i_r, 0), v3(rows, i_r, 3), v3(rows, i_r, 6), v3(rows, i_r, 9)
         out[i_r, 0] = func_edge_edge_mollifier_threshold(x0, x1, x2, x3, mollifier_ratio)
-        cross_norm2, _ = func_edge_edge_cross_norm2(x0, x1, x2, x3)
-        out[i_r, 1] = cross_norm2
+        out[i_r, 1] = (x1 - x0).cross(x3 - x2).norm_sqr()
 
 
 def make_pair_kernel(n_a, n_b):
@@ -279,30 +279,37 @@ def k_barrier_ee(
     parallel_tolerance: float,
     mollifier_ratio: float,
     hessian_clamp_ratio: float,
+    rank_tolerance: float,
+    eigen_tolerance: float,
+    max_sweeps: int,
 ):
     for i_r in range(rows.shape[0]):
         ea0, ea1, eb0, eb1 = v3(rows, i_r, 0), v3(rows, i_r, 3), v3(rows, i_r, 6), v3(rows, i_r, 9)
         d_hat, thickness, kappa = rows[i_r, 24], rows[i_r, 25], rows[i_r, 26]
         flag = func_edge_edge_distance_flag(ea0, ea1, eb0, eb1, parallel_tolerance)
         distance2, distance2_gradient = func_edge_edge_flagged_distance2(flag, ea0, ea1, eb0, eb1)
-        cross_norm2, cross_norm2_gradient = func_edge_edge_cross_norm2(ea0, ea1, eb0, eb1)
         threshold = func_edge_edge_mollifier_threshold(
             v3(rows, i_r, 12), v3(rows, i_r, 15), v3(rows, i_r, 18), v3(rows, i_r, 21), mollifier_ratio
         )
         gradient = qd.Vector.zero(gs.qd_float, 12)
         hessian = qd.Matrix.zero(gs.qd_float, 12, 12)
-        is_mollified = cross_norm2 < threshold
+        is_mollified = (ea1 - ea0).cross(eb1 - eb0).norm_sqr() < threshold
         if is_mollified:
             gradient, hessian = func_mollified_barrier_gradient_hessian(
+                flag,
+                ea0,
+                ea1,
+                eb0,
+                eb1,
                 distance2,
                 distance2_gradient,
-                cross_norm2,
-                cross_norm2_gradient,
                 threshold,
                 d_hat,
                 thickness,
                 kappa,
-                hessian_clamp_ratio,
+                rank_tolerance,
+                eigen_tolerance,
+                max_sweeps,
             )
         else:
             gradient, hessian = func_barrier_gradient_hessian(
@@ -600,9 +607,15 @@ def build_runners():
         "mollified_barrier": k_mollified_barrier,
         "mollifier": lambda r, o: k_mollifier(r, o, MOLLIFIER_RATIO),
         "barrier_pt": lambda r, o: k_barrier_pt(r, o, HESSIAN_CLAMP_RATIO),
-        "barrier_ee": lambda r, o: k_barrier_ee(r, o, EE_PARALLEL_TOLERANCE, MOLLIFIER_RATIO, HESSIAN_CLAMP_RATIO),
-        "barrier_ee_unprefixed": lambda r, o: k_barrier_ee(
-            r, o, EE_PARALLEL_TOLERANCE, MOLLIFIER_RATIO, HESSIAN_CLAMP_RATIO
+        "barrier_ee": lambda r, o: k_barrier_ee(
+            r,
+            o,
+            EE_PARALLEL_TOLERANCE,
+            MOLLIFIER_RATIO,
+            HESSIAN_CLAMP_RATIO,
+            PROJECTION_RANK_TOLERANCE,
+            PROJECTION_EIGEN_TOLERANCE,
+            PROJECTION_MAX_SWEEPS,
         ),
         "barrier_pe": lambda r, o: k_barrier_pe(r, o, HESSIAN_CLAMP_RATIO),
         "barrier_pp": lambda r, o: k_barrier_pp(r, o, HESSIAN_CLAMP_RATIO),
@@ -657,7 +670,7 @@ def main() -> None:
 
     runners = build_runners()
     outputs = {}
-    with np.load(HERE / "data" / "inputs.npz") as inputs:
+    with np.load(DATA / "inputs.npz") as inputs:
         for key in inputs.files:
             name = key.split("/")[0]
             if args.cases and name not in args.cases:
@@ -669,7 +682,7 @@ def main() -> None:
             outputs[key] = out.cpu().numpy()
             print(f"[genesis] {key}: {rows.shape[0]} rows, {time.perf_counter() - start:.1f} s", flush=True)
     suffix = "" if args.sum_order == "quadrants" else "_sum-order-eigen"
-    path = HERE / "data" / f"out_genesis_{args.backend}_fast-math-{args.fast_math}{suffix}.npz"
+    path = DATA / f"out_genesis_{args.backend}_fast-math-{args.fast_math}{suffix}.npz"
     np.savez(path, **outputs)
     print(f"[genesis] wrote {path}")
 

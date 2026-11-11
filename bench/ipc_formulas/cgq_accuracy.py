@@ -2,26 +2,23 @@
 
     python bench/ipc_formulas/cgq_accuracy.py [--run cuda_fast-math-false]
 
-Reads the exact values of data/referee.npz (referee.py), both CGQ builds and the Genesis run, and writes
-results/cgq_accuracy.md: per refereed row, the error of CGQ (production and IEEE builds) and of Genesis against the
-exact value, relative to the largest entry of that row's exact output, then the input rows to replay them.
+Reads the exact values of referee.npz (referee.py), both CGQ builds and the Genesis run from cases.DATA, and writes
+cgq_accuracy.md to cases.RESULTS: per refereed row, the error of CGQ (production and IEEE builds) and of Genesis
+against the exact value, relative to the largest entry of that row's exact output, then the input rows to replay them.
 """
 
 import argparse
-from pathlib import Path
 
 import numpy as np
 
-from cases import CASES
-
-HERE = Path(__file__).resolve().parent
+from cases import CASES, DATA, RESULTS
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--run", default="cuda_fast-math-false")
     args = parser.parse_args()
-    data = HERE / "data"
+    data = DATA
     referee = np.load(data / "referee.npz")
     lines = [
         "# Where Genesis is closer to the exact value than CGQ",
@@ -62,7 +59,7 @@ def main() -> None:
     ]
     for key, i_r, row in replay:
         lines.append(f"- {key} row {i_r}: [{', '.join(f'{v:.17g}' for v in row)}]")
-    path = HERE / "results" / "cgq_accuracy.md"
+    path = RESULTS / "cgq_accuracy.md"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"{len(replay)} rows, wrote {path}")
 

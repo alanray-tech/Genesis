@@ -1,7 +1,7 @@
 """Compare the outputs of the Genesis side with the CGQ reference, per case, input set and backend.
 
     python bench/ipc_formulas/compare.py --reference fmad-true --ieee fmad-false --order _sum-order-eigen \
-        --referee data/referee.npz --label acceptance --runs cuda_fast-math-false cpu_fast-math-false
+        --referee data/aeb58956/referee.npz --label acceptance --runs cuda_fast-math-false cpu_fast-math-false
 
 The reference c is CGQ as production builds it (nvcc default, --fmad=true), c_ieee the IEEE build (--fmad=false), s
 the largest magnitude of an output (all its components) over the input set. For a candidate x, pass1(x) holds on a row
@@ -13,8 +13,8 @@ output (flag, branch, active bit, verdict, status, iteration count) equals c or 
 3. referee: every discrete output passes for g or g_order, and every real output passes for g or g_order or satisfies
    max |g - e| <= max(max |c - e|, 1e-12 * s), e its 50-digit exact value (referee.py).
 Without '--ieee' and '--order' the rule reduces to 1e-12 * s and equality with c. Two NaN (or two equal infinities)
-agree. Writes results/table_<label>.md and results/summary_<label>.json, which lists every failing row and, per case,
-the rows each clause was needed for.
+agree. Reads the outputs of cases.DATA and writes table_<label>.md and summary_<label>.json to cases.RESULTS, the
+summary listing every failing row and, per case, the rows each clause was needed for.
 """
 
 import argparse
@@ -24,9 +24,8 @@ from pathlib import Path
 
 import numpy as np
 
-from cases import CASES
+from cases import CASES, DATA, RESULTS
 
-HERE = Path(__file__).resolve().parent
 TOLERANCE = 1e-12
 N_EXAMPLES = 3
 CLAUSES = ("pass1", "order", "referee")
@@ -178,7 +177,7 @@ def main() -> None:
     parser.add_argument("--label", default=None)
     args = parser.parse_args()
     label = args.label or f"cgq-{args.reference}_vs_" + "+".join(args.runs)
-    data = HERE / "data"
+    data = DATA
     referee = np.load(args.referee) if args.referee is not None and args.referee.is_file() else None
     ieee = np.load(data / f"out_cgq_{args.ieee}.npz") if args.ieee else None
     runs = {}
@@ -190,11 +189,10 @@ def main() -> None:
                 runs[run] = compare_run(reference, ieee, order, genesis, referee)
             if order is not None:
                 order.close()
-    results_dir = HERE / "results"
-    results_dir.mkdir(exist_ok=True)
+    RESULTS.mkdir(parents=True, exist_ok=True)
     table = format_table(label, runs)
-    (results_dir / f"table_{label}.md").write_text(table, encoding="utf-8")
-    (results_dir / f"summary_{label}.json").write_text(json.dumps(runs, indent=1), encoding="utf-8")
+    (RESULTS / f"table_{label}.md").write_text(table, encoding="utf-8")
+    (RESULTS / f"summary_{label}.json").write_text(json.dumps(runs, indent=1), encoding="utf-8")
     print(table)
     is_pass = True
     for run, results in runs.items():
