@@ -4,10 +4,13 @@ import argparse
 import cProfile
 import pstats
 import time
+from collections import defaultdict
 from pathlib import Path
 
 import igl
 import numpy as np
+
+from quadrants.lang.kernel import Kernel
 
 import genesis as gs
 
@@ -17,9 +20,23 @@ parser.add_argument("--steps", type=int, default=150)
 parser.add_argument("--data", default=str(Path(__file__).parent / "data"))
 parser.add_argument("--capacities", type=int, nargs="+", default=[1, 1000, 1])
 parser.add_argument("--profile-build", action="store_true")
+parser.add_argument("--kernel-times", action="store_true", help="time the materialization of every kernel")
 args = parser.parse_args()
 
 gs.init(backend=getattr(gs, args.backend), precision="64", logging_level="warning")
+
+materialize_times: dict[str, float] = defaultdict(float)
+materialize = Kernel.materialize
+
+
+def timed_materialize(self, key, py_args, arg_features=None):
+    t_start = time.perf_counter()
+    materialize(self, key, py_args, arg_features)
+    materialize_times[f"{self.func.__module__}.{self.func.__name__}"] += time.perf_counter() - t_start
+
+
+if args.kernel_times:
+    Kernel.materialize = timed_materialize
 
 n = 8
 grid_verts = np.array([[i / n - 0.5, j / n - 0.5, 0.0] for j in range(n + 1) for i in range(n + 1)])
@@ -67,4 +84,14 @@ for capacity in args.capacities:
         f" (final {capacities[-1]}), slow steps {slow_steps.tolist()[:20]} totalling {steps_time[slow_steps - 1].sum():.1f} s",
         flush=True,
     )
+    if args.kernel_times:
+        modules_time: dict[str, float] = defaultdict(float)
+        for name, duration in materialize_times.items():
+            modules_time[name.rsplit(".", 1)[0]] += duration
+        print(f"materialization {sum(materialize_times.values()):.1f} s over {len(materialize_times)} kernels")
+        for module, duration in sorted(modules_time.items(), key=lambda item: -item[1]):
+            print(f"  {duration:7.2f} s  {module}")
+        for name, duration in sorted(materialize_times.items(), key=lambda item: -item[1])[:40]:
+            print(f"    {duration:7.2f} s  {name}")
+        materialize_times.clear()
     scene.destroy()
