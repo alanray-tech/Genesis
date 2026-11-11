@@ -49,6 +49,13 @@ Genesis is closer to the exact value than CGQ: e.g. kimono row 9244, CGQ 4e-8 of
    block of that Hessian has diagonal entries 10 to 20 orders of magnitude apart, and CGQ's results are 1e-12 to 1e-10
    of the output scale away from the exact value in both builds alike. Genesis is closer to it on every such row.
 
+The 66 rows where Genesis is closer to the exact value than CGQ are recorded with their inputs in
+`results/cgq_accuracy.md` (`cgq_accuracy.py`), to improve CGQ later: CGQ is 1e-11 to 2e-8 of the row's largest entry
+away from the exact value there, in both builds, Genesis 4e-16 to 1e-13. CGQ's own un-prefixed algebra fails on the
+same rows, so the loss is in the shared steps, presumably the 2x2 eigensolve (Eigen's `computeDirect`) of a block whose
+diagonal entries are 10 to 20 orders of magnitude apart; the fix of Genesis (eigenvalue of the sign opposite to the
+half trace from the determinant, eigenvector from the cancellation-free column) carries over.
+
 ## Defects found and fixed by the harness
 
 - Projected 2x2 block of the mollified EE Hessian, eigenvector: my first closed form `(M - lambda_min I) * lambda_max /
