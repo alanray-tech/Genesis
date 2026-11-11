@@ -3,8 +3,13 @@
 **结论：PASS。** 三个场景（悬挂、平铺落地、倾斜落地）的每一帧单步回放都在界限 2 * velocity_tol * dt = 2e-8 m 以内，
 CPU 和 GPU 都是如此；整条轨迹与 CGQ 的最大偏差 1.8e-8 m（150 帧）；落地后的静止高度与 CGQ 相差 1.3e-12 m。
 
-Genesis：分支 `ipc-cloth`（`genesis-world-ipc-cloth`）。CGQ：`cuda-graph-qipc` main@0496c4fa（构建于
-`CudaGraphQIPC/cuda-graph-qipc-bvh-bench`）。
+Genesis：分支 `ipc-cloth` b176b7fc（`genesis-world-ipc-cloth`）。CGQ：`cuda-graph-qipc` main@aeb58956（锁定的真值，构建于
+`CudaGraphQIPC/cuda-graph-qipc-p2a-aeb58956`）。
+
+0496c4fa..aeb58956 在本范围内只有二次弯曲变了：能量和梯度改用相对铰链第一个顶点的位置计算（Q0 行和为零，数学上相同，
+少了绝对坐标的抵消误差），Genesis 已对齐（b176b7fc）。新增的增量 line search 能量默认关闭
+（`line_search/incremental_energy=0`，接受判据不变）。Baraff-Witkin / strain limit、hinge 弯曲、`Cloth` 前端、地面半平面、
+摩擦、CCD 和 Newton 默认值都没变。两个版本下的误差相差不到 3e-14。
 
 ## 一条命令
 
@@ -54,9 +59,9 @@ powershell -File bench\ipc_cloth\run_all.ps1
 
 | 场景 | 帧 10 | 帧 50 | 帧 100 | 最后一帧 | 最大（帧） |
 |---|---|---|---|---|---|
-| drape | 1.90e-9 | 7.91e-9 | 1.80e-8 | 4.76e-9 | 1.83e-8（101） |
-| ground_flat | 4.51e-9 | 3.40e-10 | 3.35e-10 | 3.38e-10 | 7.46e-9（23） |
-| ground_tilted | 4.06e-10 | 2.08e-9 | 2.79e-9 | 3.02e-9 | 7.41e-9（33） |
+| drape | 2.39e-9 | 7.90e-9 | 1.82e-8 | 4.76e-9 | 1.82e-8（100） |
+| ground_flat | 4.76e-9 | 3.40e-10 | 3.35e-10 | 3.38e-10 | 7.46e-9（22） |
+| ground_tilted | 5.06e-10 | 2.13e-9 | 2.81e-9 | 3.02e-9 | 7.41e-9（32） |
 
 静止高度（最后一帧最低顶点的 y）：
 
@@ -71,9 +76,9 @@ powershell -File bench\ipc_cloth\run_all.ps1
 
 | 场景 | Genesis GPU | Genesis CPU | CGQ（CUDA graph） | CGQ 每帧最多 Newton 迭代 |
 |---|---|---|---|---|
-| drape | 10.27 ms | 20.03 ms | 4.05 ms | 10 |
-| ground_flat | 3.17 ms | 3.47 ms | 1.70 ms | 8 |
-| ground_tilted | 6.56 ms | 14.72 ms | 3.82 ms | 12 |
+| drape | 9.99 ms | 19.93 ms | 4.40 ms | 10 |
+| ground_flat | 2.11 ms | 3.18 ms | 1.88 ms | 8 |
+| ground_tilted | 5.70 ms | 11.99 ms | 4.19 ms | 12 |
 
 Genesis 每次 Newton 迭代从主机读回几个标志（line search、收敛），这么小的网格时间主要花在启动和同步上；没做性能优化。
 

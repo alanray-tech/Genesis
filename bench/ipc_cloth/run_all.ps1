@@ -3,7 +3,7 @@
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$Tree = 'C:\Users\81946\Projects\GenesisSimEngine\genesis-world-ipc-cloth',
-    [string]$Cgq = 'C:\Users\81946\Projects\CudaGraphQIPC\cuda-graph-qipc-bvh-bench',
+    [string]$Cgq = 'C:\Users\81946\Projects\CudaGraphQIPC\cuda-graph-qipc-p2a-aeb58956',
     [int]$N = 10
 )
 & "$Cgq\.venv\Scripts\python.exe" "$PSScriptRoot\cgq_side.py" --n $N
