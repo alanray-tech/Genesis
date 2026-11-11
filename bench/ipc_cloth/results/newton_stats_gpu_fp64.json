@@ -1,0 +1,56 @@
+{
+ "precision": "64",
+ "backend": "gpu",
+ "scenes": {
+  "ground_flat": {
+   "substeps": 120,
+   "newton_iterations_median": 1.0,
+   "newton_iterations_max": 4,
+   "substeps_at_max_iterations": 0,
+   "substeps_non_finite": 0,
+   "line_searches": 146,
+   "line_searches_exhausted": 0,
+   "error": null
+  },
+  "ground_tilted": {
+   "substeps": 120,
+   "newton_iterations_median": 1.0,
+   "newton_iterations_max": 7,
+   "substeps_at_max_iterations": 0,
+   "substeps_non_finite": 0,
+   "line_searches": 234,
+   "line_searches_exhausted": 0,
+   "error": null
+  },
+  "crossed_drop": {
+   "substeps": 200,
+   "newton_iterations_median": 1.5,
+   "newton_iterations_max": 26,
+   "substeps_at_max_iterations": 0,
+   "substeps_non_finite": 0,
+   "line_searches": 629,
+   "line_searches_exhausted": 0,
+   "error": null
+  },
+  "multilayer": {
+   "substeps": 150,
+   "newton_iterations_median": 1.0,
+   "newton_iterations_max": 6,
+   "substeps_at_max_iterations": 0,
+   "substeps_non_finite": 0,
+   "line_searches": 175,
+   "line_searches_exhausted": 0,
+   "error": null
+  },
+  "self_fold": {
+   "substeps": 200,
+   "newton_iterations_median": 1.0,
+   "newton_iterations_max": 6,
+   "substeps_at_max_iterations": 0,
+   "substeps_non_finite": 0,
+   "line_searches": 370,
+   "line_searches_exhausted": 0,
+   "error": null
+  }
+ }
+}

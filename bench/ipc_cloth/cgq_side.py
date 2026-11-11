@@ -25,6 +25,7 @@ parser.add_argument("--resolution", type=int, default=10)
 parser.add_argument("--only", nargs="*", default=None)
 parser.add_argument("--velocity-tol", type=float, default=scenes.VELOCITY_TOL)
 parser.add_argument("--tag", default="", help="suffix of the saved runs")
+parser.add_argument("--frames", type=int, default=None, help="the frames of every scene at most")
 parser.add_argument("--out", default=str(Path(__file__).parent / "data"))
 args = parser.parse_args()
 sys.path.insert(0, args.cgq)
@@ -42,6 +43,8 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
     if args.only and cloth_scene.name not in args.only:
         continue
     is_closure = cloth_scene.name in contact_names
+    if args.frames is not None:
+        cloth_scene.n_frames = min(cloth_scene.n_frames, args.frames)
     workspace = Path(tempfile.mkdtemp())
     closure_overrides = {}
     if is_closure:

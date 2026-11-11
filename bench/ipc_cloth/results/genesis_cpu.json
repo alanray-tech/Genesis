@@ -1,0 +1,7 @@
+{
+ "backend": "cpu",
+ "fast_math": true,
+ "velocity_tol": 1e-11,
+ "bound": 1.9999999999999998e-13,
+ "scenes": {}
+}

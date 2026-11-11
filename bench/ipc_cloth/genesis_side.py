@@ -36,7 +36,13 @@ parser.add_argument("--n", type=int, default=10)
 parser.add_argument("--resolution", type=int, default=10)
 parser.add_argument("--only", nargs="*", default=None)
 parser.add_argument("--fast-math", type=int, default=1)
+parser.add_argument("--velocity-tol", type=float, default=scenes.VELOCITY_TOL)
+parser.add_argument("--max-iterations", type=int, default=1024)
+parser.add_argument("--reference-tag", default="", help="suffix of the CGQ runs (see cgq_side.py)")
 parser.add_argument("--tag", default="")
+parser.add_argument(
+    "--replay-frames", type=int, nargs="*", default=None, help="replay these frames alone, without the trajectory"
+)
 parser.add_argument("--data", default=str(Path(__file__).parent / "data"))
 parser.add_argument("--results", default=str(Path(__file__).parent / "results"))
 args = parser.parse_args()
@@ -45,8 +51,14 @@ results_dir.mkdir(parents=True, exist_ok=True)
 
 # Genesis compiles with fast_math outside debug mode alone
 gs.init(backend=getattr(gs, args.backend), precision="64", logging_level="warning", debug=not args.fast_math)
-bound = 2.0 * scenes.VELOCITY_TOL * scenes.DT
-summary = {"backend": args.backend, "fast_math": bool(args.fast_math), "bound": bound, "scenes": {}}
+bound = 2.0 * args.velocity_tol * scenes.DT
+summary = {
+    "backend": args.backend,
+    "fast_math": bool(args.fast_math),
+    "velocity_tol": args.velocity_tol,
+    "bound": bound,
+    "scenes": {},
+}
 
 
 @qd.kernel
@@ -121,13 +133,13 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
     if args.only and cloth_scene.name not in args.only:
         continue
     is_contact = cloth_scene.name in contact_names
-    reference = np.load(data_dir / f"cgq_{cloth_scene.name}.npz")
+    reference = np.load(data_dir / f"cgq_{cloth_scene.name}{args.reference_tag}.npz")
     cgq_positions, cgq_velocities = reference["positions"], reference["velocities"]
 
     scene = gs.Scene(
         sim_options=gs.options.SimOptions(dt=scenes.DT, gravity=scenes.GRAVITY),
         newton_options=gs.options.NewtonOptions(
-            velocity_tol=scenes.VELOCITY_TOL, max_iterations=1024, line_search_max_iterations=12
+            velocity_tol=args.velocity_tol, max_iterations=args.max_iterations, line_search_max_iterations=12
         ),
         ipc_options=gs.options.IPCOptions(d_hat=scenes.D_HAT),
         show_viewer=False,
@@ -171,7 +183,8 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
     # One-step replay of every frame of CGQ, in order, so that the adaptive stiffness of a frame comes from the step
     # before it
     replay_errors, step_ms, pairs_rows = [], [], []
-    for k in range(cloth_scene.n_frames):
+    replay_frames = range(cloth_scene.n_frames) if args.replay_frames is None else args.replay_frames
+    for k in replay_frames:
         for entity, part in zip(entities, slices):
             entity.set_verts_pos(cgq_positions[k][part])
             entity.set_verts_vel(cgq_velocities[k][part])
@@ -191,6 +204,11 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
         positions = get_positions()
         step_ms.append(1e3 * (time.perf_counter() - t))
         replay_errors.append(float(np.abs(positions - cgq_positions[k + 1]).max()))
+    if args.replay_frames is not None:
+        errors = ", ".join(f"frame {k}: {e:.3e}" for k, e in zip(replay_frames, replay_errors))
+        print(f"{cloth_scene.name} [{args.backend}] tol {args.velocity_tol:g}: {errors}", flush=True)
+        scene.destroy()
+        continue
 
     # The whole trajectory, from the initial state
     scene.reset()
