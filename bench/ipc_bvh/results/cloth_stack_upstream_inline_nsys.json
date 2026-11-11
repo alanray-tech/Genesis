@@ -1,0 +1,101 @@
+{
+ "schedule": "inline",
+ "capacities": {
+  "pt": 5179,
+  "ee": 15564,
+  "ph": 1,
+  "pt_raw": 1,
+  "ee_raw": 1
+ },
+ "memory_bytes": {
+  "trees_and_leaves": 5375024,
+  "query_boxes": 841104,
+  "query_results": 248940,
+  "raw_hits": 40,
+  "narrow_output": 165960
+ },
+ "frames": [
+  {
+   "frame": 20,
+   "check": {
+    "pt": {
+     "candidates_upstream": 5179,
+     "candidates_cgq": 5179,
+     "active_upstream": 2702,
+     "active_cgq": 2702,
+     "active_only_upstream": 0,
+     "active_only_cgq": 0,
+     "cgq_candidates_missing_upstream": 0,
+     "upstream_candidates_not_in_cgq": 0,
+     "duplicates_upstream": 0,
+     "quadrants_flag_mismatch": 8,
+     "quadrants_active_mismatch": 0
+    },
+    "ee": {
+     "candidates_upstream": 15564,
+     "candidates_cgq": 15564,
+     "active_upstream": 7530,
+     "active_cgq": 7530,
+     "active_only_upstream": 0,
+     "active_only_cgq": 0,
+     "cgq_candidates_missing_upstream": 0,
+     "upstream_candidates_not_in_cgq": 0,
+     "duplicates_upstream": 0,
+     "quadrants_flag_mismatch": 2,
+     "quadrants_active_mismatch": 0
+    },
+    "ph": {
+     "candidates_upstream": 0,
+     "candidates_cgq": 0,
+     "active_upstream": 0,
+     "active_cgq": 0,
+     "active_only_upstream": 0,
+     "active_only_cgq": 0,
+     "cgq_candidates_missing_upstream": 0,
+     "upstream_candidates_not_in_cgq": 0,
+     "duplicates_upstream": 0,
+     "quadrants_flag_mismatch": 0,
+     "quadrants_active_mismatch": 0
+    },
+    "raw_hits": {
+     "pt": 0,
+     "ee": 0
+    }
+   },
+   "timing": {
+    "build": {
+     "median_ms": 0.92380000569392,
+     "p90_ms": 0.9735299914609641
+    },
+    "pt_query": {
+     "median_ms": 2.0936999935656786,
+     "p90_ms": 2.0967100164853036
+    },
+    "ee_query": {
+     "median_ms": 4.869800002779812,
+     "p90_ms": 4.8807799990754575
+    },
+    "ph_query": {
+     "median_ms": 0.0023000029614195228,
+     "p90_ms": 0.0035100238164886832
+    },
+    "narrow": {
+     "median_ms": 0.0755500077502802,
+     "p90_ms": 0.10698002006392927
+    },
+    "counts_readback": {
+     "median_ms": 0.1875000016298145,
+     "p90_ms": 0.22985000105109066
+    },
+    "total": {
+     "median_ms": 8.101200000965036,
+     "p90_ms": 8.33188998803962
+    }
+   }
+  }
+ ],
+ "pass": true,
+ "genesis_revision": "c80084a1516df0525b76f2a009380eb04bce00e7",
+ "quadrants_version": "1.4.0",
+ "gpu": "NVIDIA GeForce RTX 5090"
+}

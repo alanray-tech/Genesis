@@ -4,7 +4,8 @@
 #   powershell -File bench\ipc_bvh\run_upstream.ps1 -All
 #   powershell -File bench\ipc_bvh\run_upstream.ps1 -Nsys kimono_deferred --scene kimono --schedule deferred --nsys-frame -1
 # -All runs every scene with both schedules (the measured pass). -Nsys traces the run with nsys into
-# data\nsys\upstream_<name> and parses it with upstream_nsys.py. Other arguments go to upstream_side.py.
+# data\nsys\upstream_<name> and parses it with upstream_nsys.py. Other arguments go to upstream_side.py, or to the
+# script of this folder named first (hit_distribution.py --scene kimono).
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$Python = 'C:\Users\81946\Projects\GenesisSimEngine\.venv\Scripts\python.exe',
@@ -39,5 +40,9 @@ if ($Nsys) {
     & $Python "$PSScriptRoot\upstream_nsys.py" --scene $scene --schedule $schedule "$trace.sqlite"
     exit $LASTEXITCODE
 }
-& $Python "$PSScriptRoot\upstream_side.py" @Arguments
+$script = 'upstream_side.py'
+if ($Arguments -and $Arguments[0] -like '*.py') {
+    $script, $Arguments = $Arguments[0], @($Arguments | Select-Object -Skip 1)
+}
+& $Python "$PSScriptRoot\$script" @Arguments
 exit $LASTEXITCODE

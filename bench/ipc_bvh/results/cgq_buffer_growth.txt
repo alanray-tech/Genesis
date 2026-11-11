@@ -1,0 +1,45 @@
+== two_bunnies
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=24000, ee=24000, pe=0, pp=0
+== cloth_stack
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=600000, ee=600000, pe=0, pp=0
+== wrecking_ball
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=24000, ee=24000, pe=0, pp=0
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=24000, ee=33142, pe=0, pp=0
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=24000, ee=39778, pe=0, pp=0
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 18699 -> 40000, ee 40601 -> 60000)
+[QIPC][info] EFBroadPhase: hit buffer overflow, growing (pass A 81003 -> 120000, pass B 0 -> 1)
+== kimono
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=24000, ee=24000, pe=0, pp=0
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 11036 -> 40000, ee 40493 -> 60000)
+[QIPC][info] EFBroadPhase: hit buffer overflow, growing (pass A 1518329 -> 1518329, pass B 0 -> 1)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 176455 -> 176455, ee 873515 -> 873515)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 212393 -> 264683, ee 904241 -> 1310273)
+[QIPC][info] EFBroadPhase: hit buffer overflow, growing (pass A 1974854 -> 2277494, pass B 0 -> 1)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 266106 -> 397025, ee 1190160 -> 1310273)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 338436 -> 397025, ee 1363342 -> 1965410)
+[QIPC][info] EFBroadPhase: hit buffer overflow, growing (pass A 2302187 -> 3416241, pass B 0 -> 1)
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=24000, ee=30664, pe=0, pp=0
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=24000, ee=76077, pe=0, pp=0
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=66576, ee=227836, pe=0, pp=0
+== cloth_stack_x3
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=600000, ee=600000, pe=0, pp=0
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 261559 -> 1000000, ee 1320040 -> 1500000)
+[QIPC][info] EFBroadPhase: hit buffer overflow, growing (pass A 18058932 -> 18058932, pass B 0 -> 1)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 2396738 -> 2396738, ee 11983983 -> 11983983)
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=899277, ee=639682, pe=0, pp=0
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=1901902, ee=4765677, pe=0, pp=0
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 3937873 -> 3937873, ee 11781051 -> 11983983)
+[QIPC][info] EFBroadPhase: hit buffer overflow, growing (pass A 41975209 -> 41975209, pass B 0 -> 1)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 9089708 -> 9089708, ee 27414217 -> 27414217)
+Traceback (most recent call last):
+RuntimeError: [QIPC] CUDA error: unspecified launch failure at C:\Users\81946\Projects\CudaGraphQIPC\cuda-graph-qipc-bvh-bench\qipc\_src\native\solver\core\pipeline_builder.cu:136
+[QIPC][critical] CUDA error: unspecified launch failure at C:\Users\81946\Projects\CudaGraphQIPC\cuda-graph-qipc-bvh-bench\qipc\_src\native\solver\sim_engine.cu:112
+== cloth_stack_x3
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=600000, ee=600000, pe=0, pp=0
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 476100 -> 1000000, ee 1257305 -> 1500000)
+[QIPC][info] EFBroadPhase: hit buffer overflow, growing (pass A 9397048 -> 9397048, pass B 0 -> 1)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 2043918 -> 2043918, ee 5928034 -> 5928034)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 1715845 -> 2043918, ee 6093620 -> 8892051)
+[QIPC][info] EFBroadPhase: hit buffer overflow, growing (pass A 16794834 -> 16794834, pass B 0 -> 1)
+[QIPC][info] EFBroadPhase: sub-pair overflow, growing (pt 3135582 -> 3135582, ee 10919879 -> 13338077)
+[QIPC][info] ContactSystem::realloc_pair_buffers: pt=889572, ee=3151299, pe=0, pp=0

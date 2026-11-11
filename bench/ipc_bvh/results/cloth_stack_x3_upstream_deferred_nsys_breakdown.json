@@ -1,0 +1,567 @@
+{
+ "build": {
+  "wall_ms": 2.201126,
+  "kernel_sum_ms": 1.6100824999999999,
+  "kernel_span_ms": 2.1019335,
+  "n_kernels": 111.0,
+  "n_runtime_calls": 229.0,
+  "n_launches": 111.0,
+  "n_syncs_and_copies": 4.0
+ },
+ "pt_query": {
+  "wall_ms": 2.608924,
+  "kernel_sum_ms": 2.5480894999999997,
+  "kernel_span_ms": 2.5598015,
+  "n_kernels": 4.0,
+  "n_runtime_calls": 11.0,
+  "n_launches": 4.0,
+  "n_syncs_and_copies": 1.0
+ },
+ "ee_query": {
+  "wall_ms": 13.1605965,
+  "kernel_sum_ms": 13.077069,
+  "kernel_span_ms": 13.108812,
+  "n_kernels": 4.0,
+  "n_runtime_calls": 11.0,
+  "n_launches": 4.0,
+  "n_syncs_and_copies": 1.0
+ },
+ "ph_query": {
+  "wall_ms": 0.004618499999999999,
+  "kernel_sum_ms": 0.0,
+  "kernel_span_ms": 0.0,
+  "n_kernels": 0.0,
+  "n_runtime_calls": 1.0,
+  "n_launches": 0.0,
+  "n_syncs_and_copies": 1.0
+ },
+ "narrow": {
+  "wall_ms": 0.2119015,
+  "kernel_sum_ms": 0.134687,
+  "kernel_span_ms": 0.15260649999999998,
+  "n_kernels": 6.0,
+  "n_runtime_calls": 14.0,
+  "n_launches": 6.0,
+  "n_syncs_and_copies": 1.0
+ },
+ "counts_readback": {
+  "wall_ms": 0.23009249999999998,
+  "kernel_sum_ms": 0.0,
+  "kernel_span_ms": 0.0,
+  "n_kernels": 0.0,
+  "n_runtime_calls": 16.0,
+  "n_launches": 0.0,
+  "n_syncs_and_copies": 11.0
+ },
+ "total": {
+  "wall_ms": 18.1941415,
+  "kernel_sum_ms": 17.369159,
+  "kernel_span_ms": 17.855921000000002,
+  "n_kernels": 125.0,
+  "n_runtime_calls": 277.0,
+  "n_launches": 125.0,
+  "n_syncs_and_copies": 14.0
+ },
+ "total_kernels": {
+  "kernel_query_c494_3_kernel_1_r_117...": {
+   "per_repeat_ms": 9.62585245,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_reach_filter_c490_3_ker_119...": {
+   "per_repeat_ms": 3.7197221999999996,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_reach_filter_c490_2_ker_115...": {
+   "per_repeat_ms": 1.4758893,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_query_c494_2_kernel_1_r_113...": {
+   "per_repeat_ms": 1.10159185,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_1_range_59...": {
+   "per_repeat_ms": 0.6286150499999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_1_range_5...": {
+   "per_repeat_ms": 0.41292275,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_narrow_c498_1_kernel_3__123...": {
+   "per_repeat_ms": 0.076417,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_53_rang_111...": {
+   "per_repeat_ms": 0.06820425,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_narrow_c498_1_kernel_1__121...": {
+   "per_repeat_ms": 0.05426344999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_53_rang_57...": {
+   "per_repeat_ms": 0.049586849999999995,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_bounds_c492_0_kernel_1__2...": {
+   "per_repeat_ms": 0.0194831,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_bounds_c492_0_kernel_0__1...": {
+   "per_repeat_ms": 0.0132575,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_52_rang_56...": {
+   "per_repeat_ms": 0.009729449999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_52_rang_110...": {
+   "per_repeat_ms": 0.00972625,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_13_rang_71...": {
+   "per_repeat_ms": 0.009204449999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_20_rang_78...": {
+   "per_repeat_ms": 0.009099199999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_27_rang_85...": {
+   "per_repeat_ms": 0.008990399999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_41_rang_99...": {
+   "per_repeat_ms": 0.008825499999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_34_rang_92...": {
+   "per_repeat_ms": 0.00877105,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_48_rang_106...": {
+   "per_repeat_ms": 0.008103949999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_13_rang_17...": {
+   "per_repeat_ms": 0.007623899999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_20_rang_24...": {
+   "per_repeat_ms": 0.007483050000000002,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_34_rang_38...": {
+   "per_repeat_ms": 0.0070943,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_41_rang_45...": {
+   "per_repeat_ms": 0.0070848000000000005,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_27_rang_31...": {
+   "per_repeat_ms": 0.00704315,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_48_rang_52...": {
+   "per_repeat_ms": 0.0068064,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_14_rang_72...": {
+   "per_repeat_ms": 0.0061887999999999995,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_35_rang_93...": {
+   "per_repeat_ms": 0.00611835,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_42_rang_100...": {
+   "per_repeat_ms": 0.0060544,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_5_range_63...": {
+   "per_repeat_ms": 0.0060414499999999986,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_28_rang_86...": {
+   "per_repeat_ms": 0.006036699999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_21_rang_79...": {
+   "per_repeat_ms": 0.006006299999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_12_rang_70...": {
+   "per_repeat_ms": 0.005244799999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_33_rang_91...": {
+   "per_repeat_ms": 0.005214399999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_47_rang_105...": {
+   "per_repeat_ms": 0.005196799999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_40_rang_98...": {
+   "per_repeat_ms": 0.00519355,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_19_rang_77...": {
+   "per_repeat_ms": 0.00514075,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_21_rang_25...": {
+   "per_repeat_ms": 0.005119949999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_26_rang_84...": {
+   "per_repeat_ms": 0.0051167,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_14_rang_18...": {
+   "per_repeat_ms": 0.005110399999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_5_range_9...": {
+   "per_repeat_ms": 0.0051008,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_35_rang_39...": {
+   "per_repeat_ms": 0.005099049999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_28_rang_32...": {
+   "per_repeat_ms": 0.00506875,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_36_rang_94...": {
+   "per_repeat_ms": 0.005068750000000001,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_2_range_60...": {
+   "per_repeat_ms": 0.005065599999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_7_range_65...": {
+   "per_repeat_ms": 0.005059199999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_42_rang_46...": {
+   "per_repeat_ms": 0.0050512000000000005,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_bounds_c492_0_kernel_2__3...": {
+   "per_repeat_ms": 0.005039999999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_22_rang_80...": {
+   "per_repeat_ms": 0.0050063,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_15_rang_73...": {
+   "per_repeat_ms": 0.0049888,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_43_rang_101...": {
+   "per_repeat_ms": 0.0049872,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_29_rang_87...": {
+   "per_repeat_ms": 0.00497915,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_2_range_6...": {
+   "per_repeat_ms": 0.004897500000000001,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_19_rang_23...": {
+   "per_repeat_ms": 0.0047184,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_36_rang_40...": {
+   "per_repeat_ms": 0.0047184,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_29_rang_33...": {
+   "per_repeat_ms": 0.00471515,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_33_rang_37...": {
+   "per_repeat_ms": 0.004699200000000001,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_7_range_11...": {
+   "per_repeat_ms": 0.004695899999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_15_rang_19...": {
+   "per_repeat_ms": 0.00469275,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_43_rang_47...": {
+   "per_repeat_ms": 0.00468,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_22_rang_26...": {
+   "per_repeat_ms": 0.0046703,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_40_rang_44...": {
+   "per_repeat_ms": 0.0046655,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_12_rang_16...": {
+   "per_repeat_ms": 0.0046592,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_47_rang_51...": {
+   "per_repeat_ms": 0.0046559999999999995,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_25_rang_29...": {
+   "per_repeat_ms": 0.004628800000000001,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_26_rang_30...": {
+   "per_repeat_ms": 0.0046270999999999994,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_46_rang_50...": {
+   "per_repeat_ms": 0.00461425,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_18_rang_76...": {
+   "per_repeat_ms": 0.0046047499999999995,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_16_rang_20...": {
+   "per_repeat_ms": 0.0046047,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_32_rang_36...": {
+   "per_repeat_ms": 0.0046032,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_25_rang_83...": {
+   "per_repeat_ms": 0.004591899999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_39_rang_97...": {
+   "per_repeat_ms": 0.0045856,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_11_rang_15...": {
+   "per_repeat_ms": 0.004585549999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_9_range_67...": {
+   "per_repeat_ms": 0.004577599999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_46_rang_104...": {
+   "per_repeat_ms": 0.004575899999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_44_rang_48...": {
+   "per_repeat_ms": 0.004564799999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_30_rang_88...": {
+   "per_repeat_ms": 0.004564799999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_23_rang_27...": {
+   "per_repeat_ms": 0.004563199999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_44_rang_102...": {
+   "per_repeat_ms": 0.004561549999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_32_rang_90...": {
+   "per_repeat_ms": 0.0045471999999999995,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_30_rang_34...": {
+   "per_repeat_ms": 0.004545449999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_9_range_13...": {
+   "per_repeat_ms": 0.004540799999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_11_rang_69...": {
+   "per_repeat_ms": 0.004539099999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_39_rang_43...": {
+   "per_repeat_ms": 0.004534399999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_37_rang_41...": {
+   "per_repeat_ms": 0.0045295,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_18_rang_22...": {
+   "per_repeat_ms": 0.004527999999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_23_rang_81...": {
+   "per_repeat_ms": 0.004526349999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_16_rang_74...": {
+   "per_repeat_ms": 0.0045246999999999996,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_37_rang_95...": {
+   "per_repeat_ms": 0.004523149999999998,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_narrow_c498_1_kernel_5__125...": {
+   "per_repeat_ms": 0.0044766499999999996,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_49_rang_107...": {
+   "per_repeat_ms": 0.0020800000000000003,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_3_range_61...": {
+   "per_repeat_ms": 0.0020239999999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_3_range_7...": {
+   "per_repeat_ms": 0.0018192,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_50_rang_108...": {
+   "per_repeat_ms": 0.0016399999999999997,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_10_rang_14...": {
+   "per_repeat_ms": 0.0016352000000000003,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_49_rang_53...": {
+   "per_repeat_ms": 0.0015584000000000001,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_24_rang_28...": {
+   "per_repeat_ms": 0.0014624000000000002,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_45_rang_103...": {
+   "per_repeat_ms": 0.0014352,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_17_rang_75...": {
+   "per_repeat_ms": 0.0014208000000000003,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_17_rang_21...": {
+   "per_repeat_ms": 0.0014208,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_45_rang_49...": {
+   "per_repeat_ms": 0.0013999999999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_38_rang_42...": {
+   "per_repeat_ms": 0.0013888,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_10_rang_68...": {
+   "per_repeat_ms": 0.0013855999999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_31_rang_35...": {
+   "per_repeat_ms": 0.0013744,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_38_rang_96...": {
+   "per_repeat_ms": 0.0013727,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_31_rang_89...": {
+   "per_repeat_ms": 0.0013647999999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_24_rang_82...": {
+   "per_repeat_ms": 0.0013551999999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_50_rang_54...": {
+   "per_repeat_ms": 0.0012832000000000002,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_narrow_c498_1_kernel_4__124...": {
+   "per_repeat_ms": 0.0012624,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_4_seria_62...": {
+   "per_repeat_ms": 0.0012416,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_4_seria_8...": {
+   "per_repeat_ms": 0.0012272000000000001,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_0_seria_4...": {
+   "per_repeat_ms": 0.0011791999999999998,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_reach_filter_c490_3_ker_118...": {
+   "per_repeat_ms": 0.0011535999999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_0_seria_58...": {
+   "per_repeat_ms": 0.0011471999999999997,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_8_seria_66...": {
+   "per_repeat_ms": 0.0010928,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_6_seria_10...": {
+   "per_repeat_ms": 0.0009695999999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_6_seria_64...": {
+   "per_repeat_ms": 0.0009615499999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_8_seria_12...": {
+   "per_repeat_ms": 0.0009391999999999997,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_narrow_c498_1_kernel_2__122...": {
+   "per_repeat_ms": 0.0009247999999999997,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_reach_filter_c490_2_ker_114...": {
+   "per_repeat_ms": 0.0009007999999999999,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_narrow_c498_1_kernel_0__120...": {
+   "per_repeat_ms": 0.0008911999999999998,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_0_kernel_51_rang_55...": {
+   "per_repeat_ms": 0.0008,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_query_c494_2_kernel_0_s_112...": {
+   "per_repeat_ms": 0.0007823999999999999,
+   "launches_per_repeat": 1.0
+  },
+  "build_bvh_c60_1_kernel_51_rang_109...": {
+   "per_repeat_ms": 0.0007808,
+   "launches_per_repeat": 1.0
+  },
+  "kernel_query_c494_3_kernel_0_s_116...": {
+   "per_repeat_ms": 0.0007439999999999999,
+   "launches_per_repeat": 1.0
+  }
+ }
+}

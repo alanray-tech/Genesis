@@ -1,0 +1,1534 @@
+{
+ "frames": {
+  "0": {
+   "build": {
+    "median_ms": 0.1923025,
+    "p90_ms": 0.19442689999999999
+   },
+   "query": {
+    "median_ms": 0.119983,
+    "p90_ms": 0.12196699999999999
+   },
+   "query_traverse": {
+    "median_ms": 0.06839899999999999,
+    "p90_ms": 0.0690463
+   },
+   "pt_filter": {
+    "median_ms": 0.028224,
+    "p90_ms": 0.031296
+   },
+   "ee_filter": {
+    "median_ms": 0.022719999999999997,
+    "p90_ms": 0.023043099999999997
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.0018592
+   },
+   "broad_phase": {
+    "median_ms": 0.31330899999999995,
+    "p90_ms": 0.31675639999999994
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.38066849999999997,
+    "p90_ms": 0.3822601
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "1": {
+   "build": {
+    "median_ms": 0.192846,
+    "p90_ms": 0.1936365
+   },
+   "query": {
+    "median_ms": 0.120703,
+    "p90_ms": 0.1218262
+   },
+   "query_traverse": {
+    "median_ms": 0.069359,
+    "p90_ms": 0.069775
+   },
+   "pt_filter": {
+    "median_ms": 0.028336,
+    "p90_ms": 0.029088
+   },
+   "ee_filter": {
+    "median_ms": 0.022703,
+    "p90_ms": 0.0230112
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.31430199999999997,
+    "p90_ms": 0.3161195
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.382318,
+    "p90_ms": 0.3839705
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "2": {
+   "build": {
+    "median_ms": 0.19340649999999998,
+    "p90_ms": 0.1949516
+   },
+   "query": {
+    "median_ms": 0.12068699999999999,
+    "p90_ms": 0.122319
+   },
+   "query_traverse": {
+    "median_ms": 0.068991,
+    "p90_ms": 0.06950619999999999
+   },
+   "pt_filter": {
+    "median_ms": 0.02856,
+    "p90_ms": 0.0297984
+   },
+   "ee_filter": {
+    "median_ms": 0.022816,
+    "p90_ms": 0.023136
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.31519699999999995,
+    "p90_ms": 0.317725
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.38217199999999996,
+    "p90_ms": 0.3840643
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "3": {
+   "build": {
+    "median_ms": 0.1935985,
+    "p90_ms": 0.1990764
+   },
+   "query": {
+    "median_ms": 0.119295,
+    "p90_ms": 0.120831
+   },
+   "query_traverse": {
+    "median_ms": 0.068303,
+    "p90_ms": 0.0688183
+   },
+   "pt_filter": {
+    "median_ms": 0.0278235,
+    "p90_ms": 0.029103999999999998
+   },
+   "ee_filter": {
+    "median_ms": 0.022816,
+    "p90_ms": 0.0231103
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.0018272
+   },
+   "broad_phase": {
+    "median_ms": 0.31378949999999994,
+    "p90_ms": 0.3193035
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.3809255,
+    "p90_ms": 0.3828876
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "4": {
+   "build": {
+    "median_ms": 0.19330999999999998,
+    "p90_ms": 0.19581969999999999
+   },
+   "query": {
+    "median_ms": 0.11934299999999999,
+    "p90_ms": 0.1208022
+   },
+   "query_traverse": {
+    "median_ms": 0.0681755,
+    "p90_ms": 0.06868389999999999
+   },
+   "pt_filter": {
+    "median_ms": 0.02824,
+    "p90_ms": 0.0294134
+   },
+   "ee_filter": {
+    "median_ms": 0.0228,
+    "p90_ms": 0.023008
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.0018592
+   },
+   "broad_phase": {
+    "median_ms": 0.31406100000000003,
+    "p90_ms": 0.31609709999999996
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.38116449999999996,
+    "p90_ms": 0.3828216
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "5": {
+   "build": {
+    "median_ms": 0.193262,
+    "p90_ms": 0.19392769999999998
+   },
+   "query": {
+    "median_ms": 0.12071899999999999,
+    "p90_ms": 0.1222166
+   },
+   "query_traverse": {
+    "median_ms": 0.06896,
+    "p90_ms": 0.06906789999999999
+   },
+   "pt_filter": {
+    "median_ms": 0.028656,
+    "p90_ms": 0.0303895
+   },
+   "ee_filter": {
+    "median_ms": 0.0227995,
+    "p90_ms": 0.0229558
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.3148935,
+    "p90_ms": 0.316733
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.38239599999999996,
+    "p90_ms": 0.3841944
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "6": {
+   "build": {
+    "median_ms": 0.19291,
+    "p90_ms": 0.19846529999999998
+   },
+   "query": {
+    "median_ms": 0.11940699999999999,
+    "p90_ms": 0.121775
+   },
+   "query_traverse": {
+    "median_ms": 0.0679515,
+    "p90_ms": 0.0685591
+   },
+   "pt_filter": {
+    "median_ms": 0.028319999999999998,
+    "p90_ms": 0.0301568
+   },
+   "ee_filter": {
+    "median_ms": 0.022736,
+    "p90_ms": 0.022879999999999998
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.001808,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.31438099999999997,
+    "p90_ms": 0.3201442
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.380669,
+    "p90_ms": 0.3824952
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "7": {
+   "build": {
+    "median_ms": 0.1916945,
+    "p90_ms": 0.192703
+   },
+   "query": {
+    "median_ms": 0.11955099999999999,
+    "p90_ms": 0.12119579999999999
+   },
+   "query_traverse": {
+    "median_ms": 0.0680475,
+    "p90_ms": 0.06851510000000001
+   },
+   "pt_filter": {
+    "median_ms": 0.028415999999999997,
+    "p90_ms": 0.029452799999999998
+   },
+   "ee_filter": {
+    "median_ms": 0.0227995,
+    "p90_ms": 0.0230176
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001888
+   },
+   "broad_phase": {
+    "median_ms": 0.31246149999999995,
+    "p90_ms": 0.31599469999999996
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.380142,
+    "p90_ms": 0.3818362
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "8": {
+   "build": {
+    "median_ms": 0.191519,
+    "p90_ms": 0.1922326
+   },
+   "query": {
+    "median_ms": 0.120031,
+    "p90_ms": 0.12154459999999999
+   },
+   "query_traverse": {
+    "median_ms": 0.06791900000000001,
+    "p90_ms": 0.0684895
+   },
+   "pt_filter": {
+    "median_ms": 0.0288795,
+    "p90_ms": 0.0300096
+   },
+   "ee_filter": {
+    "median_ms": 0.022736,
+    "p90_ms": 0.022992
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.3124295,
+    "p90_ms": 0.3141131
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.381468,
+    "p90_ms": 0.3828353
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "9": {
+   "build": {
+    "median_ms": 0.1934865,
+    "p90_ms": 0.1952949
+   },
+   "query": {
+    "median_ms": 0.120831,
+    "p90_ms": 0.1222742
+   },
+   "query_traverse": {
+    "median_ms": 0.0685915,
+    "p90_ms": 0.0691647
+   },
+   "pt_filter": {
+    "median_ms": 0.028752,
+    "p90_ms": 0.030787099999999998
+   },
+   "ee_filter": {
+    "median_ms": 0.022831999999999998,
+    "p90_ms": 0.0230432
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.0018239999999999999
+   },
+   "broad_phase": {
+    "median_ms": 0.31534149999999994,
+    "p90_ms": 0.316589
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.3834835,
+    "p90_ms": 0.38494649999999997
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "10": {
+   "build": {
+    "median_ms": 0.193342,
+    "p90_ms": 0.194526
+   },
+   "query": {
+    "median_ms": 0.121039,
+    "p90_ms": 0.12255579999999999
+   },
+   "query_traverse": {
+    "median_ms": 0.069663,
+    "p90_ms": 0.0709312
+   },
+   "pt_filter": {
+    "median_ms": 0.027968,
+    "p90_ms": 0.029504
+   },
+   "ee_filter": {
+    "median_ms": 0.022831999999999998,
+    "p90_ms": 0.023232
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.31524549999999996,
+    "p90_ms": 0.31804499999999997
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.3835165,
+    "p90_ms": 0.3859224
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "11": {
+   "build": {
+    "median_ms": 0.1934225,
+    "p90_ms": 0.19563419999999998
+   },
+   "query": {
+    "median_ms": 0.1200465,
+    "p90_ms": 0.1217302
+   },
+   "query_traverse": {
+    "median_ms": 0.06871949999999999,
+    "p90_ms": 0.0690231
+   },
+   "pt_filter": {
+    "median_ms": 0.02792,
+    "p90_ms": 0.0299392
+   },
+   "ee_filter": {
+    "median_ms": 0.022767999999999997,
+    "p90_ms": 0.023081599999999997
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.314334,
+    "p90_ms": 0.3172643
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.3825075,
+    "p90_ms": 0.384449
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "12": {
+   "build": {
+    "median_ms": 0.192495,
+    "p90_ms": 0.19382519999999998
+   },
+   "query": {
+    "median_ms": 0.11815899999999999,
+    "p90_ms": 0.119071
+   },
+   "query_traverse": {
+    "median_ms": 0.0667195,
+    "p90_ms": 0.0672087
+   },
+   "pt_filter": {
+    "median_ms": 0.028255499999999996,
+    "p90_ms": 0.029231999999999998
+   },
+   "ee_filter": {
+    "median_ms": 0.022879999999999998,
+    "p90_ms": 0.023039999999999998
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.31169349999999996,
+    "p90_ms": 0.3135074
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.38025299999999995,
+    "p90_ms": 0.3812216
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "13": {
+   "build": {
+    "median_ms": 0.19252599999999997,
+    "p90_ms": 0.1931638
+   },
+   "query": {
+    "median_ms": 0.11985499999999999,
+    "p90_ms": 0.1209718
+   },
+   "query_traverse": {
+    "median_ms": 0.0681595,
+    "p90_ms": 0.068463
+   },
+   "pt_filter": {
+    "median_ms": 0.028527999999999998,
+    "p90_ms": 0.0297399
+   },
+   "ee_filter": {
+    "median_ms": 0.022896,
+    "p90_ms": 0.0231135
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.31332499999999996,
+    "p90_ms": 0.3143938
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.3820125,
+    "p90_ms": 0.3827897
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "14": {
+   "build": {
+    "median_ms": 0.19295849999999998,
+    "p90_ms": 0.1952524
+   },
+   "query": {
+    "median_ms": 0.121039,
+    "p90_ms": 0.1220502
+   },
+   "query_traverse": {
+    "median_ms": 0.06964799999999999,
+    "p90_ms": 0.0703456
+   },
+   "pt_filter": {
+    "median_ms": 0.0284,
+    "p90_ms": 0.029502999999999998
+   },
+   "ee_filter": {
+    "median_ms": 0.022656,
+    "p90_ms": 0.0230231
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.31521299999999997,
+    "p90_ms": 0.31826899999999997
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.383294,
+    "p90_ms": 0.38513519999999996
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "15": {
+   "build": {
+    "median_ms": 0.19243,
+    "p90_ms": 0.193454
+   },
+   "query": {
+    "median_ms": 0.12035099999999999,
+    "p90_ms": 0.12201179999999999
+   },
+   "query_traverse": {
+    "median_ms": 0.0680955,
+    "p90_ms": 0.0683286
+   },
+   "pt_filter": {
+    "median_ms": 0.027903999999999998,
+    "p90_ms": 0.0294199
+   },
+   "ee_filter": {
+    "median_ms": 0.023104,
+    "p90_ms": 0.025509499999999997
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.0018592
+   },
+   "broad_phase": {
+    "median_ms": 0.313517,
+    "p90_ms": 0.3161794
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.38199649999999996,
+    "p90_ms": 0.38445779999999996
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "16": {
+   "build": {
+    "median_ms": 0.193407,
+    "p90_ms": 0.19467969999999998
+   },
+   "query": {
+    "median_ms": 0.123231,
+    "p90_ms": 0.12643100000000002
+   },
+   "query_traverse": {
+    "median_ms": 0.0687355,
+    "p90_ms": 0.0692415
+   },
+   "pt_filter": {
+    "median_ms": 0.028527999999999998,
+    "p90_ms": 0.0331679
+   },
+   "ee_filter": {
+    "median_ms": 0.025088,
+    "p90_ms": 0.0262167
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.3182215,
+    "p90_ms": 0.32200660000000003
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.385742,
+    "p90_ms": 0.3905911
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "17": {
+   "build": {
+    "median_ms": 0.1910385,
+    "p90_ms": 0.1930965
+   },
+   "query": {
+    "median_ms": 0.1285425,
+    "p90_ms": 0.1314358
+   },
+   "query_traverse": {
+    "median_ms": 0.06771150000000001,
+    "p90_ms": 0.06844789999999999
+   },
+   "pt_filter": {
+    "median_ms": 0.0339995,
+    "p90_ms": 0.036777599999999994
+   },
+   "ee_filter": {
+    "median_ms": 0.0266875,
+    "p90_ms": 0.027547799999999997
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.0018239999999999999,
+    "p90_ms": 0.001856
+   },
+   "broad_phase": {
+    "median_ms": 0.321117,
+    "p90_ms": 0.3240482
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.3891645,
+    "p90_ms": 0.3928663
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "18": {
+   "build": {
+    "median_ms": 0.19297399999999998,
+    "p90_ms": 0.1938924
+   },
+   "query": {
+    "median_ms": 0.141503,
+    "p90_ms": 0.14378139999999998
+   },
+   "query_traverse": {
+    "median_ms": 0.0695995,
+    "p90_ms": 0.0704054
+   },
+   "pt_filter": {
+    "median_ms": 0.039199,
+    "p90_ms": 0.0410911
+   },
+   "ee_filter": {
+    "median_ms": 0.032112,
+    "p90_ms": 0.0332224
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.014367999999999999,
+    "p90_ms": 0.014496
+   },
+   "broad_phase": {
+    "median_ms": 0.33610949999999995,
+    "p90_ms": 0.3378434
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.4039155,
+    "p90_ms": 0.4061592
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "19": {
+   "build": {
+    "median_ms": 0.1928305,
+    "p90_ms": 0.1935212
+   },
+   "query": {
+    "median_ms": 0.14540699999999998,
+    "p90_ms": 0.1484886
+   },
+   "query_traverse": {
+    "median_ms": 0.07142399999999999,
+    "p90_ms": 0.0718711
+   },
+   "pt_filter": {
+    "median_ms": 0.040576,
+    "p90_ms": 0.043592599999999995
+   },
+   "ee_filter": {
+    "median_ms": 0.032896,
+    "p90_ms": 0.0334432
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.080879,
+    "p90_ms": 0.0828493
+   },
+   "broad_phase": {
+    "median_ms": 0.339421,
+    "p90_ms": 0.3421474
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.408381,
+    "p90_ms": 0.4109423
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "20": {
+   "build": {
+    "median_ms": 0.193326,
+    "p90_ms": 0.19514689999999998
+   },
+   "query": {
+    "median_ms": 0.14862199999999998,
+    "p90_ms": 0.150367
+   },
+   "query_traverse": {
+    "median_ms": 0.071391,
+    "p90_ms": 0.0719711
+   },
+   "pt_filter": {
+    "median_ms": 0.043536,
+    "p90_ms": 0.044639
+   },
+   "ee_filter": {
+    "median_ms": 0.033296,
+    "p90_ms": 0.0338912
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.08903799999999999,
+    "p90_ms": 0.09529599999999999
+   },
+   "broad_phase": {
+    "median_ms": 0.342893,
+    "p90_ms": 0.346477
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.41154799999999997,
+    "p90_ms": 0.4130944
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "21": {
+   "build": {
+    "median_ms": 0.19329449999999998,
+    "p90_ms": 0.1939189
+   },
+   "query": {
+    "median_ms": 0.14755049999999997,
+    "p90_ms": 0.1492822
+   },
+   "query_traverse": {
+    "median_ms": 0.06998299999999999,
+    "p90_ms": 0.0703766
+   },
+   "pt_filter": {
+    "median_ms": 0.0436635,
+    "p90_ms": 0.045062399999999996
+   },
+   "ee_filter": {
+    "median_ms": 0.033534999999999995,
+    "p90_ms": 0.0339232
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.09385450000000001,
+    "p90_ms": 0.09487670000000001
+   },
+   "broad_phase": {
+    "median_ms": 0.34132549999999995,
+    "p90_ms": 0.3434402
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.40983649999999994,
+    "p90_ms": 0.411052
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "22": {
+   "build": {
+    "median_ms": 0.1932145,
+    "p90_ms": 0.19374519999999998
+   },
+   "query": {
+    "median_ms": 0.14788649999999998,
+    "p90_ms": 0.1503437
+   },
+   "query_traverse": {
+    "median_ms": 0.07011200000000001,
+    "p90_ms": 0.0704351
+   },
+   "pt_filter": {
+    "median_ms": 0.0435515,
+    "p90_ms": 0.045148799999999996
+   },
+   "ee_filter": {
+    "median_ms": 0.03392,
+    "p90_ms": 0.035446399999999996
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.15267,
+    "p90_ms": 0.1579372
+   },
+   "broad_phase": {
+    "median_ms": 0.342701,
+    "p90_ms": 0.3452771
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.41142049999999997,
+    "p90_ms": 0.41319069999999997
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "23": {
+   "build": {
+    "median_ms": 0.19458999999999999,
+    "p90_ms": 0.19507639999999998
+   },
+   "query": {
+    "median_ms": 0.14865499999999998,
+    "p90_ms": 0.14955090000000001
+   },
+   "query_traverse": {
+    "median_ms": 0.070335,
+    "p90_ms": 0.0706007
+   },
+   "pt_filter": {
+    "median_ms": 0.0437915,
+    "p90_ms": 0.044683799999999996
+   },
+   "ee_filter": {
+    "median_ms": 0.034032,
+    "p90_ms": 0.0350006
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.16391899999999998,
+    "p90_ms": 0.1668222
+   },
+   "broad_phase": {
+    "median_ms": 0.343885,
+    "p90_ms": 0.3452226
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.4126375,
+    "p90_ms": 0.4140331
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "24": {
+   "build": {
+    "median_ms": 0.1946385,
+    "p90_ms": 0.1957996
+   },
+   "query": {
+    "median_ms": 0.1497425,
+    "p90_ms": 0.15118939999999997
+   },
+   "query_traverse": {
+    "median_ms": 0.07071899999999999,
+    "p90_ms": 0.0715551
+   },
+   "pt_filter": {
+    "median_ms": 0.044303499999999996,
+    "p90_ms": 0.0462039
+   },
+   "ee_filter": {
+    "median_ms": 0.0341115,
+    "p90_ms": 0.0351927
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.166816,
+    "p90_ms": 0.176062
+   },
+   "broad_phase": {
+    "median_ms": 0.346013,
+    "p90_ms": 0.347581
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.4142525,
+    "p90_ms": 0.4162361
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "25": {
+   "build": {
+    "median_ms": 0.191807,
+    "p90_ms": 0.1936557
+   },
+   "query": {
+    "median_ms": 0.148031,
+    "p90_ms": 0.150447
+   },
+   "query_traverse": {
+    "median_ms": 0.0703995,
+    "p90_ms": 0.0709142
+   },
+   "pt_filter": {
+    "median_ms": 0.043887999999999996,
+    "p90_ms": 0.045115800000000005
+   },
+   "ee_filter": {
+    "median_ms": 0.0338715,
+    "p90_ms": 0.034192
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.16410999999999998,
+    "p90_ms": 0.16988599999999998
+   },
+   "broad_phase": {
+    "median_ms": 0.341453,
+    "p90_ms": 0.343325
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.40913199999999994,
+    "p90_ms": 0.4117088
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "26": {
+   "build": {
+    "median_ms": 0.193006,
+    "p90_ms": 0.1946285
+   },
+   "query": {
+    "median_ms": 0.1461905,
+    "p90_ms": 0.14906049999999998
+   },
+   "query_traverse": {
+    "median_ms": 0.070383,
+    "p90_ms": 0.07087999999999998
+   },
+   "pt_filter": {
+    "median_ms": 0.042207499999999995,
+    "p90_ms": 0.0431551
+   },
+   "ee_filter": {
+    "median_ms": 0.033456,
+    "p90_ms": 0.0342391
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.169294,
+    "p90_ms": 0.17265919999999998
+   },
+   "broad_phase": {
+    "median_ms": 0.34089349999999996,
+    "p90_ms": 0.3439586
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.40874900000000003,
+    "p90_ms": 0.4115544
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "27": {
+   "build": {
+    "median_ms": 0.193038,
+    "p90_ms": 0.19387
+   },
+   "query": {
+    "median_ms": 0.146687,
+    "p90_ms": 0.1488662
+   },
+   "query_traverse": {
+    "median_ms": 0.07124749999999999,
+    "p90_ms": 0.0717888
+   },
+   "pt_filter": {
+    "median_ms": 0.041678999999999994,
+    "p90_ms": 0.0437503
+   },
+   "ee_filter": {
+    "median_ms": 0.033071,
+    "p90_ms": 0.0347008
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.168959,
+    "p90_ms": 0.17140619999999998
+   },
+   "broad_phase": {
+    "median_ms": 0.341101,
+    "p90_ms": 0.3427778
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.41033149999999996,
+    "p90_ms": 0.41192789999999996
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "28": {
+   "build": {
+    "median_ms": 0.1934385,
+    "p90_ms": 0.1947468
+   },
+   "query": {
+    "median_ms": 0.14627099999999998,
+    "p90_ms": 0.1485334
+   },
+   "query_traverse": {
+    "median_ms": 0.0713755,
+    "p90_ms": 0.0720055
+   },
+   "pt_filter": {
+    "median_ms": 0.0411835,
+    "p90_ms": 0.043612700000000004
+   },
+   "ee_filter": {
+    "median_ms": 0.032832,
+    "p90_ms": 0.0336
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.173262,
+    "p90_ms": 0.17664439999999998
+   },
+   "broad_phase": {
+    "median_ms": 0.340766,
+    "p90_ms": 0.34314259999999996
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.409181,
+    "p90_ms": 0.4115097
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  },
+  "29": {
+   "build": {
+    "median_ms": 0.19311799999999998,
+    "p90_ms": 0.1936502
+   },
+   "query": {
+    "median_ms": 0.14611049999999998,
+    "p90_ms": 0.14775809999999998
+   },
+   "query_traverse": {
+    "median_ms": 0.071375,
+    "p90_ms": 0.0716566
+   },
+   "pt_filter": {
+    "median_ms": 0.041968,
+    "p90_ms": 0.0438719
+   },
+   "ee_filter": {
+    "median_ms": 0.0327195,
+    "p90_ms": 0.0332311
+   },
+   "ph": {
+    "median_ms": 0.0,
+    "p90_ms": 0.0
+   },
+   "narrow": {
+    "median_ms": 0.170062,
+    "p90_ms": 0.176251
+   },
+   "broad_phase": {
+    "median_ms": 0.34052499999999997,
+    "p90_ms": 0.3425186
+   },
+   "broad_phase_kernel_sum": {
+    "median_ms": 0.408988,
+    "p90_ms": 0.4107275
+   },
+   "n_broad_phase_kernels": {
+    "median_ms": 86.0,
+    "p90_ms": 86.0
+   },
+   "repeats": 20
+  }
+ },
+ "kernels": {
+  "drs_onesweep_kernel": {
+   "launches": 9600,
+   "median_ms": 0.005024,
+   "sum_ms": 46.508272999999996
+  },
+  "ef_pass_a_kernel": {
+   "launches": 600,
+   "median_ms": 0.0531995,
+   "sum_ms": 32.321365
+  },
+  "ef_face_bounds_kernel": {
+   "launches": 600,
+   "median_ms": 0.034783,
+   "sum_ms": 20.871297
+  },
+  "bvh_filter_raw_pt_kernel": {
+   "launches": 600,
+   "median_ms": 0.029808,
+   "sum_ms": 20.745418
+  },
+  "export_assemble_pt_kernel": {
+   "launches": 600,
+   "median_ms": 0.000896,
+   "sum_ms": 17.602469
+  },
+  "bvh_filter_raw_ee_kernel": {
+   "launches": 600,
+   "median_ms": 0.0232,
+   "sum_ms": 16.34823
+  },
+  "export_assemble_ee_kernel": {
+   "launches": 600,
+   "median_ms": 0.0009599999999999999,
+   "sum_ms": 15.303348999999999
+  },
+  "bvh_calc_internal_aabb_kernel": {
+   "launches": 1200,
+   "median_ms": 0.012159999999999999,
+   "sum_ms": 15.037341
+  },
+  "bvh_propagate_body_ids_kernel": {
+   "launches": 600,
+   "median_ms": 0.018623999999999998,
+   "sum_ms": 11.146744
+  },
+  "export_ccd_ee_kernel": {
+   "launches": 600,
+   "median_ms": 0.000864,
+   "sum_ms": 8.415858
+  },
+  "ef_pass_a_expand_raw_kernel": {
+   "launches": 600,
+   "median_ms": 0.013311,
+   "sum_ms": 7.984565999999999
+  },
+  "drs_memset_lookback_kernel": {
+   "launches": 9600,
+   "median_ms": 0.000704,
+   "sum_ms": 6.941668999999999
+  },
+  "ef_edge_bounds_kernel": {
+   "launches": 600,
+   "median_ms": 0.01136,
+   "sum_ms": 6.822502999999999
+  },
+  "export_ccd_pt_kernel": {
+   "launches": 600,
+   "median_ms": 0.001088,
+   "sum_ms": 4.788018999999999
+  },
+  "bvh_calc_internal_nodes_kernel": {
+   "launches": 1200,
+   "median_ms": 0.003888,
+   "sum_ms": 4.650777
+  },
+  "bvh_reduce_scene_partial_kernel": {
+   "launches": 1200,
+   "median_ms": 0.0039355,
+   "sum_ms": 4.110424999999999
+  },
+  "bvh_calc_morton_kernel": {
+   "launches": 1200,
+   "median_ms": 0.0034239999999999995,
+   "sum_ms": 3.9740849999999996
+  },
+  "ef_point_bounds_kernel": {
+   "launches": 600,
+   "median_ms": 0.006464,
+   "sum_ms": 3.878109
+  },
+  "ef_body_query_kernel": {
+   "launches": 600,
+   "median_ms": 0.00528,
+   "sum_ms": 3.0153420000000004
+  },
+  "bvh_calc_leaf_nodes_kernel": {
+   "launches": 1200,
+   "median_ms": 0.002864,
+   "sum_ms": 2.931367
+  },
+  "drs_histogram_kernel": {
+   "launches": 1200,
+   "median_ms": 0.002336,
+   "sum_ms": 2.825834
+  },
+  "bvh_reduce_scene_final_kernel": {
+   "launches": 1200,
+   "median_ms": 0.002224,
+   "sum_ms": 2.6265739999999997
+  },
+  "ef_body_accumulate_kernel": {
+   "launches": 600,
+   "median_ms": 0.004288,
+   "sum_ms": 2.566633
+  },
+  "bvh_copy_leaf_aabb_kernel": {
+   "launches": 1200,
+   "median_ms": 0.002144,
+   "sum_ms": 2.454728
+  },
+  "bvh_stamp_leaf_body_ids_kernel": {
+   "launches": 600,
+   "median_ms": 0.003232,
+   "sum_ms": 1.9372329999999998
+  },
+  "bvh_reorder_leaf_aabb_kernel": {
+   "launches": 1200,
+   "median_ms": 0.0017439999999999999,
+   "sum_ms": 1.8368509999999998
+  },
+  "bvh_extract_indices_kernel": {
+   "launches": 1200,
+   "median_ms": 0.0014399999999999999,
+   "sum_ms": 1.710378
+  },
+  "bvh_calc_leaf_aabb_kernel": {
+   "launches": 1200,
+   "median_ms": 0.0012799999999999999,
+   "sum_ms": 1.639053
+  },
+  "pipeline_lambda_kernel": {
+   "launches": 1200,
+   "median_ms": 0.00112,
+   "sum_ms": 1.3627009999999997
+  },
+  "des_scan_kernel": {
+   "launches": 600,
+   "median_ms": 0.001984,
+   "sum_ms": 1.1814930000000001
+  },
+  "ef_body_flag_kernel": {
+   "launches": 600,
+   "median_ms": 0.001856,
+   "sum_ms": 1.112407
+  },
+  "bvh_memset_flags_kernel": {
+   "launches": 1200,
+   "median_ms": 0.000896,
+   "sum_ms": 1.084661
+  },
+  "drs_exclusive_sum_kernel": {
+   "launches": 1200,
+   "median_ms": 0.000864,
+   "sum_ms": 1.061335
+  },
+  "ef_body_seam_kernel": {
+   "launches": 600,
+   "median_ms": 0.001664,
+   "sum_ms": 1.005717
+  },
+  "ef_body_compact_kernel": {
+   "launches": 600,
+   "median_ms": 0.001568,
+   "sum_ms": 0.947164
+  },
+  "ef_body_leaves_kernel": {
+   "launches": 600,
+   "median_ms": 0.001408,
+   "sum_ms": 0.8514179999999999
+  },
+  "drs_memset_bins_kernel": {
+   "launches": 1200,
+   "median_ms": 0.0006399999999999999,
+   "sum_ms": 0.784152
+  },
+  "drs_memset_ctrs_kernel": {
+   "launches": 1200,
+   "median_ms": 0.0006399999999999999,
+   "sum_ms": 0.7635449999999999
+  },
+  "bvh_memset_flags2_kernel": {
+   "launches": 600,
+   "median_ms": 0.000896,
+   "sum_ms": 0.5296569999999999
+  },
+  "drs_write_sorted_ptrs_kernel": {
+   "launches": 1200,
+   "median_ms": 0.000352,
+   "sum_ms": 0.43145399999999995
+  },
+  "bvh_raw_reset_pt_kernel": {
+   "launches": 600,
+   "median_ms": 0.000704,
+   "sum_ms": 0.4280599999999999
+  },
+  "bvh_raw_reset_ee_kernel": {
+   "launches": 600,
+   "median_ms": 0.000704,
+   "sum_ms": 0.42364499999999994
+  },
+  "ef_body_reset_kernel": {
+   "launches": 600,
+   "median_ms": 0.0006399999999999999,
+   "sum_ms": 0.39007699999999995
+  },
+  "des_init_tile_state_kernel": {
+   "launches": 600,
+   "median_ms": 0.000576,
+   "sum_ms": 0.36908300000000005
+  },
+  "ef_raw_reset_kernel": {
+   "launches": 600,
+   "median_ms": 0.000512,
+   "sum_ms": 0.309759
+  },
+  "pipeline_reset_kernel": {
+   "launches": 600,
+   "median_ms": 0.000416,
+   "sum_ms": 0.25625400000000004
+  }
+ },
+ "solver_memory": {
+  "device_bytes_current": 218273663,
+  "device_alloc_count": 457,
+  "device_bytes_peak": 218273663,
+  "host_bytes_current": 0,
+  "host_alloc_count": 0,
+  "host_bytes_peak": 0
+ }
+}
