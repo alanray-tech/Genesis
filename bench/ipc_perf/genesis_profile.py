@@ -167,35 +167,32 @@ def make_counting_reader(name):
     return counting_reader
 
 
-original_line_search_trial = newton_solver.kernel_line_search_trial
-original_pcg_loop = newton_solver.kernel_pcg_loop
-original_end_iteration = newton_solver.kernel_end_iteration
+# The Newton loop of the tree: the line search as one graph kernel ending the iteration and the direction as another
+# (ipc-perf B1 on), or the trial, PCG loop and end-of-iteration kernels launched by the host (before)
+is_graph_line_search = "kernel_line_search" in vars(newton_solver)
+if is_graph_line_search:
+    original_direction = newton_solver.kernel_newton_direction
+    original_end = newton_solver.kernel_line_search
+else:
+    original_direction = newton_solver.kernel_pcg_loop
+    original_end = newton_solver.kernel_end_iteration
 
 
-def counted_line_search_trial(*kernel_args):
-    counters["ls_trials"] += 1
-    original_line_search_trial(*kernel_args)
-
-
-def counted_pcg_loop(*kernel_args):
-    original_pcg_loop(*kernel_args)
+def counted_direction(*kernel_args):
+    original_direction(*kernel_args)
     is_counting[0] = False
     last_pcg[0] = pcg_max_iterations - int(original_readers["qd_to_numpy"](newton.newton_loops.n_pcg_iterations_left))
     counters["pcg"] += last_pcg[0]
     is_counting[0] = True
 
 
-def marked_end_iteration(*kernel_args):
-    torch.cuda.nvtx.mark("newton_iteration")
-    original_end_iteration(*kernel_args)
-
-
-def traced_end_iteration(*kernel_args):
-    """The end of a Newton iteration, its step, line search, convergence measure and CCD bounds recorded first."""
+def record_iteration() -> None:
+    """The line-search trials of the Newton iteration, and with tracing its step, convergence measure and CCD bounds."""
+    is_counting[0] = False
+    read = original_readers["qd_to_numpy"]
+    envs = newton.newton_envs
+    counters["ls_trials"] += int(read(envs.n_line_search_iterations)[0])
     if is_tracing[0]:
-        is_counting[0] = False
-        read = original_readers["qd_to_numpy"]
-        envs = newton.newton_envs
         bodies_alpha = read(newton.ipc_state.bodies.alpha)[:, 0]
         trace_rows.append(
             {
@@ -211,8 +208,21 @@ def traced_end_iteration(*kernel_args):
             }
         )
         print("trace", json.dumps(trace_rows[-1]), flush=True)
-        is_counting[0] = True
-    original_end_iteration(*kernel_args)
+    is_counting[0] = True
+
+
+def counted_end(*kernel_args):
+    if is_graph_line_search:
+        original_end(*kernel_args)
+        record_iteration()
+    else:
+        record_iteration()
+        original_end(*kernel_args)
+
+
+def marked_end(*kernel_args):
+    original_end(*kernel_args)
+    torch.cuda.nvtx.mark("newton_iteration")
 
 
 if args.mode == "count":
@@ -221,11 +231,19 @@ if args.mode == "count":
         for name in original_readers:
             if module.__dict__.get(name) is original_readers[name]:
                 setattr(module, name, make_counting_reader(name))
-    newton_solver.kernel_line_search_trial = counted_line_search_trial
-    newton_solver.kernel_pcg_loop = counted_pcg_loop
-    newton_solver.kernel_end_iteration = traced_end_iteration
+    if is_graph_line_search:
+        newton_solver.kernel_newton_direction = counted_direction
+        newton_solver.kernel_line_search = counted_end
+    else:
+        newton_solver.kernel_pcg_loop = counted_direction
+        newton_solver.kernel_end_iteration = counted_end
 elif args.mode == "nsys":
-    newton_solver.kernel_end_iteration = marked_end_iteration
+    if is_graph_line_search:
+        newton_solver.kernel_line_search = marked_end
+    else:
+        newton_solver.kernel_end_iteration = marked_end
+
+
 def segments_distance2(p0, p1, q0, q1):
     """The squared distance between the segments p0p1 and q0q1, row by row (clamped closest points)."""
     u, v, w = p1 - p0, q1 - q0, p0 - q0

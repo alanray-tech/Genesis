@@ -2,8 +2,8 @@
 preconditioned conjugate gradient (PCG) iterations of environment 0, the counts CGQ's solver reports per frame
 (newton_iters, total_ls_iters, total_pcg_iters).
 
-The counters wrap the kernels of genesis/engine/solvers/newton_solver.py that end the PCG (the start of the line search)
-and the Newton iteration, which the solver looks up in its module at every call. Import after gs.init.
+The counters wrap the kernels of genesis/engine/solvers/newton_solver.py that solve the Newton direction (the PCG) and
+run the line search, which the solver looks up in its module at every call. Import after gs.init.
 """
 
 import numpy as np
@@ -40,22 +40,31 @@ class NewtonCounters:
         self.pcg_max_iterations = pcg_max_iterations
         self.n_line_search_trials = 0
         self.n_pcg_iterations = 0
-        start_line_search = newton_solver.kernel_start_line_search
-        end_iteration = newton_solver.kernel_end_iteration
+        newton_direction = newton_solver.kernel_newton_direction
+        line_search = newton_solver.kernel_line_search
 
-        def counted_start_line_search(newton_rows, newton_envs, newton_loops, *args):
+        def solver_structs(args):
+            """The environments and the loop flags of the Newton solve among the arguments of a kernel."""
+            newton_envs = next(arg for arg in args if isinstance(arg, newton_solver.NewtonEnvs))
+            newton_loops = next(arg for arg in args if isinstance(arg, newton_solver.NewtonLoops))
+            return newton_envs, newton_loops
+
+        def counted_newton_direction(*args):
+            newton_envs, newton_loops = solver_structs(args)
+            newton_direction(*args)
             if bool(qd_to_numpy(newton_envs.is_active)[0]):
                 n_left = int(qd_to_numpy(newton_loops.n_pcg_iterations_left))
                 self.n_pcg_iterations += self.pcg_max_iterations - n_left
-            start_line_search(newton_rows, newton_envs, newton_loops, *args)
 
-        def counted_end_iteration(newton_envs, *args):
-            if bool(qd_to_numpy(newton_envs.is_active)[0]):
+        def counted_line_search(*args):
+            newton_envs, _ = solver_structs(args)
+            is_active = bool(qd_to_numpy(newton_envs.is_active)[0])
+            line_search(*args)
+            if is_active:
                 self.n_line_search_trials += int(qd_to_numpy(newton_envs.n_line_search_iterations)[0])
-            end_iteration(newton_envs, *args)
 
-        newton_solver.kernel_start_line_search = counted_start_line_search
-        newton_solver.kernel_end_iteration = counted_end_iteration
+        newton_solver.kernel_newton_direction = counted_newton_direction
+        newton_solver.kernel_line_search = counted_line_search
 
     def take(self, scene) -> tuple[int, int, int]:
         """Return the Newton iterations, line-search trials and PCG iterations of the last step, and reset."""
