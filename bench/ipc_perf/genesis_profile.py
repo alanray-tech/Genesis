@@ -192,6 +192,49 @@ if args.mode == "count":
 elif args.mode == "nsys":
     newton_solver.kernel_end_iteration = marked_end_iteration
 
+def segments_distance2(p0, p1, q0, q1):
+    """The squared distance between the segments p0p1 and q0q1, row by row (clamped closest points)."""
+    u, v, w = p1 - p0, q1 - q0, p0 - q0
+    a, b, c = (u * u).sum(-1), (u * v).sum(-1), (v * v).sum(-1)
+    d, e = (u * w).sum(-1), (v * w).sum(-1)
+    denominator = np.maximum(a * c - b * b, 1e-300)
+    s = np.clip((b * e - c * d) / denominator, 0.0, 1.0)
+    t = np.clip((b * s + e) / np.maximum(c, 1e-300), 0.0, 1.0)
+    s = np.clip((b * t - d) / np.maximum(a, 1e-300), 0.0, 1.0)
+    return (((p0 + s[:, None] * u) - (q0 + t[:, None] * v)) ** 2).sum(-1)
+
+
+def count_mollified_pairs() -> tuple[int, int]:
+    """The edge-edge candidates in the contact band at the end of the step, and those among them near-parallel enough
+    to take the mollified barrier (see 'func_pair_terms' in ipc_contact.py)."""
+    read = original_readers["qd_to_numpy"]
+    contact, info = newton.ipc_contact, newton.ipc_info
+    n_ee = min(int(read(contact.pairs.counts)[1]), contact.pairs.ee.shape[0])
+    pairs = read(contact.pairs.ee)[:n_ee]
+    edges = read(info.edges.verts_idx)
+    pos = read(newton.ipc_state.vertices.pos)[:, 0]
+    rest_length2 = read(info.edges.rest_length2)
+    ratio = float(read(info.mollifier_ratio))
+    d_hat, thickness = read(info.vertices.d_hat), read(info.vertices.thickness)
+    edges_a, edges_b = edges[pairs[:, 1]], edges[pairs[:, 2]]
+    p0, p1, q0, q1 = pos[edges_a[:, 0]], pos[edges_a[:, 1]], pos[edges_b[:, 0]], pos[edges_b[:, 1]]
+    # The band of a pair: the mean d_hat plus the largest thickness of each side (see func_pair_barrier_parameters)
+    band = 0.5 * (d_hat[edges_a[:, 0]] + d_hat[edges_b[:, 0]]) + thickness[edges_a].max(-1) + thickness[edges_b].max(-1)
+    is_in_band = segments_distance2(p0, p1, q0, q1) < band**2
+    cross_norm2 = (np.cross(p1 - p0, q1 - q0) ** 2).sum(-1)
+    threshold = ratio * rest_length2[pairs[:, 1]] * rest_length2[pairs[:, 2]]
+    is_mollified = cross_norm2 < threshold
+    if args.trace_frames and frame in args.trace_frames:
+        relative = cross_norm2 / np.maximum(threshold, 1e-300)
+        print(
+            f"mollifier check frame {frame}: {n_ee} candidates, {int(is_mollified.sum())} below the threshold, "
+            f"{int(is_in_band.sum())} in band, smallest cross/threshold in band "
+            f"{relative[is_in_band].min() if is_in_band.any() else float('nan'):.3g}, ratio {ratio:g}",
+            flush=True,
+        )
+    return int(is_in_band.sum()), int((is_in_band & is_mollified).sum()), int(is_mollified.sum())
+
+
 # --- trajectory ---------------------------------------------------------------------------------------------------
 rows = []
 profiler = cProfile.Profile()
@@ -229,7 +272,11 @@ for frame in range(n_frames):
         "n_pairs": list(newton.ipc_contact.n_pairs),
     }
     if args.mode == "count":
+        ee_in_band, ee_mollified, ee_parallel = count_mollified_pairs()
         row.update(
+            ee_in_band=ee_in_band,
+            ee_mollified=ee_mollified,
+            ee_parallel=ee_parallel,
             ls_trials=counters["ls_trials"],
             pcg_iterations=counters["pcg"],
             kernel_calls=sum(counters["kernels"].values()),
@@ -238,7 +285,16 @@ for frame in range(n_frames):
             readback_sites=dict(counters["readbacks"]),
         )
     rows.append(row)
-    print(f"frame {frame}: {step_ms:.1f} ms, {row['newton_iterations']} Newton iterations", flush=True)
+    print(
+        f"frame {frame}: {step_ms:.1f} ms, {row['newton_iterations']} Newton iterations"
+        + (
+            f", EE in band {row['ee_in_band']}, mollified {row['ee_mollified']}, near-parallel candidates "
+            f"{row['ee_parallel']}"
+            if args.mode == "count"
+            else ""
+        ),
+        flush=True,
+    )
 if args.mode == "nsys":
     qd.sync()
     torch.cuda.profiler.stop()
