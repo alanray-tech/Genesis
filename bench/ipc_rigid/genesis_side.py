@@ -217,6 +217,7 @@ for rigid_scene in scenes.make_scenes(args.n):
         "genesis_rest_box_y": float(box_entity.get_pos().cpu().numpy()[1]),
         "cgq_rest_box_y": float(cgq_rigid[-1][1]),
         "newton_counts": compare_counts(counts, reference) if "ls_iters" in reference else None,
+        "genesis_step_ms": step_ms,
         "genesis_step_ms_median": float(np.median(step_ms[1:])),
         "cgq_step_ms_median": float(np.median(reference["step_ms"][1:])),
         "pairs": pairs_rows,

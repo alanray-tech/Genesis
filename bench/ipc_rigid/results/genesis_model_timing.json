@@ -1,0 +1,38 @@
+[
+ {
+  "scene": "case 2 box_on_cloth (tol 1e-6)",
+  "frames": 149,
+  "equal_newton_frames": 142,
+  "genesis_median_ms": 69.9717000243254,
+  "genesis_median_ms_equal_newton": 69.92420001188293,
+  "genesis_newton": 925,
+  "genesis_pcg": 10869,
+  "genesis_ms_per_newton": 12.559817837853286,
+  "cgq_median_ms": 20.733300014398992,
+  "cgq_median_ms_equal_newton": 20.588850005879067,
+  "cgq_newton": 916,
+  "cgq_pcg": 8306,
+  "cgq_ms_per_newton": 4.057158952126204,
+  "ratio_median": 3.3748462606401786,
+  "ratio_median_equal_newton": 3.396216883988972,
+  "ratio_per_newton": 3.095717467828358
+ },
+ {
+  "scene": "case 3 Franka press (tol 5e-2)",
+  "frames": 98,
+  "equal_newton_frames": 15,
+  "genesis_median_ms": 128.28375000390224,
+  "genesis_median_ms_equal_newton": 41.896199982147664,
+  "genesis_newton": 1079,
+  "genesis_pcg": 23791,
+  "genesis_ms_per_newton": 13.546239851770682,
+  "cgq_median_ms": 39.173550001578405,
+  "cgq_median_ms_equal_newton": 37.23899999749847,
+  "cgq_newton": 536,
+  "cgq_pcg": 10909,
+  "cgq_ms_per_newton": 9.498628171900576,
+  "ratio_median": 3.2747542665582605,
+  "ratio_median_equal_newton": 1.1250624341406064,
+  "ratio_per_newton": 1.426125921198179
+ }
+]
