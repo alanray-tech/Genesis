@@ -657,6 +657,7 @@ def main() -> None:
     parser.add_argument("--fast-math", choices=("true", "false"), required=True)
     parser.add_argument("--cases", nargs="*", default=None)
     parser.add_argument("--sum-order", choices=("quadrants", "eigen"), default="quadrants")
+    parser.add_argument("--tag", default="", help="suffix of the output file, to keep the run of a library variant apart")
     args = parser.parse_args()
 
     gs.init(backend=gs.cuda if args.backend == "cuda" else gs.cpu, precision="64", logging_level="warning")
@@ -682,7 +683,7 @@ def main() -> None:
             outputs[key] = out.cpu().numpy()
             print(f"[genesis] {key}: {rows.shape[0]} rows, {time.perf_counter() - start:.1f} s", flush=True)
     suffix = "" if args.sum_order == "quadrants" else "_sum-order-eigen"
-    path = DATA / f"out_genesis_{args.backend}_fast-math-{args.fast_math}{suffix}.npz"
+    path = DATA / f"out_genesis_{args.backend}_fast-math-{args.fast_math}{args.tag}{suffix}.npz"
     np.savez(path, **outputs)
     print(f"[genesis] wrote {path}")
 
