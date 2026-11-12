@@ -35,7 +35,7 @@ CONTACT_TASKS = {
     "cloth_on_box": {"assemble_rows": {11, 13, 15, 17, 19}, "line_search_trial": {7, 9, 11, 13}},
 }
 GENESIS_BY_NAME = (
-    (r"^kernel_contact_(boxes|query|filter)|^build_bvh", "broad phase"),
+    (r"^kernel_contact_(boxes|query|filter)|^build_bvh|^kernel_ef_", "broad phase"),
     (r"^kernel_contact_(ccd|partition)|^kernel_scale_directions", "CCD"),
     (r"^kernel_pcg_", "PCG"),
     (r"^kernel_(compose_triplets_key|radix_sort|mark_entry_ends|exclusive_sum|reduce_triplets|set_segments)", "BCOO sort-reduce"),
@@ -60,6 +60,7 @@ CGQ_BY_NAME = (
 parser = argparse.ArgumentParser()
 parser.add_argument("scene")
 parser.add_argument("--genesis", default=None, help="the Genesis export, results/genesis_<scene>.sqlite by default")
+parser.add_argument("--cgq", default=None, help="the CGQ export, results/cgq_<scene>.sqlite by default")
 parser.add_argument("--frames", type=int, nargs="*", default=None, help="keep only these steps of the window")
 args = parser.parse_args()
 results = Path(__file__).parent / "results"
@@ -107,7 +108,8 @@ genesis_path = Path(args.genesis) if args.genesis else results / f"genesis_{args
 # The short names of nsys truncate the Quadrants task names, which carry the task index, and the demangled names of
 # CGQ carry its namespace and template arguments
 genesis, genesis_kernels, n_genesis = stage_times(genesis_path, genesis_stage, "demangledName")
-cgq, cgq_kernels, n_cgq = stage_times(results / f"cgq_{args.scene}.sqlite", cgq_stage, "shortName")
+cgq_path = Path(args.cgq) if args.cgq else results / f"cgq_{args.scene}.sqlite"
+cgq, cgq_kernels, n_cgq = stage_times(cgq_path, cgq_stage, "shortName")
 print(f"{args.scene}: kernel ms per step, Genesis ({n_genesis} steps) vs CGQ ({n_cgq} steps)")
 print("stage | Genesis | CGQ | ratio | top Genesis kernel | top CGQ kernel")
 total_genesis = total_cgq = 0.0
