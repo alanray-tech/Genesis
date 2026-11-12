@@ -112,6 +112,42 @@ plain kernel is bound by the 1.25 KB it writes per pair. Mollified pairs are rar
 lengths' product), so the runtime cost scales with their count. The compile time is paid by every kernel that inlines the
 mollified path, which argues for keeping it in one kernel.
 
+## Edge-triangle intersection fix (both sides)
+
+The coplanar branch of `tri_edge_intersect` / `func_edge_triangle_intersect` tested an edge against each triangle side
+by 3D segment-segment closest points, skipping a side only when `|e x s|^2 < 1e-30`. A flat cloth (box_on_cloth, CPU,
+frame 8, edge [145, 161], triangle [143, 144, 160], reproduced on Genesis 7224d8c4) reported a false crossing:
+- in the plane, the edge and the side 144-160 are parallel to 5e-17, 2.65 cm apart. `|e x s|^2 = 3.11e-30` measures the
+  tilt of the edge out of the triangle plane (heights -2.6e-14 / 7.2e-15, sin 6.3e-13), which the coplanar band admits;
+- the crossing coordinates then hang on the normal component of e x s, 1.3e-19 exactly, from products of size 1.4e-3.
+  Float64 gives 0, hence u = 0.892 where the exact value on the same float inputs is 5.8e7 (rational arithmetic).
+
+A threshold relative to |e|^2 |s|^2 does not close it: the band admits tilts up to about 2e-12 L / |e|, and the same
+edge moved to heights of 0.5 to 0.95 of the band (tilt 1.0e-12 to 1.9e-12) still crosses with tol = 1e-12. Fix (lead's
+decision), the same on both sides: the side test in the plane of the triangle, with its normal n,
+`denom = (e x s) . n`, side skipped when `denom^2 < rel^2 |e|^2 |s|^2 |n|^2` (rel = 1e-12, the header's tolerance),
+`u = ((B - A) x s) . n / denom`, `v = ((B - A) x e) . n / denom`. The tilt no longer enters. Point-in-triangle had the
+same scale problem (`|uv^2 - uu vv| < 1e-30` rejects every triangle with sides under ~3e-8 m) and now skips when
+`|denom| < rel^2 uu vv`. A collinear overlap stays detected by the endpoints or by the two other sides.
+
+Proof, ET only (nothing else rerun): input set `intersect/regression` (`inputs.py`, 8 rows: the real case, its tilted
+copy, an edge exactly parallel to a side in the plane and the same edge tilted inside the band (+-1e-12), two collinear
+overlaps, a 1e-8 m triangle crossed and missed). Crossing reported per row, in that order:
+
+| | real | real tilted | parallel | parallel tilted | overlap 1 | overlap 2 | small crossed | small missed |
+|---|---|---|---|---|---|---|---|---|
+| CGQ aeb58956, nvcc --fmad=true | 0 | 0 | 0 | **1** | 1 | 1 | **0** | 0 |
+| CGQ aeb58956, nvcc --fmad=false | **1** | **1** | 0 | **1** | 1 | 1 | **0** | 0 |
+| CGQ fixed (both builds), Genesis fixed (CUDA, CPU) | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 0 |
+
+Whether the real case crosses depends on contraction (with fused multiply-adds no tilted copy of it crosses, without
+them 44% of 200,000 do), while the tilted exact-parallel case crosses in any arithmetic: the old test returns the closest
+points of the two lines (u = v = 0.5) and never checks that the lines meet. On all 4,808 intersection rows, the fixed
+Genesis (CUDA and CPU, fast_math off) and both fixed CGQ builds agree on every row, and the fixed CGQ differs from
+aeb58956 on none of the 4,800 rows of the other sets (`results/aeb58956/table_et-fix.md`). CGQ test
+`tests/test_edge_triangle_intersect.py` (branch `fix/et-relative-threshold`): with the header of aeb58956, 2 of 3 fail
+(the tilted exact-parallel case, the small triangle); with the fix, 3 of 3 pass.
+
 ## P1 result (ground truth 0496c4fa, tables in results/)
 
 **PASS: 0 failing rows of 1,498,156 on CUDA and on CPU** (`results/table_acceptance.md`), Genesis compiled with

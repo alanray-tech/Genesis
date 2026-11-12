@@ -11,7 +11,9 @@ Writes <data>/inputs.npz (cases.DATA) with one array per case and set, named '<c
 - real_<scene>: the candidate and active stencils of T0's captured frames (bench/ipc_bvh/data/<scene>), their
   trajectories to the step end, their per-vertex d_hat and thickness; real_<scene>_mollified: every active edge-edge
   pair of those frames below the mollifier threshold;
-- parallel, mollifier_sweep: edge-edge barrier rows of exactly parallel edges, and of I1 / eps_x swept over 1e-6..1.
+- parallel, mollifier_sweep: edge-edge barrier rows of exactly parallel edges, and of I1 / eps_x swept over 1e-6..1;
+- regression: edge-triangle rows of the coplanar side test (an edge parallel to a side, collinear overlaps, a 1e-8 m
+  triangle).
 The barrier parameters (d_hat, xi) of a row are set from the true distance of its closest features, so that the pair
 lies inside the active band.
 """
@@ -602,6 +604,37 @@ def build_mollified(builder, n):
     builder.barriers("mollifier_sweep", {"ee": np.stack([ea0, ea1, eb0, eb1], axis=1)})
 
 
+def build_intersection_regressions(builder):
+    """Edge-triangle rows of the coplanar side test, as the CGQ test of the fix has them (no random draw)."""
+    cloth_triangle = [
+        [-0.03750000000250894, 0.010796496484808772, -5.6792833359554066e-11],
+        [3.702922774809752e-18, 0.01079649648479572, -6.91262025920539e-19],
+        [-0.03749999994495807, 0.010796496484828983, 0.03749999994495807],
+    ]
+    unit_triangle = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+    small_triangle = [[0.0, 0.0, 0.0], [1e-8, 0.0, 0.0], [0.0, 1e-8, 0.0]]
+    rows = [
+        # box_on_cloth (CPU, frame 8): edge [145, 161] parallel to the side 144-160 of triangle [143, 144, 160], 2.65 cm
+        # away, tilted out of the plane by 6.3e-13 inside the coplanar band, then the same edge tilted by 1.6e-12
+        cloth_triangle
+        + [[0.03750000000250894, 0.010796496484808772, 5.679283242788697e-11],
+           [5.6792832912178434e-11, 0.010796496484808772, 0.037500000002508936]],
+        cloth_triangle
+        + [[0.03750000000250894, 0.010796496484825094, 5.6792832427886965e-11],
+           [5.679283291217842e-11, 0.010796496484773505, 0.037500000002508936]],
+        # Exactly parallel to a side outside the triangle, in its plane and tilted inside the coplanar band, then
+        # collinear overlaps of the side t0-t1
+        unit_triangle + [[1.0, 0.25, 0.0], [0.25, 1.0, 0.0]],
+        unit_triangle + [[1.0, 0.25, -1e-12], [0.25, 1.0, 1e-12]],
+        unit_triangle + [[0.5, 0.0, 0.0], [1.5, 0.0, 0.0]],
+        unit_triangle + [[-0.5, 0.0, 0.0], [1.5, 0.0, 0.0]],
+        # A triangle of 1e-8 m sides, crossed and missed
+        small_triangle + [[2.5e-9, 2.5e-9, -1e-8], [2.5e-9, 2.5e-9, 1e-8]],
+        small_triangle + [[1e-8, 1e-8, -1e-8], [1e-8, 1e-8, 1e-8]],
+    ]
+    builder.add("intersect", "regression", flat(np.array(rows)))
+
+
 def gather_feature(stencils, flags, kind):
     """The point-edge or point-point sub-stencil of each PT or EE stencil, from its distance flag."""
     rows_pe, rows_pp = [], []
@@ -751,6 +784,7 @@ def main() -> None:
     for scene in args.scenes:
         build_real(builder, scene, args.cap)
     build_mollified(builder, args.n_random)
+    build_intersection_regressions(builder)
     missing = {case for case in CASES} - {key.split("/")[0] for key in builder.arrays}
     assert not missing, missing
     path = DATA / "inputs.npz"

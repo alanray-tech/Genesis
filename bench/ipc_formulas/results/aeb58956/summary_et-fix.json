@@ -1,0 +1,144 @@
+{
+ "cuda_fast-math-false_et-fix": {
+  "intersect/degenerate": {
+   "rows": 800,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "intersect/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "intersect/regression": {
+   "rows": 8,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  }
+ },
+ "cpu_fast-math-false_et-fix": {
+  "intersect/degenerate": {
+   "rows": 800,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "intersect/random": {
+   "rows": 4000,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  },
+  "intersect/regression": {
+   "rows": 8,
+   "failures": 0,
+   "failed_rows": [],
+   "max_error": 0.0,
+   "order": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "referee": {
+    "rows": 0,
+    "max_error": 0.0,
+    "examples": []
+   },
+   "outputs": {
+    "is_hit": {
+     "is_discrete": true,
+     "pass1_fail": 0,
+     "fail": 0
+    }
+   }
+  }
+ }
+}
