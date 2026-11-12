@@ -11,7 +11,9 @@ Every mode runs the trajectory from frame 0 and measures the frames [--start, --
   themselves excluded);
 - cprofile: cProfile over the window, saved and printed by own time and cumulative time;
 - nsys: the window between cudaProfilerStart / Stop, one NVTX range per step and a mark per Newton iteration (run it
-  under 'nsys profile --capture-range=cudaProfilerApi').
+  under 'nsys profile --capture-range=cudaProfilerApi');
+- compile: the first call of every kernel timed, synchronized before and after (frontend, compile, module load and
+  first launch), to run with a fresh compile cache (run.ps1 -Cache <new folder>).
 """
 
 import argparse
@@ -42,12 +44,13 @@ import scenes  # noqa: E402
 parser = argparse.ArgumentParser()
 parser.add_argument("--backend", default="gpu")
 parser.add_argument("--scene", choices=("cloth_on_box", "crossed_drop"), required=True)
-parser.add_argument("--mode", choices=("wall", "count", "cprofile", "nsys"), required=True)
+parser.add_argument("--mode", choices=("wall", "count", "cprofile", "nsys", "compile"), required=True)
 parser.add_argument("--start", type=int, default=20)
 parser.add_argument("--end", type=int, default=None)
 parser.add_argument("--velocity-tol", type=float, default=scenes.VELOCITY_TOL)
 parser.add_argument("--trace-frames", type=int, nargs="*", default=(), help="count mode: trace every Newton iteration")
 parser.add_argument("--out", default=str(Path(__file__).parent / "results"))
+parser.add_argument("--tag", default="", help="suffix of the output files, to keep the runs of several trees apart")
 args = parser.parse_args()
 out_dir = Path(args.out)
 out_dir.mkdir(parents=True, exist_ok=True)
@@ -59,6 +62,39 @@ gs.init(backend=getattr(gs, args.backend), precision="64", logging_level="warnin
 import genesis.engine.solvers.ipc_contact as ipc_contact  # noqa: E402
 import genesis.engine.solvers.newton_solver as newton_solver  # noqa: E402
 import genesis.utils.misc as misc  # noqa: E402
+
+materialize_s: dict[str, float] = {}
+first_call_s: dict[str, float] = {}
+original_materialize = Kernel.materialize
+original_kernel_call = Kernel.__call__
+
+
+def timing_kernel_call(self, *py_args, **kwargs):
+    """A kernel call, the first one of each kernel timed with its compile, module load and launch."""
+    name = self.func.__name__
+    if name in first_call_s:
+        return original_kernel_call(self, *py_args, **kwargs)
+    qd.sync()
+    t = time.perf_counter()
+    result = original_kernel_call(self, *py_args, **kwargs)
+    qd.sync()
+    first_call_s[name] = time.perf_counter() - t
+    return result
+
+
+def timing_materialize(self, key, py_args, arg_features=None):
+    """The materialization of a kernel (its frontend, and its compile when not cached), timed per kernel."""
+    t = time.perf_counter()
+    result = original_materialize(self, key, py_args, arg_features)
+    name = self.func.__name__
+    materialize_s[name] = materialize_s.get(name, 0.0) + time.perf_counter() - t
+    return result
+
+
+if args.mode == "compile":
+    # Every kernel compiles at its first materialization, part of them while the scene builds
+    Kernel.materialize = timing_materialize
+    Kernel.__call__ = timing_kernel_call
 
 if args.scene == "cloth_on_box":
     scene_spec = rigid_scenes.make_scenes(16)[0]
@@ -109,7 +145,6 @@ is_tracing = [False]
 trace_rows = []
 last_pcg = [0]
 original_readers = {"qd_to_numpy": misc.qd_to_numpy, "qd_to_torch": misc.qd_to_torch}
-original_kernel_call = Kernel.__call__
 
 
 def counting_kernel_call(self, *py_args, **kwargs):
@@ -191,7 +226,6 @@ if args.mode == "count":
     newton_solver.kernel_end_iteration = traced_end_iteration
 elif args.mode == "nsys":
     newton_solver.kernel_end_iteration = marked_end_iteration
-
 def segments_distance2(p0, p1, q0, q1):
     """The squared distance between the segments p0p1 and q0q1, row by row (clamped closest points)."""
     u, v, w = p1 - p0, q1 - q0, p0 - q0
@@ -332,8 +366,13 @@ if args.mode == "count":
         sites.update(row["readback_sites"])
     summary["kernels_total"] = dict(kernels.most_common())
     summary["readback_sites_total"] = dict(sites.most_common())
+if args.mode == "compile":
+    compile_s = {name: materialize_s.get(name, 0.0) + first_call_s.get(name, 0.0) for name in {*materialize_s, *first_call_s}}
+    summary["compile_s"] = dict(sorted(compile_s.items(), key=lambda item: -item[1]))
+    summary["compile_s_total"] = sum(compile_s.values())
 tag = f"_tol{args.velocity_tol:g}" if args.velocity_tol != scenes.VELOCITY_TOL else ""
 tag += "" if args.backend == "gpu" else f"_{args.backend}"
+tag += args.tag
 (out_dir / f"genesis_{args.scene}_{args.mode}{tag}.json").write_text(
     json.dumps({"summary": summary, "rows": rows, "trace": trace_rows}, indent=1)
 )

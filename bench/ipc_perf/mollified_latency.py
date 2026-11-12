@@ -24,6 +24,7 @@ import genesis as gs
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--repeats", type=int, default=20)
+parser.add_argument("--tag", default="", help="suffix of the output file, to keep the runs of several trees apart")
 args = parser.parse_args()
 
 gs.init(backend=gs.gpu, precision="64", logging_level="warning")
@@ -135,5 +136,5 @@ for name, kernel in (
         qd.sync()
         results[name][n] = 1e6 * (time.perf_counter() - start) / args.repeats
     print(f"{name}: " + ", ".join(f"{n} threads {us:.1f} us" for n, us in results[name].items()), flush=True)
-Path(__file__).parent.joinpath("results", "mollified_latency.json").write_text(json.dumps(results, indent=1))
+Path(__file__).parent.joinpath("results", f"mollified_latency{args.tag}.json").write_text(json.dumps(results, indent=1))
 print(json.dumps({name: float(np.round(r[1], 1)) for name, r in results.items()}))
