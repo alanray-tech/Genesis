@@ -1,6 +1,9 @@
 """Probes of the contact of a Genesis scene for the parity benches: the start point of the next step published into the
 contact surface, and the active pairs of the first Newton iteration there, in contact vertex indices."""
 
+import numpy as np
+import torch
+
 import quadrants as qd
 
 import genesis as gs
@@ -14,9 +17,8 @@ from genesis.engine.solvers.ipc_contact import (
     func_stencil_positions,
 )
 from genesis.engine.solvers.newton_solver import kernel_publish_contact
+from genesis.engine.solvers.rigid.contact_proxy import kernel_proxies_init_pose
 from genesis.utils.misc import qd_to_numpy
-
-import numpy as np
 
 
 @qd.kernel
@@ -50,6 +52,20 @@ def kernel_classify(ipc_pairs: IPCPairs, ipc_state: IPCState, ipc_info: IPCInfo)
     func_classify(1, ipc_pairs, ipc_state, ipc_info)
 
 
+def init_proxies(scene) -> None:
+    """Set every rigid contact proxy at the inertial frame of its link, as the first step does."""
+    newton, rigid = scene.sim.newton_solver, scene.sim.rigid_solver
+    if newton.newton_config.has_rigid_vertices:
+        kernel_proxies_init_pose(
+            torch.ones(scene.sim._B, dtype=gs.tc_int, device=gs.device),
+            newton.data_manager.proxies_state,
+            rigid.dyn_state,
+            newton.data_manager.proxies_info,
+            rigid.dyn_info,
+            rigid.rigid_config,
+        )
+
+
 def publish_start_point(scene) -> None:
     """Set the start point of the next step at the current positions and publish it into the contact surface."""
     newton, fem, rigid = scene.sim.newton_solver, scene.sim.fem_solver, scene.sim.rigid_solver
@@ -62,8 +78,41 @@ def publish_start_point(scene) -> None:
         rigid.dyn_state,
         newton.data_manager.proxies_info,
         newton.data_manager.proxy_vertices_info,
+        rigid.dyn_info,
+        rigid.rigid_config,
         newton.newton_config,
     )
+
+
+def canonical(stencil: np.ndarray, flag: np.ndarray, is_edge_edge: bool) -> dict:
+    """Map every pair to its canonical stencil, with its distance flag permuted alike: the vertices of a triangle and of
+    an edge increasing, the edges of an edge-edge pair increasing."""
+    pairs = {}
+    for row, f in zip(stencil.tolist(), flag.tolist()):
+        bits = [(f >> k) & 1 for k in range(4)]
+        if is_edge_edge:
+            edges = [sorted(zip(row[0:2], bits[0:2])), sorted(zip(row[2:4], bits[2:4]))]
+            edges.sort(key=lambda edge: [v for v, _ in edge])
+            items = edges[0] + edges[1]
+        else:
+            items = [(row[0], bits[0])] + sorted(zip(row[1:4], bits[1:4]))
+        key = tuple(v for v, _ in items)
+        pairs[key] = sum(b << k for k, (_, b) in enumerate(items))
+    return pairs
+
+
+def compare_pairs(genesis_pairs, cgq_stencil, cgq_flag, is_edge_edge) -> dict:
+    """Count the pairs of each side, those of one side alone, and the common pairs whose distance flags differ."""
+    genesis_keys = canonical(*genesis_pairs, is_edge_edge)
+    cgq_keys = canonical(cgq_stencil, cgq_flag, is_edge_edge)
+    common = genesis_keys.keys() & cgq_keys.keys()
+    return {
+        "n_genesis": len(genesis_keys),
+        "n_cgq": len(cgq_keys),
+        "only_genesis": len(genesis_keys.keys() - cgq_keys.keys()),
+        "only_cgq": len(cgq_keys.keys() - genesis_keys.keys()),
+        "flag_mismatch": sum(genesis_keys[key] != cgq_keys[key] for key in common),
+    }
 
 
 def genesis_active_pairs(scene) -> dict:

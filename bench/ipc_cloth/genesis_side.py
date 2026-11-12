@@ -48,6 +48,9 @@ results_dir.mkdir(parents=True, exist_ok=True)
 # Genesis compiles with fast_math outside debug mode alone
 gs.init(backend=getattr(gs, args.backend), precision="64", logging_level="warning", debug=not args.fast_math)
 bound = 2.0 * args.velocity_tol * scenes.DT
+from newton_counters import NewtonCounters, compare_counts  # noqa: E402
+
+counters = NewtonCounters(gs.options.NewtonOptions().pcg_max_iterations)
 summary = {
     "backend": args.backend,
     "fast_math": bool(args.fast_math),
@@ -127,7 +130,7 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
 
     # One-step replay of every frame of CGQ, in order, so that the adaptive stiffness of a frame comes from the step
     # before it
-    replay_errors, step_ms, pairs_rows = [], [], []
+    replay_errors, step_ms, pairs_rows, counts = [], [], [], []
     replay_frames = range(cloth_scene.n_frames) if args.replay_frames is None else args.replay_frames
     for k in replay_frames:
         for entity, part in zip(entities, slices):
@@ -144,10 +147,12 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
                     reference[f"{ch}_flag"][offsets[k] : offsets[k + 1]],
                 )
             pairs_rows.append(row)
+        counters.take(scene)
         t = time.perf_counter()
         scene.step()
         positions = get_positions()
         step_ms.append(1e3 * (time.perf_counter() - t))
+        counts.append(counters.take(scene))
         replay_errors.append(float(np.abs(positions - cgq_positions[k + 1]).max()))
     if args.replay_frames is not None:
         errors = ", ".join(f"frame {k}: {e:.3e}" for k, e in zip(replay_frames, replay_errors))
@@ -181,6 +186,13 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
         "cgq_step_ms_median": float(np.median(reference["step_ms"][1:])),
         "cgq_newton_iters_max": int(reference["newton_iters"].max()),
     }
+    counts_text = ""
+    if "ls_iters" in reference:
+        result["newton_counts"] = compare_counts(counts, reference)
+        counts_text = (
+            f", newton/ls/pcg totals {result['newton_counts']['totals']}, "
+            f"{len(result['newton_counts']['flagged_frames'])} frames above 1.5x CGQ's Newton iterations"
+        )
     if cloth_scene.has_ground:
         result["genesis_rest_min_y"] = float(positions[:, 1].min())
         result["cgq_rest_min_y"] = float(cgq_positions[-1][:, 1].min())
@@ -204,7 +216,7 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
         f"{cloth_scene.name} [{args.backend}]: replay max {result['replay_max_error']:.3e} (bound {bound:.1e}, "
         f"{result['replay_frames_above_bound']} frames above, worst frame {result['replay_worst_frame']}), "
         f"trajectory max {result['trajectory_max_error']:.3e}, step {result['genesis_step_ms_median']:.2f} ms"
-        f"{pairs_text}",
+        f"{pairs_text}{counts_text}",
         flush=True,
     )
     scene.destroy()

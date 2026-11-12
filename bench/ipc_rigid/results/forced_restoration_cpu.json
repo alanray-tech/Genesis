@@ -1,0 +1,106 @@
+{
+ "backend": "cpu",
+ "solve_tolerance": 1e-08,
+ "caps": {
+  "1": {
+   "entries": 1,
+   "dual_updates": 1,
+   "hard_probes": 1,
+   "newton": 1171,
+   "errno": 16,
+   "error": "The Newton solve of the cloth in contact with rigid links stopped before converging, the substep being left uncommitted: raise NewtonOptions(max_iterations) or loosen NewtonOptions(velocity_tol).",
+   "n_frames_run": 18,
+   "intersections": 1,
+   "commit_residual_max": 2.7755575615628914e-17,
+   "commit_frames_above_tolerance": 0,
+   "rest_box_pos": [
+    0.0009359939442005614,
+    0.0858077457700539,
+    -0.0005875196260375429
+   ],
+   "rest_box_quat": [
+    0.9995434907118599,
+    0.018387749508376065,
+    -0.004030333477741675,
+    0.0236317002271477
+   ],
+   "cloth_min_y": 0.009500748168893267,
+   "rest_box_offset_vs_largest_cap": 0.006246520807807612
+  },
+  "2": {
+   "entries": 0,
+   "dual_updates": 0,
+   "hard_probes": 0,
+   "newton": 1171,
+   "errno": 16,
+   "error": "The Newton solve of the cloth in contact with rigid links stopped before converging, the substep being left uncommitted: raise NewtonOptions(max_iterations) or loosen NewtonOptions(velocity_tol).",
+   "n_frames_run": 18,
+   "intersections": 1,
+   "commit_residual_max": 2.7755575615628914e-17,
+   "commit_frames_above_tolerance": 0,
+   "rest_box_pos": [
+    0.0009359939442005614,
+    0.0858077457700539,
+    -0.0005875196260375429
+   ],
+   "rest_box_quat": [
+    0.9995434907118599,
+    0.018387749508376065,
+    -0.004030333477741675,
+    0.0236317002271477
+   ],
+   "cloth_min_y": 0.009500748168893267,
+   "rest_box_offset_vs_largest_cap": 0.006246520807807612
+  },
+  "3": {
+   "entries": 0,
+   "dual_updates": 0,
+   "hard_probes": 0,
+   "newton": 934,
+   "errno": 0,
+   "error": null,
+   "n_frames_run": 150,
+   "intersections": 1,
+   "commit_residual_max": 2.980232252647743e-09,
+   "commit_frames_above_tolerance": 0,
+   "rest_box_pos": [
+    0.00029167240072219277,
+    0.07969768953044112,
+    0.0005399045277092284
+   ],
+   "rest_box_quat": [
+    0.9999509458489075,
+    -0.0001425140753615533,
+    -0.009898015969409408,
+    0.0003389181068181794
+   ],
+   "cloth_min_y": 0.009849425478650378,
+   "rest_box_offset_vs_largest_cap": 2.5224680696011124e-10
+  },
+  "12": {
+   "entries": 0,
+   "dual_updates": 0,
+   "hard_probes": 0,
+   "newton": 929,
+   "errno": 0,
+   "error": null,
+   "n_frames_run": 150,
+   "intersections": 1,
+   "commit_residual_max": 2.9802322526477427e-09,
+   "commit_frames_above_tolerance": 0,
+   "rest_box_pos": [
+    0.0002916724516949157,
+    0.07969768952228028,
+    0.0005399042808010801
+   ],
+   "rest_box_quat": [
+    0.9999509458550837,
+    -0.00014251401532995963,
+    -0.009898015346978878,
+    0.00033891808720977137
+   ],
+   "cloth_min_y": 0.009849425428468535,
+   "rest_box_offset_vs_largest_cap": 0.0
+  }
+ }
+}

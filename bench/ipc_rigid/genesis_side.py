@@ -19,13 +19,14 @@ import numpy as np
 import trimesh
 
 import genesis as gs
+import genesis.utils.geom as gu
 from genesis.utils.misc import qd_to_numpy
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "ipc_cloth"))
 
 import rigid_scenes as scenes  # noqa: E402
-from contact_probe import genesis_active_pairs, publish_start_point  # noqa: E402
+from contact_probe import compare_pairs, genesis_active_pairs, init_proxies, publish_start_point  # noqa: E402
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--backend", default="gpu")
@@ -44,36 +45,10 @@ results_dir.mkdir(parents=True, exist_ok=True)
 
 gs.init(backend=getattr(gs, args.backend), precision="64", logging_level="warning", debug=not args.fast_math)
 bound = 2.0 * args.velocity_tol * scenes.DT
+from newton_counters import NewtonCounters, compare_counts  # noqa: E402
+
+counters = NewtonCounters(gs.options.NewtonOptions().pcg_max_iterations)
 summary = {"backend": args.backend, "fast_math": bool(args.fast_math), "velocity_tol": args.velocity_tol, "scenes": {}}
-
-
-def canonical(stencil: np.ndarray, flag: np.ndarray, is_edge_edge: bool) -> dict:
-    """Map every pair to its canonical stencil (see the module docstring), with its distance flag permuted alike."""
-    pairs = {}
-    for row, f in zip(stencil.tolist(), flag.tolist()):
-        bits = [(f >> k) & 1 for k in range(4)]
-        if is_edge_edge:
-            edges = [sorted(zip(row[0:2], bits[0:2])), sorted(zip(row[2:4], bits[2:4]))]
-            edges.sort(key=lambda edge: [v for v, _ in edge])
-            items = edges[0] + edges[1]
-        else:
-            items = [(row[0], bits[0])] + sorted(zip(row[1:4], bits[1:4]))
-        key = tuple(v for v, _ in items)
-        pairs[key] = sum(b << k for k, (_, b) in enumerate(items))
-    return pairs
-
-
-def compare_pairs(genesis_pairs, cgq_stencil, cgq_flag, is_edge_edge) -> dict:
-    genesis_keys = canonical(*genesis_pairs, is_edge_edge)
-    cgq_keys = canonical(cgq_stencil, cgq_flag, is_edge_edge)
-    common = genesis_keys.keys() & cgq_keys.keys()
-    return {
-        "n_genesis": len(genesis_keys),
-        "n_cgq": len(cgq_keys),
-        "only_genesis": len(genesis_keys.keys() - cgq_keys.keys()),
-        "only_cgq": len(cgq_keys.keys() - genesis_keys.keys()),
-        "flag_mismatch": sum(genesis_keys[key] != cgq_keys[key] for key in common),
-    }
 
 
 for rigid_scene in scenes.make_scenes(args.n):
@@ -106,17 +81,27 @@ for rigid_scene in scenes.make_scenes(args.n):
                 ),
             )
         )
-    for box in rigid_scene.boxes:
-        scene.add_entity(
-            morph=gs.morphs.Box(size=box.size, pos=box.pos, fixed=box.is_fixed),
-            # The friction of a rigid-cloth pair is the mean of both sides, CGQ's default model being the cloth's
-            material=gs.materials.Rigid(coup_friction=gs.materials.FEM.Cloth().friction_mu),
-        )
+    if rigid_scene.has_ground:
+        scene.add_entity(morph=gs.morphs.Plane(pos=scenes.GROUND_POS, normal=scenes.GROUND_NORMAL))
+    (box,) = rigid_scene.boxes
+    box_entity = scene.add_entity(
+        morph=gs.morphs.Box(size=box.size, pos=box.pos, quat=box.quat, fixed=box.is_fixed),
+        # The friction of a rigid-cloth pair is the mean of both sides, CGQ's default model being the cloth's
+        material=gs.materials.Rigid(rho=box.density, coup_friction=gs.materials.FEM.Cloth().friction_mu),
+    )
     scene.build()
     newton = scene.sim.newton_solver
+
+    def set_initial_spin() -> None:
+        if not box.is_fixed:
+            omega_link = scenes.quat_to_R(box.quat).T @ np.array(box.omega)
+            box_entity.set_dofs_velocity(np.concatenate([np.zeros(3), omega_link]))
+
+    set_initial_spin()
     n_cloth_verts = sum(len(cloth.verts) for cloth in rigid_scene.cloths)
 
     if args.dump_mesh:
+        init_proxies(scene)
         publish_start_point(scene)
         verts = qd_to_numpy(newton.ipc_state.vertices.pos)[n_cloth_verts:, 0]
         tris = qd_to_numpy(newton.ipc_info.triangles.verts_idx)
@@ -128,20 +113,61 @@ for rigid_scene in scenes.make_scenes(args.n):
 
     reference = np.load(data_dir / f"cgq_{rigid_scene.name}.npz")
     cgq_positions, cgq_velocities = reference["positions"], reference["velocities"]
+    # The references of a fixed box predate the rigid states, which it leaves unused
+    if "rigid_states" in reference:
+        cgq_rigid = reference["rigid_states"]
+    else:
+        cgq_rigid = np.zeros((rigid_scene.n_frames + 1, 20))
     slices, v_start = [], 0
     for cloth in rigid_scene.cloths:
         slices.append(slice(v_start, v_start + len(cloth.verts)))
         v_start += len(cloth.verts)
+    # The frame of CGQ's root is the principal frame of the box, a constant rotation of the frame of its link
+    axes = scenes.quat_to_R(box.quat).T @ scenes.quat_to_R(cgq_rigid[0][3:7])
+    box_radius = 0.5 * float(np.linalg.norm(box.size))
 
     def get_positions():
         return np.concatenate([entity.get_verts_pos().cpu().numpy() for entity in entities])
 
+    def box_error(state) -> float:
+        """The largest surface displacement |dt| + r |dtheta| of the box from the pose of CGQ's root."""
+        if box.is_fixed:
+            return 0.0
+        rotation = gu.quat_to_R(box_entity.get_quat().cpu().numpy()) @ axes
+        relative = rotation.T @ scenes.quat_to_R(state[3:7])
+        angle = np.arccos(np.clip(0.5 * (np.trace(relative) - 1.0), -1.0, 1.0))
+        return float(np.linalg.norm(box_entity.get_pos().cpu().numpy() - state[0:3]) + box_radius * angle)
+
+    def set_box(state) -> None:
+        if box.is_fixed:
+            return
+        rotation = scenes.quat_to_R(state[3:7]) @ axes.T
+        box_entity.set_qpos(np.concatenate([state[0:3], gu.R_to_quat(rotation)]))
+        box_entity.set_dofs_velocity(np.concatenate([state[7:10], rotation.T @ state[10:13]]))
+
+    def set_proxy(state) -> None:
+        """Offset the proxy of the box from the inertial frame of its link as CGQ's proxy is offset from its root, the
+        principal axes of both sides possibly differing by a permutation."""
+        if box.is_fixed:
+            return
+        proxies_state = newton.data_manager.proxies_state
+        quat = qd_to_numpy(proxies_state.quat)
+        relative = scenes.quat_to_R(state[16:20]) @ scenes.quat_to_R(state[3:7]).T
+        quat[0, 0] = gu.R_to_quat(relative @ scenes.quat_to_R(quat[0, 0]))
+        pos = qd_to_numpy(proxies_state.pos)
+        pos[0, 0] = state[13:16]
+        proxies_state.quat.from_numpy(quat)
+        proxies_state.pos.from_numpy(pos)
+
     init_error = float(np.abs(get_positions() - cgq_positions[0]).max())
-    replay_errors, step_ms, pairs_rows = [], [], []
+    replay_errors, box_errors, step_ms, pairs_rows, counts = [], [], [], [], []
     for k in range(rigid_scene.n_frames):
         for entity, part in zip(entities, slices):
             entity.set_verts_pos(cgq_positions[k][part])
             entity.set_verts_vel(cgq_velocities[k][part])
+        set_box(cgq_rigid[k])
+        init_proxies(scene)
+        set_proxy(cgq_rigid[k])
         genesis_pairs = genesis_active_pairs(scene)
         row = {}
         for ch in ("pt", "ee"):
@@ -153,16 +179,21 @@ for rigid_scene in scenes.make_scenes(args.n):
                 ch == "ee",
             )
         pairs_rows.append(row)
+        counters.take(scene)
         t = time.perf_counter()
         scene.step()
         step_ms.append(1e3 * (time.perf_counter() - t))
+        counts.append(counters.take(scene))
         replay_errors.append(float(np.abs(get_positions() - cgq_positions[k + 1]).max()))
+        box_errors.append(box_error(cgq_rigid[k + 1]))
 
     scene.reset()
-    trajectory_errors, n_intersections = [], []
+    set_initial_spin()
+    trajectory_errors, box_trajectory_errors, n_intersections = [], [], []
     for k in range(rigid_scene.n_frames):
         scene.step()
         trajectory_errors.append(float(np.abs(get_positions() - cgq_positions[k + 1]).max()))
+        box_trajectory_errors.append(box_error(cgq_rigid[k + 1]))
         publish_start_point(scene)
         n_intersections.append(len(newton.ipc_contact.find_intersections(newton.ipc_state, newton.ipc_info)))
 
@@ -178,6 +209,14 @@ for rigid_scene in scenes.make_scenes(args.n):
         "replay_errors": replay_errors.tolist(),
         "trajectory_errors": trajectory_errors,
         "trajectory_max_error": float(max(trajectory_errors)),
+        "box_replay_errors": box_errors,
+        "box_replay_max_error": float(max(box_errors)),
+        "box_replay_frames_above_bound": int((np.array(box_errors) > bound).sum()),
+        "box_trajectory_errors": box_trajectory_errors,
+        "box_trajectory_max_error": float(max(box_trajectory_errors)),
+        "genesis_rest_box_y": float(box_entity.get_pos().cpu().numpy()[1]),
+        "cgq_rest_box_y": float(cgq_rigid[-1][1]),
+        "newton_counts": compare_counts(counts, reference) if "ls_iters" in reference else None,
         "genesis_step_ms_median": float(np.median(step_ms[1:])),
         "cgq_step_ms_median": float(np.median(reference["step_ms"][1:])),
         "pairs": pairs_rows,
@@ -193,9 +232,17 @@ for rigid_scene in scenes.make_scenes(args.n):
     print(
         f"{rigid_scene.name} [{args.backend}]: replay max {result['replay_max_error']:.3e} (bound {bound:.1e}, "
         f"{result['replay_frames_above_bound']} frames above, worst frame {result['replay_worst_frame']}), "
-        f"trajectory max {result['trajectory_max_error']:.3e}, step {result['genesis_step_ms_median']:.2f} ms, "
+        f"trajectory max {result['trajectory_max_error']:.3e}, box replay max {result['box_replay_max_error']:.3e} "
+        f"({result['box_replay_frames_above_bound']} frames above), box trajectory max "
+        f"{result['box_trajectory_max_error']:.3e}, step {result['genesis_step_ms_median']:.2f} ms, "
         f"pairs {totals} ({result['pairs_frames_differing']} frames differ), intersections "
-        f"{result['trajectory_intersections']}",
+        f"{result['trajectory_intersections']}"
+        + (
+            f", newton/ls/pcg totals {result['newton_counts']['totals']}, "
+            f"{len(result['newton_counts']['flagged_frames'])} frames above 1.5x CGQ's Newton iterations"
+            if result["newton_counts"] is not None
+            else ""
+        ),
         flush=True,
     )
     scene.destroy()

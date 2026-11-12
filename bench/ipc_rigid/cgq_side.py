@@ -2,9 +2,11 @@
 of the first Newton iteration of every frame (run with CGQ's own venv, after genesis_side.py --dump-mesh).
 
 The rigid geometry of a scene is the mesh of the Genesis proxies (see scenes.py), a fixed box being CGQ's RigidBody fixed
-in the world. The contact closure of the first Newton iteration of every frame is classified by `recompute()`, its
-global vertex indices mapped to the contact vertex indices of Genesis by the positions of the vertices at the first
-frame (the cloth, then the rigid mesh).
+in the world, and a free box a singleton minimal-coordinate root of the mass properties of `BoxSpec`, whose contact goes
+through its reduced-KKT proxy. The pose and the velocity of the root of every free box are saved at every frame. The
+contact closure of the first Newton iteration of every frame is classified by `recompute()`, its global vertex indices
+mapped to the contact vertex indices of Genesis by the positions of the vertices at the first frame (the cloth, then the
+rigid mesh).
 """
 
 import argparse
@@ -24,12 +26,14 @@ parser.add_argument("--cgq", required=True, help="the CGQ checkout, for its benc
 parser.add_argument("--n", type=int, default=16)
 parser.add_argument("--only", nargs="*", default=None)
 parser.add_argument("--velocity-tol", type=float, default=scenes.VELOCITY_TOL)
+parser.add_argument("--line-search-max-iter", type=int, default=12)
 parser.add_argument("--out", default=str(Path(__file__).parent / "data"))
 args = parser.parse_args()
 sys.path.insert(0, args.cgq)
 
 from benchmarks.bvh_ee_dual_dataset import write_selected_newton_only  # noqa: E402
-from qipc import Cloth, RigidBody, Scene, trimesh  # noqa: E402
+from qipc import Cloth, RigidBody, Scene, halfplane, trimesh  # noqa: E402
+from qipc._src.native.solver import RigidBodyDynamics  # noqa: E402
 from qipc.offline import ContactClosure  # noqa: E402
 
 out_dir = Path(args.out)
@@ -47,7 +51,7 @@ for rigid_scene in scenes.make_scenes(args.n):
             "contact/d_hat": scenes.D_HAT,
             "newton/velocity_tol": args.velocity_tol,
             "newton/max_iter": 1024,
-            "line_search/max_iter": 12,
+            "line_search/max_iter": args.line_search_max_iter,
             "extras/contact_closure/enable": 1,
             "extras/contact_closure/frame_begin": 0,
             "extras/contact_closure/frame_end": rigid_scene.n_frames - 1,
@@ -67,15 +71,46 @@ for rigid_scene in scenes.make_scenes(args.n):
             is_fixed=cloth.pinned.astype(np.int32),
         )
         scene.geometries.create(f"cloth{i_cloth}", geo)
+    if rigid_scene.has_ground:
+        scene.geometries.create("ground", halfplane(P=scenes.GROUND_POS, N=scenes.GROUND_NORMAL))
+    # One box per scene, whose mesh is the whole rigid mesh of Genesis
+    (box,) = rigid_scene.boxes
     rigid_geo = trimesh(rigid_mesh["verts"], rigid_mesh["tris"].astype(np.int32))
-    RigidBody().apply_to(rigid_geo, mass_density=1e3, is_fixed=True)
+    if box.is_fixed:
+        RigidBody().apply_to(rigid_geo, mass_density=1e3, is_fixed=True)
+    else:
+        mass, com, inertia = box.mass_properties()
+        RigidBody().apply_to(rigid_geo, mass=mass, center_of_mass=com, inertia=inertia, minimal_coordinates=True)
     scene.geometries.create("rigid", rigid_geo)
     scene.init()
 
+    rigid = scene.rigid_body
+    native_rigid = scene.sim_systems[RigidBodyDynamics]
     fe = scene.finite_element
+    if not box.is_fixed:
+        mechanism = int(rigid.host("contact_proxy_pairs")[0, 0])
+        rigid.omega[mechanism].copy_(rigid.omega.new_tensor(box.omega))
+
+    def rigid_state():
+        """The pose and velocity of the root of the box, then the pose of its proxy."""
+        if box.is_fixed:
+            return np.zeros(20)
+        mechanism, proxy = (int(i) for i in rigid.host("contact_proxy_pairs")[0, :2])
+        return np.concatenate(
+            [
+                rigid.t[mechanism].cpu().numpy(),
+                rigid.quat[mechanism].cpu().numpy(),
+                rigid.v[mechanism].cpu().numpy(),
+                rigid.omega[mechanism].cpu().numpy(),
+                native_rigid.t_view_t()[proxy].cpu().numpy(),
+                native_rigid.quat_view_t()[proxy].cpu().numpy(),
+            ]
+        )
+
     positions = [fe.x.cpu().numpy().copy()]
     velocities = [fe.velocities.cpu().numpy().copy()]
-    newton_iters, step_ms = [], []
+    rigid_states = [rigid_state()]
+    newton_iters, ls_iters, pcg_iters, step_ms = [], [], [], []
     closure_dir = workspace / "contact_closure"
     with write_selected_newton_only(closure_dir):
         for _ in range(rigid_scene.n_frames):
@@ -84,7 +119,10 @@ for rigid_scene in scenes.make_scenes(args.n):
             step_ms.append(1e3 * (time.perf_counter() - t))
             positions.append(fe.x.cpu().numpy().copy())
             velocities.append(fe.velocities.cpu().numpy().copy())
+            rigid_states.append(rigid_state())
             newton_iters.append(scene.solver.newton_iters)
+            ls_iters.append(scene.solver.total_ls_iters)
+            pcg_iters.append(scene.solver.total_pcg_iters)
 
     # The contact vertices of Genesis: the cloth, then the rigid mesh
     genesis_verts = np.concatenate((rigid_scene.verts, rigid_mesh["verts"]))
@@ -96,7 +134,9 @@ for rigid_scene in scenes.make_scenes(args.n):
     for frame in range(rigid_scene.n_frames):
         dyn = closure.load_dynamic(frame, 0)
         if to_genesis is None:
-            cgq_verts = np.asarray(dyn["positions"]).reshape(-1, 3)
+            # The global vertices of CGQ end with the anchor point of the ground, which takes no point-triangle or
+            # edge-edge pair
+            cgq_verts = np.asarray(dyn["positions"]).reshape(-1, 3)[: len(genesis_verts)]
             distances = np.linalg.norm(cgq_verts[:, None, :] - genesis_verts[None, :, :], axis=-1)
             to_genesis = distances.argmin(axis=1)
             assert distances.min(axis=1).max() < 1e-9, "the vertices of CGQ do not match those of Genesis"
@@ -118,7 +158,10 @@ for rigid_scene in scenes.make_scenes(args.n):
         path,
         positions=np.array(positions),
         velocities=np.array(velocities),
+        rigid_states=np.array(rigid_states),
         newton_iters=np.array(newton_iters),
+        ls_iters=np.array(ls_iters),
+        pcg_iters=np.array(pcg_iters),
         step_ms=np.array(step_ms),
         **{key: np.asarray(value) for key, value in pairs.items()},
     )

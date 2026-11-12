@@ -87,7 +87,7 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
     fe = scene.finite_element
     positions = [fe.x.cpu().numpy().copy()]
     velocities = [fe.velocities.cpu().numpy().copy()]
-    newton_iters, step_ms = [], []
+    newton_iters, ls_iters, pcg_iters, step_ms = [], [], [], []
     closure_dir = workspace / "contact_closure"
     with write_selected_newton_only(closure_dir) if is_closure else contextlib.nullcontext():
         for _ in range(cloth_scene.n_frames):
@@ -97,6 +97,8 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
             positions.append(fe.x.cpu().numpy().copy())
             velocities.append(fe.velocities.cpu().numpy().copy())
             newton_iters.append(scene.solver.newton_iters)
+            ls_iters.append(scene.solver.total_ls_iters)
+            pcg_iters.append(scene.solver.total_pcg_iters)
 
     # The active pairs of the first Newton iteration of every frame, as CGQ classifies them
     pairs = {f"{ch}_{name}": [] for ch in ("pt", "ee") for name in ("stencil", "flag", "offsets")}
@@ -128,6 +130,8 @@ for cloth_scene in scenes.make_scenes(args.n) + contact_scenes:
         positions=np.array(positions),
         velocities=np.array(velocities),
         newton_iters=np.array(newton_iters),
+        ls_iters=np.array(ls_iters),
+        pcg_iters=np.array(pcg_iters),
         step_ms=np.array(step_ms),
         **({key: np.asarray(value) for key, value in pairs.items()} if is_closure else {}),
     )

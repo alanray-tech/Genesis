@@ -116,6 +116,44 @@ for name in args.scenes:
         camera = scene.add_camera(res=(1280, 720), pos=(0.3, -1.0, 0.4), lookat=(-0.15, 0.0, 0.05), fov=40, GUI=False)
         scene.build()
         n_steps = 50
+    elif name == "rigid_contact":
+        scene = gs.Scene(
+            ipc_options=gs.options.IPCOptions(d_hat=1e-2),
+            viewer_options=viewer_options,
+            vis_options=vis_options,
+            show_viewer=False,
+        )
+        scene.add_entity(morph=gs.morphs.Plane())
+        scene.add_entity(
+            morph=gs.morphs.Mesh(file=grid_path, scale=0.4, pos=(0.0, 0.0, 0.01)),
+            material=gs.materials.FEM.Cloth(contact_thickness=1e-3),
+        )
+        scene.add_entity(morph=gs.morphs.Box(size=(0.1, 0.1, 0.1), pos=(0.0, 0.0, 0.08)))
+        camera = scene.add_camera(res=(1280, 720), pos=(0.5, -0.5, 0.3), lookat=(0.0, 0.0, 0.03), fov=40, GUI=False)
+        scene.build(n_envs=2)
+        n_steps = 50
+    elif name == "robot_contact":
+        table_top = 0.2
+        scene = gs.Scene(viewer_options=viewer_options, vis_options=vis_options, show_viewer=False)
+        scene.add_entity(morph=gs.morphs.Plane())
+        scene.add_entity(morph=gs.morphs.Box(size=(0.5, 0.5, table_top), pos=(0.45, 0.0, 0.5 * table_top), fixed=True))
+        scene.add_entity(
+            morph=gs.morphs.Mesh(file=grid_path, scale=0.3, pos=(0.45, 0.0, table_top + 0.011)),
+            material=gs.materials.FEM.Cloth(contact_thickness=1e-3),
+        )
+        franka = scene.add_entity(morph=gs.morphs.MJCF(file="xml/franka_emika_panda/panda.xml"))
+        camera = scene.add_camera(res=(1280, 720), pos=(1.1, -0.6, 0.6), lookat=(0.45, 0.0, 0.2), fov=40, GUI=False)
+        scene.build(n_envs=2)
+        hand = franka.get_link("hand")
+        qpos_start, qpos_press = (
+            franka.inverse_kinematics(link=hand, pos=(0.45, 0.0, table_top + height), quat=(0.0, 1.0, 0.0, 0.0))
+            for height in (0.138, 0.09)
+        )
+        qpos_start[..., -2:] = 0.02
+        qpos_press[..., -2:] = 0.02
+        franka.set_qpos(qpos_start)
+        franka.control_dofs_position(qpos_press)
+        n_steps = 40
     else:
         raise ValueError(f"Unknown scene {name}")
     path = Path(args.out) / f"test_cloth_{name}.mp4"
